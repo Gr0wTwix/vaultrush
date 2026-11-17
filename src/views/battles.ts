@@ -68,7 +68,7 @@ function decide(mode, format, results, extraF) {
     case 'crazyjackpot': {
       const weights = totals.map(t => (mode === 'jackpot' ? Math.max(t, 0.01) : 1 / (t + 0.05)));
       const sum = weights.reduce((a, b) => a + b, 0);
-      const w = pickWeighted(weights.map((weight, i) => ({ i, weight })), extraF).i;
+      const w = pickWeighted<{ i: number; weight: number }>(weights.map((weight, i) => ({ i, weight })), extraF).i;
       return { winners: [w], totals, chances: weights.map(x => x / sum) };
     }
     case 'pointrush': {

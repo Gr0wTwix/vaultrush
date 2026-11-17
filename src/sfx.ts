@@ -6,12 +6,12 @@ let ctx;
 const silent = () => state.muted || document.hidden;
 document.addEventListener('visibilitychange', () => { if (ctx) (document.hidden ? ctx.suspend() : ctx.resume()).catch(() => {}); });
 function ac() {
-  if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; } }
+  if (!ctx) { try { ctx = new (window.AudioContext || (window as any).webkitAudioContext)(); } catch { return null; } }
   if (ctx.state === 'suspended' && !document.hidden) ctx.resume();
   return ctx;
 }
 
-function tone(freq, dur, { type = 'sine', gain = 0.06, at = 0, slide } = {}) {
+function tone(freq: number, dur: number, { type = 'sine', gain = 0.06, at = 0, slide }: { type?: OscillatorType; gain?: number; at?: number; slide?: number } = {}) {
   if (silent()) return;
   const a = ac(); if (!a) return;
   const t = a.currentTime + at;
@@ -34,7 +34,7 @@ function getNoise(a) {
   return noiseBuf;
 }
 
-function noiseBurst(a, dest, t, dur, { type = 'lowpass', freq = 1000, q = 0.7, gain = 0.3, attack = 0.005, sweepTo } = {}) {
+function noiseBurst(a: AudioContext, dest: AudioNode, t: number, dur: number, { type = 'lowpass', freq = 1000, q = 0.7, gain = 0.3, attack = 0.005, sweepTo }: { type?: BiquadFilterType; freq?: number; q?: number; gain?: number; attack?: number; sweepTo?: number } = {}) {
   const src = a.createBufferSource(); src.buffer = getNoise(a); src.loop = true;
   const f = a.createBiquadFilter(); f.type = type; f.Q.value = q;
   f.frequency.setValueAtTime(freq, t);

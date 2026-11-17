@@ -20,7 +20,7 @@ const upRow = u => `<div class="lu-row ${u.win ? 'win' : 'lose'} ${u.mine ? 'min
   <span class="lu-name">${esc(u.to.weapon)} | ${esc(u.to.skin)}</span><b class="lu-mult">${fmt(u.multi)}×</b><span class="lu-res">${u.win ? 'WIN' : 'LOSS'}</span></div>`;
 
 export function render(el) {
-  const sel = new Set();          // selected inventory uids
+  const sel = new Set<string>();          // selected inventory uids
   let coins = 0, target = null, busy = false, alive = true, rotation = 0, over = false;
 
   el.innerHTML = `
@@ -168,7 +168,7 @@ export function render(el) {
     // Count the roll up live in the centre while the pointer spins, then land on the real roll.
     const rollEl = $('#chance', el), t0 = performance.now(), final = f * 100;
     $('#chanceLbl', el).textContent = 'rolling';
-    await new Promise(done => {
+    await new Promise<void>(done => {
       const tick = t => {
         if (!alive) return done();
         const k = Math.min(1, (t - t0) / spinMs);

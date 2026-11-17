@@ -1,3 +1,9 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.log
+
 # Local tooling and account links (contain local paths and project/team IDs)
 .vercel/
 .claude/
@@ -7,8 +13,5 @@
 vaultrush-portfolio/
 ANALYSIS.md
 
-# Original image sources and generated packs: the site only uses assets/items/web, assets/cases and assets/home
-assets/items/*.png
-assets/items/vaultrush-*/
-
-node_modules/
+# Original image sources and generated packs. The site only uses public/assets.
+source-art/

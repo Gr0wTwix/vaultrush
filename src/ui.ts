@@ -4,12 +4,14 @@ import { state } from './state.js';
 import { sfx } from './sfx.js';
 import { itemArtSvg } from './art.js';
 
-export const $ = (sel, root = document) => root.querySelector(sel);
-export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+// DOM helpers. They return `any` on purpose: the views poke at many element kinds (inputs, buttons, svg) and the
+// ids are validated by the browser tests, not by the type system.
+export const $ = (sel: string, root: ParentNode = document): any => root.querySelector(sel);
+export const $$ = (sel: string, root: ParentNode = document): any[] => [...root.querySelectorAll(sel)];
 export const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const fmt = n => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export const sleep = ms => new Promise(r => setTimeout(r, ms));
-export const h = html => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+export const sleep = (ms: number): Promise<void> => new Promise<void>(r => setTimeout(r, ms));
+export const h = (html: string): any => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
 export const coin = (cls = '') => `<svg class="coin ${cls}" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="#ffc53d"/><circle cx="10" cy="10" r="6.2" fill="none" stroke="#b07a00" stroke-width="1.6"/><path d="M10.8 5.5 7.5 10.6h2.6l-.9 3.9 3.3-5.1H9.9z" fill="#7a5200"/></svg>`;
 export const money = (n, cls = '') => `<span class="money ${cls}">${coin()}${fmt(n)}</span>`;
@@ -132,7 +134,7 @@ export function spinReel(host, pool, winner, { axis = 'x', duration = 5200, tota
   const tf = v => (axis === 'x' ? `translate3d(${v}px,0,0)` : `translate3d(0,${v}px,0)`);
 
   strip.style.transform = tf(0);
-  return new Promise(resolve => {
+  return new Promise<void>(resolve => {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       strip.style.transition = `transform ${duration}ms cubic-bezier(.08,.62,.1,1)`;
       strip.style.transform = tf(exact + jitter);
@@ -170,7 +172,7 @@ export const speedSeg = cur => `<div class="seg speed-seg" role="group" aria-lab
 /** Bet amount input with ½ / 2× / Max buttons. Call wireAmount after rendering. */
 export const amountField = (id, value = 1, label = 'Bet amount') =>
   `<div class="field"><label for="${id}">${label}</label><div class="amount"><span class="amount-coin">${coin()}</span><input id="${id}" type="number" min="0.1" step="0.1" value="${value}"><button type="button" data-amt="half">½</button><button type="button" data-amt="double">2×</button><button type="button" data-amt="max">Max</button></div></div>`;
-export function wireAmount(root, input, getBalance, onChange) {
+export function wireAmount(root: ParentNode, input: any, getBalance: () => number, onChange?: () => void) {
   input.closest('.amount').querySelectorAll('[data-amt]').forEach(b => b.onclick = () => {
     if (input.disabled) return;
     const v = +input.value || 0;
@@ -182,7 +184,7 @@ export function wireAmount(root, input, getBalance, onChange) {
 }
 
 /** Simple modal. Returns { el, close }. */
-export function modal(html, { onClose, wide = false } = {}) {
+export function modal(html: string, { onClose, wide = false }: { onClose?: () => void; wide?: boolean } = {}): { el: any; close: () => void } {
   const wrap = h(`<div class="modal-back"><div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="Close">×</button>${html}</div></div>`);
   const close = () => { wrap.classList.add('out'); setTimeout(() => wrap.remove(), 200); document.removeEventListener('keydown', esc); onClose?.(); };
   const esc = e => { if (e.key === 'Escape') close(); };

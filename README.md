@@ -2,40 +2,61 @@
 
 An original skin-game site prototype. **Play money only**: coins can't be bought or withdrawn.
 
-- **Games**: case opening (1–6 at once, 3 speeds, ticket ranges), case battles (6 formats incl. 2v2/3v3, 7 modes: Normal, Crazy, Terminal, Jackpot, Crazy Jackpot, Point Rush, Group), crash (partial cash-outs), double (Triple Green pool), plinko, mines (4×4–8×8), multi-coin flip, upgrade (under/over).
+- **Games**: case opening (1–6 at once, 3 speeds, ticket ranges), case battles (6 formats incl. 2v2/3v3, 7 modes), crash (partial cash-outs), double (Triple Green pool), plinko, mines (4×4–8×8), multi-coin flip, upgrade (under/over).
 - **Rewards**: levels/XP, instant/daily/weekly rakeback, welcome and daily free cases, level cases every 10 levels, promo codes, 7-day login streak, daily race leaderboard.
-- **Platform**: live drops and bets, chat with coin rain, profile with bet history, demo self-exclusion, and a provably fair seed system with a verifier for every game.
+- **Platform**: live drops and bets, chat with coin rain, an account window (profile, history, transactions, settings, self-exclusion), and a provably fair seed system with a verifier for every game.
+
+## Stack
+
+TypeScript, [Vite](https://vite.dev) and [Vitest](https://vitest.dev). No framework: views are plain modules that render into the page, and state is kept in `localStorage`.
 
 ## Run it
 
 ```bash
-node server.js
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-Then open http://localhost:5173. It must be served over http(s) (not opened as a file), because it uses ES modules and Web Crypto.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server with hot reload |
+| `npm run build` | Type-checks, then builds the site into `dist/` |
+| `npm run preview` | Serves the production build locally |
+| `npm run typecheck` | `tsc` with the loose config (whole app) and the strict config (game core) |
+| `npm test` | Unit tests for the fairness maths, odds tables, wallet rules and verifier |
+
+Node 22.12 or newer is required.
 
 ## Structure
 
 ```
-index.html          app shell
-css/app.css         base styling (dark theme, responsive)
-css/games.css       styling for the newer games, rewards and race pages
-js/app.js           router, sidebar, top bar, live-drop ticker
-js/state.js         balance, inventory, XP/levels, rakeback, race wager, bet history (localStorage)
-js/fair.js          provably fair (HMAC-SHA256) + all game math and payout tables
-js/data.js          item catalog, cases and reward cases (ticket ranges, prices from odds)
-js/race.js          daily race standings (simulated rivals) and prize payout
-js/fx.js            canvas particle effects (mines explosion, sparkles)
-js/feed.js          simulated live drops / live bets (stand-in for a WebSocket feed)
-js/chat.js          simulated chat + coin rain
-js/ui.js            item/case art, reel spinner, modal, toasts, icons
-js/sfx.js           Web Audio sound effects (incl. the generated explosion)
-js/views/*.js       one file per page
+index.html            app shell (Vite entry)
+public/assets/        images served as-is: items/web, cases, home
+src/app.ts            router, sidebar, top bar, live-drop ticker, chat button
+src/types.ts          shared domain types
+src/fair.ts           provably fair (HMAC-SHA256) + every game's maths and payout tables   [strict]
+src/state.ts          balance, inventory, XP/levels, rakeback, bet history, self-exclusion   [strict]
+src/data.ts           item catalog, cases and reward cases (ticket ranges, prices from odds) [strict]
+src/verify.ts         bet re-computation, house-edge simulation, uniformity test            [strict]
+src/race.ts           daily race standings (simulated rivals) and prize payout              [strict]
+src/feed.ts           simulated live drops and bets (stand-in for a WebSocket feed)         [strict]
+src/account.ts        account window; src/chat.ts simulated chat and coin rain
+src/fx.ts, sfx.ts     canvas particle effects and generated Web Audio sounds
+src/ui.ts, art.ts     shared UI helpers, item and case art
+src/views/*.ts        one file per page
+src/css/*.css         styles, bundled by Vite
+tests/                Vitest suites
 ```
+
+Files marked **[strict]** are checked with `strict: true` (`tsconfig.strict.json`). The view files are checked with the looser `tsconfig.json`, where DOM helpers return `any`; tightening them is the next step.
 
 ## House edge settings
 
-`HOUSE` in `js/fair.js`: cases 90% RTP, crash/mines/plinko/coinflip 97%, upgrade 95% (max 80% chance), double 93.3%. Demo promo codes are in `js/views/rewards.js`.
+`HOUSE` in `src/fair.ts`: cases 90% RTP, crash/mines/plinko/coinflip 97%, upgrade 95% (max 80% chance), double 93.3%. The tests recompute these from the real functions, and the Fairness page can simulate them in the browser. Demo promo codes are in `src/views/rewards.ts`.
+
+## Deploying
+
+`vercel.json` runs `npm ci` and `npm run build` and serves `dist/`. The repository also has a GitHub Actions workflow (`.github/workflows/ci.yml`) that type-checks, tests and builds every push.
 
 ## Going to production
 

@@ -19,10 +19,10 @@ export function previewCase(id) {
 }
 
 // One delegated listener for every page that shows case cards (eye button only).
-if (!window.__casePreview) {
-  window.__casePreview = true;
+if (!(window as any).__casePreview) {
+  (window as any).__casePreview = true;
   document.addEventListener('click', e => {
-    const b = e.target.closest('[data-preview]');
-    if (b) { e.preventDefault(); e.stopPropagation(); previewCase(b.dataset.preview); }
+    const b = (e.target as Element).closest('[data-preview]') as HTMLElement | null;
+    if (b) { e.preventDefault(); e.stopPropagation(); previewCase(b.dataset.preview as string); }
   }, true);
 }

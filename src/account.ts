@@ -192,7 +192,7 @@ export function openAccount(tab = 'account') {
 
     // ---- Self exclusion -----------------------------------------------------------------------------------
     exclude() {
-      const OPT = [['1 hour', 3600e3], ['24 hours', 864e5], ['3 days', 3 * 864e5], ['7 days', 7 * 864e5], ['14 days', 14 * 864e5], ['30 days', 30 * 864e5]];
+      const OPT = [['1 hour', 3600e3], ['24 hours', 864e5], ['3 days', 3 * 864e5], ['7 days', 7 * 864e5], ['14 days', 14 * 864e5], ['30 days', 30 * 864e5]] as [string, number][];
       let pick = 1;
       const draw = () => {
         pane.innerHTML = `${head('Self Exclusion', 'Game responsibly.')}
