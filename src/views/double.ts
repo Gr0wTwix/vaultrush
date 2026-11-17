@@ -2,6 +2,7 @@
 import { randomBot } from '../data.js';
 import { state, save, debit, credit, round2, debitError } from '../state.js';
 import { bet, annotate, doubleRoll, doubleColor, doubleWins, DOUBLE_PAY, DOUBLE_TILES, getFair } from '../fair.js';
+import type { DoubleLane } from '../types.js';
 import { pushBet } from '../feed.js';
 import { $, $$, fmt, money, icon, toast, avatar, esc, confetti, coin } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -34,9 +35,12 @@ const tile = n => isBait(n)
   ? `<div class="dtile sq-tile ${doubleColor(n)} baity"><svg viewBox="0 0 24 24" aria-hidden="true">${GLYPH.bait}</svg><em>Bait 7×</em></div>`
   : `<div class="dtile sq-tile ${doubleColor(n)}"><svg viewBox="0 0 24 24" aria-hidden="true">${GLYPH[doubleColor(n)]}</svg></div>`;
 
+/** A bet on one lane. Bots and the player share the lane lists; `mine` marks the player's own. */
+interface DoubleBet { user: string; amount: number; mine: boolean; result?: 'won' | 'lost' }
+
 export function render(el) {
   let alive = true, timer = 0, raf = 0, phase = 'betting', phaseStart = performance.now();
-  let bets = {}, myBets = {}, lastBet = null, landIndex = 2 * DOUBLE_TILES, pendingN = null;
+  let bets: Record<string, DoubleBet[]> = {}, myBets: Record<string, number> = {}, lastBet = null, landIndex = 2 * DOUBLE_TILES, pendingN = null;
 
   const glyph = c => `<svg viewBox="0 0 24 24" aria-hidden="true">${GLYPH[c]}</svg>`;
   const LANE_GLYPH = { purple: glyph('purple'), gray: glyph('gray'), green: glyph('green'), bait: glyph('bait') };
@@ -93,7 +97,7 @@ export function render(el) {
     $('#streak', el).innerHTML = [0, 1, 2].map(i => `<i class="${i < greenStreak.length ? 'on' : ''}"></i>`).join('');
     $('#hist', el).innerHTML = history.slice(0, 10).map(n => `<span class="hdot ${doubleColor(n)}" title="${n}">${glyph(doubleColor(n))}</span>`).join('') || '<span class="muted small">No rounds yet</span>';
     const last = history.slice(0, 100);
-    const c = { purple: 0, gray: 0, green: 0, bait: 0 };
+    const c: Record<string, number> = { purple: 0, gray: 0, green: 0, bait: 0 };
     last.forEach(n => { c[doubleColor(n)]++; if (n === 1 || n === 14) c.bait++; });
     $('#counts', el).innerHTML = ['purple', 'gray', 'green'].map(k => `<span class="hdot ${k}">${glyph(k)}</span><b>${c[k]}</b>`).join('') + `<span class="hdot bait">${LANE_GLYPH.bait}</span><b>${c.bait}</b>`;
   };
@@ -158,7 +162,7 @@ export function render(el) {
     reel.classList.remove('settled');
     strip.querySelector('.landed')?.classList.remove('landed');
     drawLanes(); botBets();
-    timer = setTimeout(roll, BET_MS);
+    timer = window.setTimeout(roll, BET_MS);
   };
 
   const roll = async () => {
@@ -175,7 +179,7 @@ export function render(el) {
     landIndex = 10 * DOUBLE_TILES + n;
     setStrip(landIndex, true);
     sfx.click();
-    timer = setTimeout(() => settle(n), ROLL_MS);
+    timer = window.setTimeout(() => settle(n), ROLL_MS);
   };
 
   /** Pay this round's bets for tile n. Returns { won, staked }. */
@@ -183,10 +187,10 @@ export function render(el) {
     let won = 0, staked = 0;
     for (const [lane, amount] of Object.entries(myBets)) {
       staked += amount;
-      const w = doubleWins(lane, n);
-      const payout = w ? round2(amount * DOUBLE_PAY[lane]) : 0;
+      const w = doubleWins(lane as DoubleLane, n);
+      const payout = w ? round2(amount * DOUBLE_PAY[lane as DoubleLane]) : 0;
       won += payout;
-      pushBet({ user: state.name, game: 'Double', amount, multi: w ? DOUBLE_PAY[lane] : 0, payout, mine: true });
+      pushBet({ user: state.name, game: 'Double', amount, multi: w ? DOUBLE_PAY[lane as DoubleLane] : 0, payout, mine: true });
     }
     if (won) credit(round2(won));
     myBets = {}; pendingN = null;
@@ -203,7 +207,7 @@ export function render(el) {
     const myGreen = myBets.green || 0;
     const { won, staked } = payMine(n);
     LANES.forEach(([k]) => {
-      const w = doubleWins(k, n);
+      const w = doubleWins(k as DoubleLane, n);
       $(`.lane-${k}`, el).classList.add(w ? 'won' : 'lost');
       (bets[k] || []).forEach(b => { b.result = w ? 'won' : 'lost'; });
     });
@@ -221,7 +225,7 @@ export function render(el) {
     } else greenStreak = [];
     if (won > staked && staked) { sfx.win(); toast(`+${fmt(won)}`, 'win'); } else if (staked) sfx.lose();
     drawLanes(); drawTop();
-    timer = setTimeout(() => alive && startBetting(), SHOW_MS);
+    timer = window.setTimeout(() => alive && startBetting(), SHOW_MS);
   };
 
   const tick = () => {

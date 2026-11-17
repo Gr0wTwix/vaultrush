@@ -1,14 +1,13 @@
-# Files that must not be published with the site
-server.js
-*.md
-.claude
-.wrangler
+# Files that must not be uploaded to Vercel (it installs dependencies and builds on its own)
 node_modules
-vercel.json
+dist
+.git
+.github
+.claude
+.playwright-mcp
+.wrangler
+source-art
 vaultrush-portfolio
-vaultrush-portfolio.zip
+ANALYSIS.md
 *.zip
-/assets/items/*.png
-/assets/items/casino-items-48-original
-/assets/items/vaultrush-crates-23-ready
-/assets/items/vaultrush-home-content
+*.md

@@ -129,7 +129,7 @@ export function render(el) {
   const restart = (node, cls) => { node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); };
 
   /** 3D flip: the face swaps at the midpoint (when the tile is edge-on). */
-  const flip = (t, html, classes, ms, onSwap) => new Promise(res => {
+  const flip = (t: any, html: string, classes: string[], ms: number, onSwap?: () => void) => new Promise<void>(res => {
     t.style.setProperty('--fd', `${ms}ms`);
     restart(t, 'flip');
     later(() => { t.innerHTML = html; t.classList.add(...classes); onSwap?.(); }, ms * 0.5);

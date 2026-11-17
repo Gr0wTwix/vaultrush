@@ -6,7 +6,7 @@ import { pushDrop } from '../feed.js';
 import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, SPEEDS } from '../ui.js';
 import { sfx } from '../sfx.js';
 
-const LEVEL_CASES = [[10, 'starter'], [20, 'neon'], [30, 'charmed'], [40, 'sniper'], [50, 'blade'], [60, 'high']];
+const LEVEL_CASES: [number, string][] = [[10, 'starter'], [20, 'neon'], [30, 'charmed'], [40, 'sniper'], [50, 'blade'], [60, 'high']];
 const CALENDAR = [1, 2, 3, 5, 8, 12, 25];
 const PROMOS = { VAULT10: 10, RUSH5: 5, WELCOME3: 3, LUCKY7: 7 };
 const WEEK = 7 * DAY;

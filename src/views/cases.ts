@@ -6,7 +6,7 @@ import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, i
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
 
-const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50+', 50, Infinity]];
+const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50+', 50, Infinity]] as [string, string, number, number][];
 
 export function renderList(el) {
   let sort = 'price-asc', band = 'all', tag = 'all', q = '';
@@ -21,7 +21,7 @@ export function renderList(el) {
     <section class="case-grid big" id="grid"></section>`;
 
   const draw = () => {
-    const [, , lo, hi] = PRICE_BANDS.find(b => b[0] === band);
+    const [, , lo, hi] = PRICE_BANDS.find(b => b[0] === band) as [string, string, number, number];
     const list = CASES
       .filter(c => c.price >= lo && c.price < hi)
       .filter(c => tag === 'all' || (tag === 'fav' ? state.favs.includes(c.id) : tag === 'odds' ? c.tag !== 'official' : c.tag === tag))

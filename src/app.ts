@@ -1,8 +1,14 @@
+// Styles are bundled by Vite (order matters: base first, then page-specific layers).
+import './css/app.css';
+import './css/games.css';
+import './css/home.css';
+import './css/account.css';
+import './css/battles2.css';
 import { state, save, on, credit, logTx, FREE_COINS, FREE_COINS_EVERY_MS } from './state.js';
 import { initFair } from './fair.js';
 import { startFeed, drops } from './feed.js';
 import { RARITY, CASES, REWARD_CASES } from './data.js';
-import { $, esc, fmt, coin, icon, avatar, toast, h, itemArt, caseArt } from './ui.js';
+import { $, $$, esc, fmt, coin, icon, avatar, toast, h, itemArt, caseArt } from './ui.js';
 import { sfx } from './sfx.js';
 import { openAccount, applyUi } from './account.js';
 import { initChat } from './chat.js';
@@ -33,7 +39,8 @@ const NAV = [
   ['#/rewards', 'gift', 'Rewards'], ['#/leaderboard', 'trophy', 'Race'], ['#/fair', 'fair', 'Fairness'],
 ];
 
-const ROUTES = [
+type Route = [RegExp, (el: HTMLElement, ...args: string[]) => (() => void) | void, string];
+const ROUTES: Route[] = [
   [/^#\/double$/, double.render, 'double'],
   [/^#\/plinko$/, plinko.render, 'plinko'],
   [/^#\/coinflip$/, coinflip.render, 'coin'],
@@ -121,7 +128,7 @@ function renderTopbar() {
   const setMenu = open => { meMenu.hidden = !open; meBtn.setAttribute('aria-expanded', String(open)); };
   meBtn.onclick = e => { e.stopPropagation(); sfx.click(); setMenu(meMenu.hidden); };
   meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); sfx.click(); openAccount(b.dataset.tab); };
-  document.addEventListener('click', e => { if (!meMenu.hidden && !e.target.closest('.me-wrap')) setMenu(false); });
+  document.addEventListener('click', e => { if (!meMenu.hidden && !(e.target as Element).closest('.me-wrap')) setMenu(false); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !meMenu.hidden) { setMenu(false); meBtn.focus(); } });
   $('#muteBtn').onclick = () => { state.muted = !state.muted; save(); $('#muteBtn').innerHTML = icon(state.muted ? 'mute' : 'sound'); };
   $('#chatBtn').onclick = () => document.body.classList.toggle('chat-open');
@@ -194,7 +201,7 @@ function route() {
   for (const [re, fn, nav] of ROUTES) {
     const m = hash.match(re);
     if (m) {
-      document.querySelectorAll('.nav-link').forEach(a => a.classList.toggle('active', a.dataset.nav === nav));
+      $$('.nav-link').forEach(a => a.classList.toggle('active', a.dataset.nav === nav));
       cleanup = fn(view, ...m.slice(1)) || null;
       window.scrollTo(0, 0);
       document.body.classList.remove('chat-open');

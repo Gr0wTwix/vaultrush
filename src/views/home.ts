@@ -133,7 +133,7 @@ export function render(el) {
     slideEls.forEach((s, i) => s.classList.toggle('on', i === cur));
     dots.forEach((d, i) => d.classList.toggle('on', i === cur));
   };
-  const auto = () => { clearInterval(timer); timer = setInterval(() => go(cur + 1), 6500); };
+  const auto = () => { clearInterval(timer); timer = window.setInterval(() => go(cur + 1), 6500); };
   $('.prev', car).onclick = () => { go(cur - 1); auto(); };
   $('.next', car).onclick = () => { go(cur + 1); auto(); };
   dots.forEach((d, i) => d.onclick = () => { go(i); auto(); });

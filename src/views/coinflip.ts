@@ -33,12 +33,12 @@ export function coin3d() {
  * Toss the coin: it flies up spinning, slows as it falls, and lands flat on `result`. Faces are lit
  * by their angle. onPhase('toss') at the start and onPhase('landed') at the end.
  */
-function flipCoin(el, result, ms, alive, { onPhase } = {}) {
+function flipCoin(el: any, result: string, ms: number, alive: () => boolean, { onPhase }: { onPhase?: (phase: 'toss' | 'landed') => void } = {}) {
   const scene = el.parentElement, shadow = scene.querySelector('.cf-shadow');
   const shades = [...el.querySelectorAll('.cf-shade')];
   const final = 7 * 360 + (result === 'star' ? 180 : 0);
   const easeOut = (x, p) => 1 - Math.pow(1 - x, p);
-  return new Promise(done => {
+  return new Promise<void>(done => {
     const t0 = performance.now();
     el.classList.add('spin');
     let finished = false, lastFace = null;
@@ -75,7 +75,13 @@ function flipCoin(el, result, ms, alive, { onPhase } = {}) {
 // Games live at module level so they survive leaving and coming back to the page.
 const games = [];
 let seq = 36150;
-const mk = (creator, side, amount, mine = false) => ({ id: ++seq, creator: { name: creator, side }, joiner: null, amount, status: 'waiting', result: null, winner: null, mine, at: Date.now() });
+/** One coinflip lobby/match. `mine` says which seat the player holds (false = a bot-only game). */
+interface CfGame {
+  id: number; creator: { name: string; side: string }; joiner: { name: string } | null; amount: number; status: string;
+  result: string | null; winner: string | null; mine: false | 'creator' | 'joiner'; at: number;
+  doubled?: boolean; autoJoin?: ReturnType<typeof setTimeout>; hash?: string; nonce?: number;
+}
+const mk = (creator: string, side: string, amount: number, mine: false | 'creator' | 'joiner' = false): CfGame => ({ id: ++seq, creator: { name: creator, side }, joiner: null, amount, status: 'waiting', result: null, winner: null, mine, at: Date.now() });
 for (let i = 0; i < 5; i++) games.push(mk(randomBot(), Math.random() < 0.5 ? 'bolt' : 'star', round2(Math.exp(Math.random() * 4 - 1))));
 
 export function render(el) {

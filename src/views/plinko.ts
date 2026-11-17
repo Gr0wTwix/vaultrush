@@ -1,6 +1,7 @@
 // Plinko: the ball bounces down `rows` rows of pegs; each bounce is one provably fair float.
 import { state, debit, credit, round2, debitError } from '../state.js';
 import { bet, annotate, plinkoTable, plinkoPath } from '../fair.js';
+import type { Risk } from '../types.js';
 import { pushBet } from '../feed.js';
 import { $, $$, fmt, money, icon, toast, amountField, wireAmount } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -8,7 +9,7 @@ import { sfx } from '../sfx.js';
 const SEG_MS = 240;        // slower, weightier drop (was 105)
 
 export function render(el) {
-  let rows = 12, risk = 'normal', alive = true, raf = 0;
+  let rows = 12, risk: Risk = 'normal', alive = true, raf = 0;
   const balls = [];        // { path, start, amount, mult, bucket, done }
   const hits = new Map();  // peg key -> time of last hit (for glow)
 
@@ -64,7 +65,7 @@ export function render(el) {
   $$('#rows button', el).forEach(b => b.onclick = () => { if (lockable()) return toast('Wait for the balls to land', 'error'); rows = +b.dataset.n; $$('#rows button', el).forEach(x => x.classList.toggle('active', x === b)); drawBuckets(); });
 
   /** Ball position at time t along its path. */
-  const posAt = (ball, now) => {
+  const posAt = (ball: any, now: number): { x: number; y: number; seg?: number; k?: number; hop?: number } => {
     const { sx, sy, cx, top } = geo();
     const n = ball.path.length;
     const tt = (now - ball.start) / SEG_MS;

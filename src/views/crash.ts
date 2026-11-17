@@ -10,7 +10,7 @@ const WAIT_MS = 7000, AFTER_MS = 3500;
 const history = [];
 
 export function render(el) {
-  let alive = true, raf = 0, timer = 0;
+  let alive = true, raf = 0, timer = 0;   // timers use window.setTimeout so the handle is a number
   let phase = 'waiting', phaseStart = performance.now(), cp = 1, players = [];
   // myBet: { amount, riding, locked, auto, done, cashouts: [mult] } — partial cashouts lock part of the bet.
   let myBet = null, queued = null, part = 1;
@@ -130,7 +130,7 @@ export function render(el) {
     drawPlayers(); updateButton();
     // Crash point is fixed by the provably fair roll before the round starts.
     bet('crash', 1).then(({ floats, entry }) => { cp = crashPoint(floats[0]); annotate(entry, `crashed at ${fmt(cp)}×`, cp.toFixed(2)); });
-    timer = setTimeout(() => { if (alive) { phase = 'running'; phaseStart = performance.now(); sfx.click(); updateButton(); } }, WAIT_MS);
+    timer = window.setTimeout(() => { if (alive) { phase = 'running'; phaseStart = performance.now(); sfx.click(); updateButton(); } }, WAIT_MS);
   };
 
   const crashNow = () => {
@@ -139,7 +139,7 @@ export function render(el) {
     sfx.boom();
     if (live()) finish();
     drawPlayers(); updateButton();
-    timer = setTimeout(() => alive && startWaiting(), AFTER_MS);
+    timer = window.setTimeout(() => alive && startWaiting(), AFTER_MS);
   };
 
   const resize = () => {

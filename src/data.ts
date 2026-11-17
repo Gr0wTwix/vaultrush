@@ -1,7 +1,8 @@
 // Original item catalog and cases (invented names: swap in your own art and items).
 import { HOUSE } from './fair.js';
+import type { Case, CaseDef, CaseEntry, Item, Rarity } from './types.js';
 
-export const RARITY = {
+export const RARITY: Record<Rarity, { label: string; color: string }> = {
   common: { label: 'Common', color: '#9aa6bd' },
   uncommon: { label: 'Uncommon', color: '#4f9dff' },
   rare: { label: 'Rare', color: '#8f6bff' },
@@ -10,7 +11,7 @@ export const RARITY = {
   mythic: { label: 'Mythic', color: '#ffc53d' },
 };
 
-const RAW = [
+const RAW: [string, string, string, string, Rarity, number][] = [
   ['p1', 'Viper P9', 'Static', 'pistol', 'common', 0.08],
   ['s1', 'Hornet SMG', 'Grid Rot', 'smg', 'common', 0.12],
   ['p2', 'Viper P9', 'Sandblast', 'pistol', 'common', 0.15],
@@ -92,16 +93,16 @@ const WEARS = ['FN', 'MW', 'FT', 'WW', 'BS'];
 // Pack items (x01–x48) all have art. Gear/tools/charms have no wear; only guns and knives do.
 const WEAPON_TYPES = new Set(['pistol', 'smg', 'rifle', 'sniper', 'knife', 'revolver', 'shotgun', 'machine gun']);
 const IMAGES = new Set(['p1', 'p2', 'p3', 'p4', 'p5', 's1', 's2', 's3', 'r2', 'r3', 'r4', 'r5', 'r6', 'n1', 'n2', 'n3', 'n4', 'n5', 'k1', 'k2', 'k3', 'k4', 'c1', 'c2']);
-export const ITEMS = RAW.map(([id, weapon, skin, type, rarity, value], i) => ({
+export const ITEMS: Item[] = RAW.map(([id, weapon, skin, type, rarity, value], i): Item => ({
   id, weapon, skin, type, rarity, value,
   img: IMAGES.has(id) || /^x[0-9]+$/.test(id) ? `assets/items/web/${id}.png` : undefined,
   wear: WEAPON_TYPES.has(type) ? WEARS[(i * 7) % 5] : '',
   st: WEAPON_TYPES.has(type) && i % 4 === 1,           // StatTrak-style counter variant
 }));
-export const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+export const ITEM: Record<string, Item> = Object.fromEntries(ITEMS.map(i => [i.id, i]));
 
 // `odds` (optional) fixes each item's chance; otherwise drop weight falls with value.
-const CASE_DEFS = [
+const CASE_DEFS: CaseDef[] = [
   { id: 'starter', name: 'Starter Crate', hue: 200, tag: 'official', items: ['p1', 'p2', 's1', 'r1', 's2', 'p3', 'r2', 'c1', 's3', 'r4'] },
   { id: 'flip', name: 'Coinflip Crate', hue: 95, tag: '50%', odds: { r2: 0.5, p1: 0.5 } },
   { id: 'neon', name: 'Neon Nights', hue: 300, tag: 'official', items: ['s2', 'p3', 'n1', 's3', 'c1', 'p4', 'r3', 'c2', 'p5', 'r5', 'k1'] },
@@ -132,21 +133,27 @@ const CASE_DEFS = [
 
 
 // Reward-only cases (opened for free from the Rewards hub, never bought).
-const REWARD_DEFS = [
+const REWARD_DEFS: CaseDef[] = [
   { id: 'daily', name: 'Daily Crate', hue: 140, reward: true, items: ['p1', 's1', 'r1', 's2', 'p3', 'n1', 'c1', 'r3', 'r5'] },
   { id: 'welcome', name: 'Welcome Crate', hue: 75, reward: true, items: ['p2', 'r1', 's2', 'p3', 'r2', 'c1', 'p4', 'k1'] },
 ];
 
 // Case box art (assets/cases/<id>.webp). Cases without a file fall back to the drawn crate in ui.js.
-const CASE_IMG = new Map([...['starter', 'flip', 'neon', 'charmed', 'sniper', 'blade', 'high', 'wasteland', 'gearup', 'canyon', 'arcade', 'foundry', 'deeptide', 'blossom', 'relic', 'scopes', 'charmparade', 'heavy', 'gilded', 'knifeedge', 'fox33', 'daily', 'aurora'].map(id => [id, id]),
+const CASE_IMG = new Map<string, string>([...['starter', 'flip', 'neon', 'charmed', 'sniper', 'blade', 'high', 'wasteland', 'gearup', 'canyon', 'arcade', 'foundry', 'deeptide', 'blossom', 'relic', 'scopes', 'charmparade', 'heavy', 'gilded', 'knifeedge', 'fox33', 'daily', 'aurora'].map((id): [string, string] => [id, id]),
   // no dedicated art yet: borrow the closest crate
   ['phantom10', 'arcade'], ['blade20', 'deeptide'], ['cosmic5', 'aurora'], ['welcome', 'daily']]);
 
+const item = (id: string): Item => {
+  const it = ITEM[id];
+  if (!it) throw new Error(`Unknown item id: ${id}`);
+  return it;
+};
+
 // Prices are set so the expected value is HOUSE.cases (90%) of the price.
-function buildCase(def) {
+function buildCase(def: CaseDef): Case {
   const entries = def.odds
-    ? Object.entries(def.odds).map(([id, chance]) => ({ item: ITEM[id], weight: chance }))
-    : def.items.map(id => ({ item: ITEM[id], weight: 1 / Math.pow(ITEM[id].value, 1.25) }));
+    ? Object.entries(def.odds).map(([id, chance]) => ({ item: item(id), weight: chance } as CaseEntry))
+    : (def.items ?? []).map(id => ({ item: item(id), weight: 1 / Math.pow(item(id).value, 1.25) } as CaseEntry));
   const total = entries.reduce((s, e) => s + e.weight, 0);
   entries.forEach(e => { e.chance = e.weight / total; });
   entries.sort((a, b) => b.item.value - a.item.value);
@@ -159,14 +166,14 @@ function buildCase(def) {
 
 export const CASES = CASE_DEFS.map(buildCase);
 export const REWARD_CASES = REWARD_DEFS.map(buildCase);
-export const CASE = Object.fromEntries([...CASES, ...REWARD_CASES].map(c => [c.id, c]));
+export const CASE: Record<string, Case> = Object.fromEntries([...CASES, ...REWARD_CASES].map(c => [c.id, c]));
 
 /** Ticket number (0–99,999) for a roll, and the entry that owns it. */
-export const ticketOf = f => Math.floor(f * 100000);
-export const entryForTicket = (c, ticket) => c.entries.find(e => ticket >= e.from && ticket <= e.to) || c.entries[c.entries.length - 1];
+export const ticketOf = (f: number): number => Math.floor(f * 100000);
+export const entryForTicket = (c: Case, ticket: number): CaseEntry => c.entries.find(e => ticket >= e.from && ticket <= e.to) || (c.entries[c.entries.length - 1] as CaseEntry);
 
-export const BOTS = ['frostbyte', 'kappa_kid', 'm0nkey', 'Zeroday', 'lucky_lou', 'N1ghtowl', 'spray&pray', 'Vexx', 'tilted', 'rngesus', 'Bricktop', 'ozzy', 'Kaiju', 'pixelpete', 'Sable', 'noScope', 'jynx', 'Halcyon', 'grizz', 'Mirage'];
-export const randomBot = (exclude = []) => {
+export const BOTS: string[] = ['frostbyte', 'kappa_kid', 'm0nkey', 'Zeroday', 'lucky_lou', 'N1ghtowl', 'spray&pray', 'Vexx', 'tilted', 'rngesus', 'Bricktop', 'ozzy', 'Kaiju', 'pixelpete', 'Sable', 'noScope', 'jynx', 'Halcyon', 'grizz', 'Mirage'];
+export const randomBot = (exclude: string[] = []): string => {
   const pool = BOTS.filter(b => !exclude.includes(b));
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(Math.random() * pool.length)] as string;
 };
