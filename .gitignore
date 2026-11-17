@@ -1,0 +1,14 @@
+# Local tooling and account links (contain local paths and project/team IDs)
+.vercel/
+.claude/
+.playwright-mcp/
+
+# Personal drafts and notes
+vaultrush-portfolio/
+ANALYSIS.md
+
+# Original image sources and generated packs: the site only uses assets/items/web, assets/cases and assets/home
+assets/items/*.png
+assets/items/vaultrush-*/
+
+node_modules/

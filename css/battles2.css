@@ -1,0 +1,125 @@
+/* ===== Case battles: create + open battles ===== */
+.bt2-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.bt2-stats { display: flex; gap: 12px; }
+.bt2-stats > div { min-width: 130px; padding: 10px 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.bt2-stats span { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.bt2-stats b, .bt2-stats .money { font: 800 20px var(--display); }
+
+.bt2-build { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 20px; background: linear-gradient(180deg, var(--panel), var(--bg2)); border: 1px solid var(--line); }
+.bt2-block { display: flex; flex-direction: column; gap: 12px; }
+.bt2-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bt2-title h2 { display: flex; align-items: center; gap: 10px; font: 800 14px var(--display); letter-spacing: .1em; text-transform: uppercase; }
+.bt2-count { font: 700 12px var(--body); letter-spacing: 0; text-transform: none; padding: 3px 10px; border-radius: 20px; background: rgba(198,255,61,.14); color: var(--accent); }
+
+/* mode cards */
+.bt2-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
+.bt2-mode { --c: 51,214,255; position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text); text-align: left; cursor: pointer; transition: transform .15s, border-color .15s, background .15s, box-shadow .15s; }
+.bt2-mode:hover:not(:disabled) { transform: translateY(-2px); border-color: rgba(var(--c), .6); }
+.bt2-mode.on { border-color: rgb(var(--c)); background: linear-gradient(160deg, rgba(var(--c), .22), var(--panel) 70%); box-shadow: 0 0 0 1px rgb(var(--c)), 0 14px 30px -18px rgb(var(--c)); }
+.bt2-mode:disabled { opacity: .35; cursor: not-allowed; }
+.bt2-mode b { font: 800 15px var(--display); letter-spacing: .02em; }
+.bt2-mode small { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.bt2-mi { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; margin-bottom: 4px; background: rgba(var(--c), .16); color: rgb(var(--c)); }
+.bt2-mi .icon { width: 21px; height: 21px; }
+.bt2-mode.on::after { content: '✓'; position: absolute; top: 10px; right: 12px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: rgb(var(--c)); color: #0b0f18; }
+.m-normal { --c: 51,214,255; } .m-crazy { --c: 255,79,200; } .m-terminal { --c: 255,90,79; } .m-jackpot { --c: 255,197,61; }
+.m-crazyjackpot { --c: 255,140,50; } .m-pointrush { --c: 61,255,160; } .m-group { --c: 160,120,255; }
+
+/* formats */
+.bt2-formats { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; }
+.bt2-fgroup { padding: 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.bt2-fgroup h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font: 800 14px var(--display); }
+.bt2-fgroup h3 .icon { width: 18px; height: 18px; color: var(--accent); }
+.bt2-fbtns { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.bt2-fbtns button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px; border-radius: 11px; border: 1px solid var(--line); background: var(--bg2); color: var(--muted); cursor: pointer; transition: all .15s; }
+.bt2-fbtns button:hover { color: var(--text); border-color: var(--line2); }
+.bt2-fbtns button.on { color: var(--text); border-color: var(--accent); background: rgba(198,255,61,.12); box-shadow: 0 0 18px -8px var(--accent); }
+.bt2-fbtns b { font: 800 14px var(--display); }
+.bt2-seats { display: flex; align-items: center; gap: 1px; min-height: 18px; }
+.bt2-seats .icon { width: 15px; height: 15px; }
+.bt2-seats .vs { font: 800 9px var(--display); font-style: normal; margin: 0 5px; opacity: .7; }
+.bt2-fbtns button.on .bt2-seats { color: var(--accent); }
+
+/* case slots */
+.bt2-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.bt2-tool { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 38px; height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font: 700 13px var(--body); cursor: pointer; transition: all .15s; }
+.bt2-tool:hover { color: var(--text); border-color: var(--line2); background: var(--panel3); }
+.bt2-tool .icon { width: 18px; height: 18px; }
+.bt2-tool.wide { padding: 0 14px; }
+.bt2-slots { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.bt2-slot { --hue: 200; position: relative; flex: 0 0 176px; min-height: 236px; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 14px 10px 12px; border-radius: 16px; border: 1px solid var(--line); text-align: center; color: var(--text); font: inherit;
+  background: radial-gradient(130px 100px at 50% 30%, hsl(var(--hue) 80% 50% / .26), transparent 72%), var(--panel); animation: fadeIn .25s; }
+.bt2-slot b { font: 800 14px var(--display); line-height: 1.2; }
+.bt2-art { width: 118px; margin-bottom: 2px; }
+.bt2-art .case-art { width: 100%; filter: drop-shadow(0 10px 14px rgba(0,0,0,.5)); }
+.bt2-pos { position: absolute; top: 10px; left: 10px; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font: 800 12px var(--display); background: rgba(0,0,0,.45); color: var(--muted); }
+.bt2-x { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border: 0; border-radius: 8px; background: rgba(0,0,0,.45); color: var(--muted); font-size: 12px; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s; }
+.bt2-slot:hover .bt2-x, .bt2-x:focus-visible { opacity: 1; }
+.bt2-x:hover { background: var(--red); color: #fff; }
+.bt2-slot.add { border: 2px dashed var(--line2); background: var(--bg2); cursor: pointer; transition: border-color .15s, background .15s; }
+.bt2-slot.add:hover { border-color: var(--accent); background: rgba(198,255,61,.05); }
+.bt2-slot.add small { color: var(--muted); font-size: 12px; }
+.bt2-plus { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; line-height: 1; color: var(--accent); border: 2px solid var(--accent); margin-bottom: 4px; box-shadow: 0 0 22px -6px var(--accent); }
+.bt2-slot.empty { border-style: dashed; background: rgba(255,255,255,.015); cursor: pointer; }
+.bt2-slot.empty:hover { border-color: var(--line2); }
+
+/* summary + create */
+.bt2-bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 14px 16px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--line); }
+.bt2-sum { display: flex; gap: 10px; flex-wrap: wrap; }
+.bt2-sum > div { min-width: 110px; padding: 8px 14px; border-radius: 10px; background: var(--panel); display: flex; flex-direction: column; gap: 1px; }
+.bt2-sum span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.bt2-sum b, .bt2-sum .money { font: 800 17px var(--display); }
+.bt2-go { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.bt2-speed { display: flex; align-items: center; gap: 10px; }
+.bt2-go .btn-lg { display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; font-size: 16px; }
+.bt2-go .btn-lg .icon { width: 20px; height: 20px; }
+.bt2-go .btn-lg:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+/* open battles */
+.bt2-open { margin-top: 22px; padding: 18px 20px 20px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); }
+.bt2-lobbies { display: flex; flex-direction: column; gap: 8px; }
+.bt2-lobby { --c: 51,214,255; display: grid; grid-template-columns: minmax(200px, 1.4fr) minmax(150px, 1fr) minmax(150px, 1fr) auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line); border-left: 3px solid rgb(var(--c));
+  background: linear-gradient(90deg, rgba(var(--c), .1), transparent 40%), var(--bg2); transition: transform .15s, border-color .15s; animation: fadeIn .35s; }
+.bt2-lobby:hover { transform: translateX(3px); border-color: rgba(var(--c), .7); }
+.bt2-lc { display: flex; align-items: center; gap: 6px; }
+.bt2-mini { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 10px; background: rgba(255,255,255,.04); }
+.bt2-mini .case-art { width: 46px; }
+.bt2-more { font: 800 13px var(--display); font-style: normal; color: var(--muted); padding: 0 6px; }
+.bt2-lt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.bt2-lt b { font: 800 17px var(--display); }
+.bt2-lt small { color: var(--muted); font-size: 12px; }
+.bt2-ls { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.bt2-ls .seat-empty { width: 30px; height: 30px; }
+.bt2-lobby .btn { min-width: 120px; }
+.tag.pointrush, .tag.group, .tag.jackpot, .tag.crazyjackpot, .tag.terminal, .tag.crazy, .tag.normal { font-size: 11px; padding: 3px 9px; }
+
+@media (max-width: 1100px) { .bt2-formats { grid-template-columns: 1fr; } .bt2-lobby { grid-template-columns: 1fr auto; } .bt2-lc { grid-column: 1; } .bt2-lt { grid-column: 1; flex-direction: row; align-items: center; gap: 10px; } .bt2-ls { grid-column: 1; } .bt2-lobby .btn { grid-column: 2; grid-row: 1 / span 3; } }
+@media (max-width: 700px) { .bt2-build { padding: 14px; } .bt2-slot { flex-basis: 150px; min-height: 216px; } .bt2-bar, .bt2-go { flex-direction: column; align-items: stretch; } .bt2-go .btn-lg { justify-content: center; } .bt2-stats { width: 100%; } .bt2-stats > div { flex: 1; } }
+@media (max-width: 700px) {
+  .bt2-lobby { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px; }
+  .bt2-lobby .btn { grid-column: 1; grid-row: auto; width: 100%; }
+  .bt2-lc { flex-wrap: wrap; }
+  .bt2-mini { width: 44px; height: 44px; } .bt2-mini .case-art { width: 38px; }
+  .bt2-lt { flex-wrap: wrap; }
+  .bt2-lt b { white-space: nowrap; }
+}
+
+/* list page header + back button */
+.bt2-listhead { align-items: center; }
+.bt2-live { color: var(--accent); }
+.bt2-headr { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bt2-sort { display: flex; align-items: center; gap: 8px; }
+.bt2-sort select { width: auto; padding: 11px 14px; border-radius: 11px; }
+.bt2-headr .btn-lg { display: inline-flex; align-items: center; gap: 9px; }
+.bt2-headr .btn-lg .icon { width: 19px; height: 19px; }
+.bt2-back-row { display: flex; align-items: flex-start; gap: 14px; }
+.bt2-back { flex: none; width: 46px; height: 46px; margin-top: 2px; border-radius: 13px; display: grid; place-items: center; border: 1px solid var(--line2); background: var(--panel); color: var(--text); font-size: 22px; transition: all .15s; }
+.bt2-back:hover { border-color: var(--accent); color: var(--accent); transform: translateX(-2px); }
+.bt2-lcost { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.bt2-lcost b, .bt2-lcost .money { font: 800 18px var(--display); }
+.bt2-lcost small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.bt2-lobby { grid-template-columns: minmax(200px, 1.4fr) minmax(130px, .8fr) minmax(150px, 1fr) auto auto; }
+@media (max-width: 1100px) { .bt2-lobby { grid-template-columns: 1fr auto; } .bt2-lcost { grid-column: 2; grid-row: 1; } .bt2-lobby .btn { grid-column: 2; grid-row: 2 / span 2; } }
+@media (max-width: 700px) { .bt2-lobby { grid-template-columns: minmax(0, 1fr); } .bt2-lcost { grid-column: 1; grid-row: auto; flex-direction: row; align-items: baseline; gap: 8px; } .bt2-lobby .btn { grid-column: 1; grid-row: auto; } .bt2-headr { width: 100%; } .bt2-headr .btn-lg { flex: 1; justify-content: center; } }
+.bt2-head, .bt2-listhead { flex-direction: row; }
+@media (max-width: 700px) { .bt2-head, .bt2-listhead { flex-direction: column; align-items: stretch; } }

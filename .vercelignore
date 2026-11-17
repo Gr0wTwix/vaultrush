@@ -1,0 +1,14 @@
+# Files that must not be published with the site
+server.js
+*.md
+.claude
+.wrangler
+node_modules
+vercel.json
+vaultrush-portfolio
+vaultrush-portfolio.zip
+*.zip
+/assets/items/*.png
+/assets/items/casino-items-48-original
+/assets/items/vaultrush-crates-23-ready
+/assets/items/vaultrush-home-content
