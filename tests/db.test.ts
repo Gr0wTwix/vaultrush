@@ -38,6 +38,8 @@ const rpc = async (uid: string, fn: string, ...args: unknown[]): Promise<any> =>
     const r = await db.query(`select public.${fn}(${ph}) as v`, args.map(a => (a !== null && typeof a === 'object' ? JSON.stringify(a) : a)));
     return (r.rows[0] as { v: unknown }).v;
   });
+const TERMS = '2026-11-18';
+const signup = (uid: string, name: string, dob = '1990-01-01') => rpc(uid, 'complete_signup', name, dob, TERMS);
 const bet = (uid: string, amount: number, target: number, idem?: string) => rpc(uid, 'place_bet', 'crash', amount, { target }, idem ?? null);
 const sql = async (q: string, params: unknown[] = []) => (await db.query(q, params)).rows as any[];
 const fails = async (p: Promise<unknown>, code: string) => { await expect(p).rejects.toThrow(code); };
@@ -46,15 +48,14 @@ beforeAll(async () => {
   db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(PRELUDE);
   await db.exec(readFileSync(new URL('../supabase/migrations/0001_core.sql', import.meta.url), 'utf8'));
-  await rpc(ALICE, 'ensure_account', 'Alice');
-  await rpc(BOB, 'ensure_account', 'Bob');
-  await rpc(ALICE, 'confirm_age'); await rpc(BOB, 'confirm_age');
+  await signup(ALICE, 'Alice');
+  await signup(BOB, 'Bob');
 }, 60_000);
 afterAll(async () => { await db.close(); });
 
 describe('account creation', () => {
   it('creates a wallet, controls and two committed seeds, and is idempotent', async () => {
-    expect(await rpc(ALICE, 'ensure_account', 'Other name')).toEqual({ display_name: 'Alice', balance: 100 });
+    expect(await signup(ALICE, 'Other name')).toEqual({ display_name: 'Alice', balance: 100, created: false });
     const seeds = await sql(`select status, server_seed, server_hash from public.seed_pairs where user_id = $1 order by status`, [ALICE]);
     expect(seeds.map(s => s.status)).toEqual(['active', 'next']);
     for (const s of seeds) expect(s.server_hash).toBe(createHash('sha256').update(s.server_seed).digest('hex'));
@@ -62,6 +63,68 @@ describe('account creation', () => {
   });
   it('refuses duplicate display names (case-insensitive)', async () => {
     await expect(db.query(`insert into public.profiles (id, display_name) values (gen_random_uuid(), 'ALICE')`)).rejects.toThrow(/duplicate|violates/);
+  });
+});
+
+describe('sign-up is checked by the server, not the form', () => {
+  const user = async (n: number) => { const id = `aaaaaaaa-0000-0000-0000-${String(n).padStart(12, '0')}`; await sql(`insert into auth.users (id, email) values ($1, $2)`, [id, `u${n}@example.com`]); return id; };
+  it('refuses minors, even with a forged form, and refuses a missing terms version', async () => {
+    const kid = await user(1);
+    await fails(signup(kid, 'Kid', new Date(Date.now() - 17 * 365.25 * 864e5).toISOString().slice(0, 10)), 'under_age');
+    await fails(rpc(kid, 'complete_signup', 'Kid', '1990-01-01', ''), 'terms_required');
+    await fails(rpc(kid, 'complete_signup', 'Kid', null, TERMS), 'invalid_dob');
+    await fails(signup(kid, 'Kid', '2999-01-01'), 'invalid_dob');
+    await fails(signup(kid, 'Kid', '1800-01-01'), 'invalid_dob');
+    expect((await sql(`select count(*)::int n from public.profiles where id = $1`, [kid]))[0].n).toBe(0);
+  });
+  it('turns the exact 18th birthday into an adult, and one day short into a minor', async () => {
+    const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() - 18);
+    const today = d.toISOString().slice(0, 10), tomorrow = new Date(d.getTime() + 864e5).toISOString().slice(0, 10);
+    await fails(signup(await user(2), 'Almost', tomorrow), 'under_age');
+    expect((await signup(await user(3), 'Exactly', today)).created).toBe(true);
+  });
+  it('validates and reserves names, case-insensitively', async () => {
+    const probe = await user(10);
+    for (const bad of ['a', 'x'.repeat(21), 'bad<name>', 'player-123456', 'Deleted-0001', '']) await fails(signup(probe, bad), 'invalid_name');
+    await fails(signup(await user(11), 'ALICE'), 'name_taken');
+  });
+  it('records the date of birth, terms version and age confirmation, and starts with 100 coins and two seeds', async () => {
+    const id = await user(20);
+    expect(await signup(id, 'Fresh_One', '1985-03-04')).toEqual({ display_name: 'Fresh_One', balance: 100, created: true });
+    const p = (await sql(`select date_of_birth::text d, terms_version, terms_accepted_at is not null t, age_confirmed_at is not null a from public.profiles where id = $1`, [id]))[0];
+    expect(p).toEqual({ d: '1985-03-04', terms_version: TERMS, t: true, a: true });
+    expect((await sql(`select count(*)::int n from public.seed_pairs where user_id = $1`, [id]))[0].n).toBe(2);
+    await expect(as(id, () => db.query(`select date_of_birth from public.profiles`))).resolves.toBeTruthy();       // own row only
+  });
+});
+
+describe('export and deletion', () => {
+  const FRED = 'bbbbbbbb-0000-0000-0000-000000000001';
+  it('exports the caller\'s data only, with no unrevealed server seed', async () => {
+    await sql(`insert into auth.users (id, email) values ($1, 'f@example.com')`, [FRED]);
+    await signup(FRED, 'Fred'); await bet(FRED, 2, 1.5);
+    await as(FRED, () => db.query(`insert into public.chat_messages (body) values ('hello')`));
+    const data = await rpc(FRED, 'export_my_data');
+    expect(data.profile.display_name).toBe('Fred');
+    expect(data.bets).toHaveLength(1);
+    expect(data.ledger.length).toBeGreaterThanOrEqual(2);
+    expect(data.chat).toHaveLength(1);
+    expect(JSON.stringify(data)).not.toContain(((await sql(`select server_seed from public.seed_pairs where user_id = $1 and status = 'active'`, [FRED]))[0]).server_seed);
+    expect(JSON.stringify(data)).not.toContain(ALICE);
+  });
+  it('anonymises the profile, zeroes the wallet with an audit entry, removes chat, and blocks further play', async () => {
+    const before = Number((await sql(`select balance from public.wallets where user_id = $1`, [FRED]))[0].balance);
+    await rpc(FRED, 'delete_account');
+    const p = (await sql(`select display_name, date_of_birth, deleted_at is not null del from public.profiles where id = $1`, [FRED]))[0];
+    expect(p.display_name).toMatch(/^deleted-[0-9a-f]{8}$/);
+    expect(p.date_of_birth).toBeNull(); expect(p.del).toBe(true);
+    expect(Number((await sql(`select balance from public.wallets where user_id = $1`, [FRED]))[0].balance)).toBe(0);
+    const last = (await sql(`select kind, amount::float a, balance_after::float b from public.ledger where user_id = $1 order by id desc limit 1`, [FRED]))[0];
+    expect(last).toEqual({ kind: 'adjustment', a: -before, b: 0 });
+    expect((await sql(`select count(*)::int n from public.chat_messages where user_id = $1`, [FRED]))[0].n).toBe(0);
+    expect((await sql(`select count(*)::int n from public.bets where user_id = $1`, [FRED]))[0].n).toBe(1);   // financial records stay
+    await fails(bet(FRED, 1, 2), 'no_account');
+    await fails(signup(FRED, 'Fred'), 'account_closed');
   });
 });
 
@@ -129,9 +192,10 @@ describe('the gate', () => {
   it('requires an adult confirmation, and enforces the unverified bet cap until KYC raises the tier', async () => {
     const CAROL = '33333333-3333-3333-3333-333333333333';
     await sql(`insert into auth.users (id, email) values ($1, 'c@example.com')`, [CAROL]);
-    await rpc(CAROL, 'ensure_account', 'Carol');
+    await signup(CAROL, 'Carol');
+    await sql(`update public.profiles set age_confirmed_at = null where id = $1`, [CAROL]);
     await fails(bet(CAROL, 1, 2), 'age_not_confirmed');
-    await rpc(CAROL, 'confirm_age');
+    await sql(`update public.profiles set age_confirmed_at = now() where id = $1`, [CAROL]);
     await sql(`update public.wallets set balance = 1000 where user_id = $1`, [CAROL]);
     await fails(bet(CAROL, 51, 2), 'tier_cap_exceeded');
     await sql(`update public.account_controls set kyc_tier = 1 where user_id = $1`, [CAROL]);
@@ -162,7 +226,7 @@ describe('the gate', () => {
   it('enforces the daily loss limit on settled bets', async () => {
     const DAN = '44444444-4444-4444-4444-444444444444';
     await sql(`insert into auth.users (id, email) values ($1, 'd@example.com')`, [DAN]);
-    await rpc(DAN, 'ensure_account', 'Dan'); await rpc(DAN, 'confirm_age');
+    await signup(DAN, 'Dan');
     await rpc(DAN, 'request_limit_change', 'loss_daily', 5);
     // a target of 1000 almost never wins, so each stake is a loss
     for (let i = 0; i < 5; i++) await bet(DAN, 1, 1000);
@@ -174,7 +238,7 @@ describe('seeds: commitment, rotation and verification', () => {
   it('reveals only after rotation, promotes the committed next seed, and every bet then re-verifies in the browser verifier', async () => {
     const EVE = '55555555-5555-5555-5555-555555555555';
     await sql(`insert into auth.users (id, email) values ($1, 'e@example.com')`, [EVE]);
-    await rpc(EVE, 'ensure_account', 'Eve'); await rpc(EVE, 'confirm_age');
+    await signup(EVE, 'Eve');
     await rpc(EVE, 'set_client_seed', 'my-seed');
     const committedNext = (await sql(`select server_hash from public.seed_pairs where user_id = $1 and status = 'next'`, [EVE]))[0].server_hash;
     const bets = [];

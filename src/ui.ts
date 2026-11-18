@@ -56,6 +56,7 @@ export function avatar(name, size = 28) {
 }
 
 export function toast(msg, kind = 'info') {
+  if (!state.ui.notify && kind !== 'error') return;      // Settings > Notifications off: only errors still show
   const el = h(`<div class="toast toast-${kind}">${msg}</div>`);
   document.getElementById('toasts').append(el);
   setTimeout(() => el.classList.add('out'), 2600);

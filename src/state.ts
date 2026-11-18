@@ -22,7 +22,8 @@ export const newGameState = (): GameState => ({
   calendar: { streak: 0, last: '' },
   race: { date: '', wagered: 0 }, racePaid: '',
   history: [], excludedUntil: 0,
-  ui: { chat: true, levelPopup: true, streamer: false },
+  ui: { chat: true, levelPopup: true, streamer: false, anonymous: false, fx: true, notify: true },
+  legal: { termsAt: 0, termsVersion: '' }, gameStats: {}, bestDrop: null,
   blocked: [], tx: [], betSeq: 0,
   rg: defaultRg(), kyc: defaultKyc(), aml: { alerts: [], payouts: [], seq: 0 },
 });
@@ -34,7 +35,7 @@ function load(): GameState {
     if (!raw) return defaults();
     const saved = JSON.parse(raw) as Partial<GameState>;
     const d = defaults();
-    return { ...d, ...saved, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui },
+    return { ...d, ...saved, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui }, legal: { ...d.legal, ...saved.legal }, gameStats: { ...saved.gameStats },
       rg: { ...d.rg, ...saved.rg, limits: { ...d.rg.limits, ...saved.rg?.limits } }, kyc: { ...d.kyc, ...saved.kyc }, aml: { ...d.aml, ...saved.aml } };
   } catch { return defaults(); }
 }
@@ -132,6 +133,9 @@ export function recordBet(b: { game: string; amount: number; multi: number; payo
   state.history.unshift({ id: ++state.betSeq, game: b.game, amount: b.amount, multi: b.multi, payout: b.payout, at: Date.now() });
   state.history.length = Math.min(state.history.length, 500);
   recordSettled(state.rg, b.amount, b.payout);
+  const gs = (state.gameStats[b.game] ??= { bets: 0, wagered: 0, paid: 0, bestPayout: 0, bestMulti: 0 });
+  gs.bets++; gs.wagered = round2(gs.wagered + b.amount); gs.paid = round2(gs.paid + b.payout);
+  gs.bestPayout = Math.max(gs.bestPayout, b.payout); gs.bestMulti = Math.max(gs.bestMulti, b.multi);
   save();
 }
 

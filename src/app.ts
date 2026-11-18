@@ -13,6 +13,8 @@ import { $, $$, esc, fmt, coin, icon, avatar, toast, h, itemArt, caseArt } from 
 import { sfx } from './sfx.js';
 import { openAccount, applyUi } from './account.js';
 import { initRg } from './rgui.js';
+import { openAuth, initAuth } from './auth.js';
+import * as legal from './views/legal.js';
 import * as responsible from './views/responsible.js';
 import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
@@ -62,6 +64,8 @@ const ROUTES: Route[] = [
   [/^#\/mines$/, mines.render, 'mines'],
   [/^#\/fair$/, fair.render, 'fair'],
   [/^#\/responsible$/, responsible.render, 'fair'],
+  [/^#\/terms$/, legal.renderTerms, 'fair'],
+  [/^#\/privacy$/, legal.renderPrivacy, 'fair'],
   [/^#\/rng$/, rngLab.render, 'fair'],
   [/^#\/inventory$/, inventory.render, 'inventory'],
 ];
@@ -75,6 +79,7 @@ function renderSidebar() {
 
 // Avatar menu: every entry opens the Account window on the matching tab.
 const ME_MENU = [
+  ['auth', 'Sign in / Register', 'users'],
   ['account', 'Account', 'user'],
   ['options', 'Settings', 'gear'],
   ['tx', 'Transactions', 'clock'],
@@ -133,7 +138,7 @@ function renderTopbar() {
   const meBtn = $('#meBtn'), meMenu = $('#meMenu');
   const setMenu = open => { meMenu.hidden = !open; meBtn.setAttribute('aria-expanded', String(open)); };
   meBtn.onclick = e => { e.stopPropagation(); sfx.click(); setMenu(meMenu.hidden); };
-  meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); sfx.click(); openAccount(b.dataset.tab); };
+  meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); sfx.click(); if (b.dataset.tab === 'auth') openAuth(); else openAccount(b.dataset.tab); };
   document.addEventListener('click', e => { if (!meMenu.hidden && !(e.target as Element).closest('.me-wrap')) setMenu(false); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !meMenu.hidden) { setMenu(false); meBtn.focus(); } });
   $('#muteBtn').onclick = () => { state.muted = !state.muted; save(); $('#muteBtn').innerHTML = icon(state.muted ? 'mute' : 'sound'); };
@@ -223,6 +228,7 @@ async function boot() {
   renderTopbar();
   applyUi();
   initRg();
+  void initAuth();
   initChatDock();
   startFeed();
   renderTicker();

@@ -1,6 +1,7 @@
 // Simulated chat with coin rain. A real site would run this over WebSockets.
 import { state, credit, logTx, save, emit } from './state.js';
 import { randomBot } from './data.js';
+import { shownName } from './feed.js';
 import { $, $$, esc, fmt, avatar, icon, coin, toast, h } from './ui.js';
 import { sfx } from './sfx.js';
 import { getPool } from './views/double.js';
@@ -21,7 +22,7 @@ export function initChat(root) {
     if (!sys && user !== state.name && state.blocked.includes(user)) return;
     const el = h(sys
       ? `<div class="msg msg-sys">${text}</div>`
-      : `<div class="msg">${avatar(user, 26)}<div><div class="msg-user"><span class="lvl">${levelOf(user)}</span><span class="msg-name" data-u="${esc(user)}">${esc(user)}</span></div><div class="msg-text">${esc(text)}</div></div></div>`);
+      : `<div class="msg">${avatar(shownName(user), 26)}<div><div class="msg-user"><span class="lvl">${levelOf(user)}</span><span class="msg-name" data-u="${esc(user)}">${esc(shownName(user))}</span></div><div class="msg-text">${esc(text)}</div></div></div>`);
     if (!sys) emit('chatmsg', user);
     const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
     box.append(el);

@@ -6,7 +6,8 @@ import { $, $$, esc, fmt, money, icon, avatar, toast, modal } from './ui.js';
 import { sfx } from './sfx.js';
 import { renderResponsible } from './account-rg.js';
 import { renderVerification } from './account-kyc.js';
-import { renderCloud } from './account-cloud.js';
+import { renderCloud, renderSecurityCloud } from './account-cloud.js';
+import { renderOverview } from './account-overview.js';
 
 const TABS = [
   ['account', 'Account', 'user'], ['security', 'Security', 'lock'], ['affiliates', 'Affiliates', 'users'], ['options', 'Options', 'gear'],
@@ -15,6 +16,7 @@ const TABS = [
 
 /** Interface switches that live outside the modal (chat visibility, streamer mode). Call once at start-up and after changes. */
 export function applyUi() {
+  document.body.classList.toggle('no-fx', !state.ui.fx);
   document.body.classList.toggle('no-chat', !state.ui.chat);
   document.body.classList.toggle('streamer', !!state.ui.streamer);
 }
@@ -61,34 +63,7 @@ export function openAccount(tab = 'account') {
   const ctx = { rerender: () => VIEWS[tabNow]?.(), close: () => m.close() };
   const VIEWS = {
     // ---- Account ------------------------------------------------------------------------------------------
-    account() {
-      const lvl = level(), base = xpForLevel(lvl), next = xpForLevel(lvl + 1), pct = Math.max(0, Math.min(100, ((state.xp - base) / (next - base)) * 100));
-      const s = state.stats, net = s.won - s.wagered, best = state.history.reduce((a, h) => Math.max(a, h.payout), 0);
-      pane.innerHTML = `${head('Account', 'Your profile and progress. Everything here is play money.')}
-        <div class="ac-card ac-who">${avatar(state.name, 68)}
-          <div class="ac-who-info"><b>${esc(state.name)}</b><span class="muted">Level ${lvl} · ${state.xp.toLocaleString('en-US')} / ${next.toLocaleString('en-US')} XP</span><div class="ac-bar"><i style="width:${pct.toFixed(1)}%"></i></div></div></div>
-        <div class="ac-stats">
-          <div class="ac-stat"><span>Balance</span>${money(state.balance)}</div>
-          <div class="ac-stat"><span>Wagered</span>${money(s.wagered)}</div>
-          <div class="ac-stat"><span>Total won</span>${money(s.won)}</div>
-          <div class="ac-stat"><span>Net</span><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : ''}${fmt(net)}</b></div>
-          <div class="ac-stat"><span>Bets placed</span><b>${s.bets.toLocaleString('en-US')}</b></div>
-          <div class="ac-stat"><span>Biggest payout</span>${money(best)}</div>
-        </div>
-        <div class="ac-card"><h3>Display name</h3><p class="ac-note">2–20 characters: letters, numbers, spaces, _ and -.</p>
-          <div class="ac-inline"><input id="acName" maxlength="20" value="${esc(state.name)}" autocomplete="off"><button class="btn btn-primary" id="acNameSave">Save</button></div></div>
-        <div class="ac-links"><a class="btn btn-ghost" href="#/inventory">${icon('bag')} Inventory (${state.inv.length})</a><a class="btn btn-ghost" href="#/rewards">${icon('gift')} Rewards</a><a class="btn btn-ghost" href="#/leaderboard">${icon('trophy')} Daily race</a><a class="btn btn-ghost" href="#/fair">${icon('fair')} Fairness</a></div>`;
-      $('#acNameSave', pane).onclick = () => {
-        const v = $('#acName', pane).value.trim();
-        if (!/^[\w \-]{2,20}$/.test(v)) return toast('Use 2–20 letters, numbers, spaces, _ or -', 'error');
-        if (BOTS.some(b => b.toLowerCase() === v.toLowerCase())) return toast('That name belongs to another player', 'error');
-        state.name = v; save(); sfx.click(); toast('Display name saved', 'win');
-        const me = $('.me .avatar'); if (me) me.outerHTML = avatar(v, 32);
-        VIEWS.account();
-      };
-      $('#acName', pane).onkeydown = e => { if (e.key === 'Enter') $('#acNameSave', pane).click(); };
-      $$('.ac-links a', pane).forEach(a => a.addEventListener('click', () => m.close()));
-    },
+    account() { renderOverview(pane, ctx, go); },
 
     // ---- Security -----------------------------------------------------------------------------------------
     security() {
@@ -96,7 +71,8 @@ export function openAccount(tab = 'account') {
         <div class="ac-card"><h3>Back up your progress</h3><p class="ac-note">Download your balance, items, levels and history as a file, or restore it on another browser. Clearing site data erases it, so a backup is the only way to recover.</p>
           <div class="ac-links"><button class="btn btn-primary" id="acExport">Download backup</button><label class="btn btn-ghost" for="acImport">Restore from file</label><input type="file" id="acImport" accept="application/json,.json" hidden></div></div>
         <div class="ac-card"><h3>Active sessions</h3><p class="ac-note">Sessions on this device. A real account would list other devices here and let you sign them out.</p>
-          <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Device</th><th>Location</th><th>Started</th></tr></thead><tbody><tr><td>${esc(device())}</td><td>This device</td><td><b class="pos">Current session</b></td></tr></tbody></table></div></div>
+          <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Device</th><th>Location</th><th>Started</th></tr></thead><tbody><tr><td>${esc(device())}</td><td>This device</td><td><b class="pos">Current session</b> <span class="muted small">since ${new Date(state.rg.sessionStart || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td></tr></tbody></table></div></div>
+        <div id="acSecCloud"></div>
         <div class="ac-card ac-danger"><div><h3>Reset demo account</h3><p class="ac-note">Back to ${fmt(START_BALANCE)} coins, level 0, an empty inventory and no history. This cannot be undone.</p></div><button class="btn btn-ghost" id="acReset">Reset account</button></div>`;
       $('#acExport', pane).onclick = () => {
         const blob = new Blob([JSON.stringify({ app: 'vaultrush', version: 1, savedAt: new Date().toISOString(), state, fair: getFair() }, null, 2)], { type: 'application/json' });
@@ -114,6 +90,7 @@ export function openAccount(tab = 'account') {
         } catch { toast('That is not a Vaultrush backup', 'error'); }
       };
       $('#acReset', pane).onclick = () => { if (confirm('Reset your demo account? This cannot be undone.')) { resetAccount(); applyUi(); toast('Account reset'); VIEWS.security(); } };
+      void renderSecurityCloud($('#acSecCloud', pane), ctx);
     },
 
     // ---- Affiliates ---------------------------------------------------------------------------------------

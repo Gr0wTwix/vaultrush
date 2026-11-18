@@ -37,6 +37,8 @@ export interface FairState extends SeedPair {
 
 // ---- player state ----
 export interface HistoryBet { id?: number; game: string; amount: number; multi: number; payout: number; at: number }
+/** Lifetime totals for one game, kept apart from the capped bet history so they stay accurate. */
+export interface GameStat { bets: number; wagered: number; paid: number; bestPayout: number; bestMulti: number }
 export interface TxEntry { id: number; type: string; amount: number; note: string; at: number }
 export interface InvEntry { uid: string; id: string; at: number }
 export interface GameState {
@@ -48,7 +50,10 @@ export interface GameState {
   calendar: { streak: number; last: string };
   race: { date: string; wagered: number }; racePaid: string;
   history: HistoryBet[]; excludedUntil: number;
-  ui: { chat: boolean; levelPopup: boolean; streamer: boolean };
+  ui: { chat: boolean; levelPopup: boolean; streamer: boolean; anonymous: boolean; fx: boolean; notify: boolean };
+  legal: { termsAt: number; termsVersion: string };
+  gameStats: Record<string, GameStat>;
+  bestDrop: { id: string; source: string; value: number } | null;
   blocked: string[]; tx: TxEntry[]; betSeq: number;
   rg: RgState; kyc: KycState; aml: AmlState;
 }

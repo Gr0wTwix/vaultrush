@@ -1,12 +1,17 @@
 // Live drops + live bets. Simulated bots stand in for the WebSocket feed a real backend would push.
 import { CASES, randomBot } from './data.js';
-import { emit, recordBet } from './state.js';
+import { emit, recordBet, save, state } from './state.js';
 import type { Drop, Item, LiveBet } from './types.js';
 
 export const drops: Drop[] = [];
 export const bets: LiveBet[] = [];
 
+/** Anonymous mode hides the player's own name in everything other players can see. */
+export const shownName = (user: string): string => (user === state.name && state.ui.anonymous ? 'Anonymous' : user);
+
 export function pushDrop(d: { user: string; item: Item; source: string }): void {
+  if (d.user === state.name && (!state.bestDrop || d.item.value > state.bestDrop.value)) { state.bestDrop = { id: d.item.id, source: d.source, value: d.item.value }; save(); }
+  d = { ...d, user: shownName(d.user) };
   drops.unshift({ ...d, at: Date.now() });
   drops.length = Math.min(drops.length, 30);
   emit('drop', drops[0]);
@@ -14,7 +19,7 @@ export function pushDrop(d: { user: string; item: Item; source: string }): void 
 
 export function pushBet(b: Omit<LiveBet, 'at'>): void {
   if (b.mine) recordBet(b);
-  bets.unshift({ ...b, at: Date.now() });
+  bets.unshift({ ...b, user: shownName(b.user), at: Date.now() });
   bets.length = Math.min(bets.length, 40);
   emit('bet', bets[0]);
 }

@@ -13,6 +13,10 @@ create table public.profiles (
   id               uuid primary key references auth.users (id) on delete cascade,
   display_name     text not null check (char_length(display_name) between 2 and 20),
   age_confirmed_at timestamptz,
+  date_of_birth    date,
+  terms_accepted_at timestamptz,
+  terms_version    text,
+  deleted_at       timestamptz,                 -- set by delete_account(): the profile is anonymised and can no longer bet
   created_at       timestamptz not null default now()
 );
 create unique index profiles_display_name_key on public.profiles (lower(display_name));
@@ -163,23 +167,69 @@ begin
   values (p_user, seed, encode(digest(seed, 'sha256'), 'hex'), encode(gen_random_bytes(8), 'hex'), p_status);
 end $$;
 
-create function public.ensure_account(p_name text default null) returns jsonb language plpgsql security definer set search_path = public, extensions, pg_temp as $$
-declare uid uuid := auth.uid(); nm text;
+-- Every player, whether they registered with a password or arrived through Google/Twitch/Steam, finishes here. The server (not the
+-- form) verifies the age from the date of birth, the terms version and the name, then creates the wallet and the first two seeds.
+create function public.complete_signup(p_name text, p_dob date, p_terms_version text) returns jsonb language plpgsql security definer set search_path = public, extensions, pg_temp as $$
+declare uid uuid := auth.uid(); nm text := trim(coalesce(p_name, '')); ex public.profiles; yrs integer;
 begin
   if uid is null then raise exception 'not_authenticated' using errcode = '28000'; end if;
-  nm := coalesce(nullif(trim(p_name), ''), 'player-' || substr(replace(uid::text, '-', ''), 1, 6));
-  insert into public.profiles (id, display_name) values (uid, nm) on conflict (id) do nothing;
-  insert into public.wallets (user_id, balance) values (uid, 100) on conflict (user_id) do nothing;
-  if found then insert into public.ledger (user_id, kind, amount, balance_after) values (uid, 'bonus', 100, 100); end if;
-  insert into public.account_controls (user_id) values (uid) on conflict (user_id) do nothing;
-  if not exists (select 1 from public.seed_pairs where user_id = uid and status = 'active') then perform public.new_seed_pair(uid, 'active'); end if;
-  if not exists (select 1 from public.seed_pairs where user_id = uid and status = 'next') then perform public.new_seed_pair(uid, 'next'); end if;
-  return (select jsonb_build_object('display_name', p.display_name, 'balance', w.balance) from public.profiles p join public.wallets w on w.user_id = p.id where p.id = uid);
+  select * into ex from public.profiles where id = uid;
+  if found then
+    if ex.deleted_at is not null then raise exception 'account_closed'; end if;
+    return (select jsonb_build_object('display_name', p.display_name, 'balance', w.balance, 'created', false) from public.profiles p join public.wallets w on w.user_id = p.id where p.id = uid);
+  end if;
+  if p_terms_version is null or char_length(trim(p_terms_version)) = 0 then raise exception 'terms_required'; end if;
+  if p_dob is null or p_dob > current_date then raise exception 'invalid_dob'; end if;
+  yrs := extract(year from age(current_date, p_dob))::integer;
+  if yrs < 18 then raise exception 'under_age'; end if;
+  if yrs > 120 then raise exception 'invalid_dob'; end if;
+  if nm !~ '^[A-Za-z0-9_ -]{2,20}$' or lower(nm) like 'deleted-%' or lower(nm) like 'player-%' then raise exception 'invalid_name'; end if;
+  begin
+    insert into public.profiles (id, display_name, age_confirmed_at, date_of_birth, terms_accepted_at, terms_version)
+    values (uid, nm, now(), p_dob, now(), trim(p_terms_version));
+  exception when unique_violation then raise exception 'name_taken';
+  end;
+  insert into public.wallets (user_id, balance) values (uid, 100);
+  insert into public.ledger (user_id, kind, amount, balance_after) values (uid, 'bonus', 100, 100);
+  insert into public.account_controls (user_id) values (uid);
+  perform public.new_seed_pair(uid, 'active');
+  perform public.new_seed_pair(uid, 'next');
+  return jsonb_build_object('display_name', nm, 'balance', 100, 'created', true);
 end $$;
 
-create function public.confirm_age() returns void language sql security definer set search_path = public, pg_temp as $$
-  update public.profiles set age_confirmed_at = coalesce(age_confirmed_at, now()) where id = auth.uid();
-$$;
+-- Right to erasure, as far as a database function can go: the profile is anonymised, personal data and chat are removed, the
+-- wallet is zeroed with an audit entry, and the account can no longer bet. Bets and the ledger are kept (financial records).
+-- Removing the login itself (auth.users) needs the service role, so it is done by the delete-account Edge Function.
+create function public.delete_account() returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare uid uuid := auth.uid(); bal numeric;
+begin
+  if uid is null then raise exception 'not_authenticated' using errcode = '28000'; end if;
+  if not exists (select 1 from public.profiles where id = uid) then raise exception 'no_account'; end if;
+  select balance into bal from public.wallets where user_id = uid for update;
+  if bal > 0 then
+    update public.wallets set balance = 0, updated_at = now() where user_id = uid;
+    insert into public.ledger (user_id, kind, amount, balance_after) values (uid, 'adjustment', -bal, 0);
+  end if;
+  delete from public.chat_messages where user_id = uid;
+  delete from public.limit_changes where user_id = uid;
+  update public.profiles set display_name = 'deleted-' || substr(replace(uid::text, '-', ''), 1, 8), date_of_birth = null, deleted_at = now() where id = uid;
+end $$;
+
+-- A copy of everything held about the caller (secret seeds that are not yet revealed are never included).
+create function public.export_my_data() returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'not_authenticated' using errcode = '28000'; end if;
+  return jsonb_build_object(
+    'exported_at', now(),
+    'profile',  (select to_jsonb(p) from public.profiles p where p.id = uid),
+    'wallet',   (select to_jsonb(w) from public.wallets w where w.user_id = uid),
+    'controls', (select to_jsonb(c) from public.account_controls c where c.user_id = uid),
+    'bets',     (select coalesce(jsonb_agg(to_jsonb(b) order by b.id), '[]'::jsonb) from (select * from public.bets where user_id = uid order by id desc limit 5000) b),
+    'ledger',   (select coalesce(jsonb_agg(to_jsonb(l) order by l.id), '[]'::jsonb) from (select * from public.ledger where user_id = uid order by id desc limit 5000) l),
+    'seeds',    (select coalesce(jsonb_agg(to_jsonb(m) order by m.id), '[]'::jsonb) from public.my_seeds m),
+    'chat',     (select coalesce(jsonb_agg(to_jsonb(c) order by c.id), '[]'::jsonb) from public.chat_messages c where c.user_id = uid));
+end $$;
 
 -- Tightening a limit applies at once; loosening or removing it waits 24 hours (and replaces any earlier pending change).
 create function public.request_limit_change(p_key text, p_value numeric) returns text language plpgsql security definer set search_path = public, pg_temp as $$
@@ -250,7 +300,7 @@ begin
   if p_amount is null or p_amount <= 0 or p_amount <> round(p_amount, 2) then raise exception 'invalid_amount'; end if;
 
   select * into prof from public.profiles where id = uid;
-  if not found then raise exception 'no_account'; end if;
+  if not found or prof.deleted_at is not null then raise exception 'no_account'; end if;
   select * into wal from public.wallets where user_id = uid for update;       -- serialises concurrent bets for this player
   select * into ctl from public.account_controls where user_id = uid;
 
@@ -294,7 +344,7 @@ end $$;
 
 -- Only signed-in players may call the public API. Internal helpers are not callable by clients at all.
 revoke execute on all functions in schema public from public, anon, authenticated;
-grant execute on function public.ensure_account(text), public.confirm_age(), public.request_limit_change(text, numeric), public.self_exclude(integer),
+grant execute on function public.complete_signup(text, date, text), public.delete_account(), public.export_my_data(), public.request_limit_change(text, numeric), public.self_exclude(integer),
   public.set_client_seed(text), public.rotate_seed(), public.place_bet(text, numeric, jsonb, text) to authenticated;
 
 -- Realtime chat (a no-op outside Supabase where the publication does not exist).
