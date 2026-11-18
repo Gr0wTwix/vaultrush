@@ -37,7 +37,7 @@ const side = (): string => `<aside class="au-side"><div class="au-brand"><span c
   <ul><li>${icon('fair')} Every result can be re-checked</li><li>${icon('heart')} Limits, breaks and self-exclusion</li><li>${icon('id')} Age and identity checks (sandbox)</li></ul>
   <small>By accessing the site, I attest that I am at least 18 years old and have read the <a href="#/terms" target="_blank" rel="noopener">Terms &amp; Conditions</a>.</small></aside>`;
 
-let open: { close: () => void } | null = null;
+let open: { el: HTMLElement; close: () => void } | null = null;
 let signedIn = false;
 export const isSignedIn = (): boolean => signedIn;
 
@@ -62,12 +62,12 @@ function enterLocalAccount(id: string, username: string, fresh: boolean): void {
   setActive(id); location.hash = '#/'; location.reload();
 }
 
-export function openAuth(opts: { tab?: Tab } = {}): void {
+export function openAuth(opts: { tab?: Tab; locked?: boolean } = {}): void {
   open?.close();
   const cloud = backendEnabled();
   let tab: Tab = opts.tab ?? 'login', lockUntil = 0, fails = 0;
-  const m = modal('', { wide: true, onClose: () => { open = null; } });
-  open = m; m.el.classList.add('auth-modal');
+  const m = modal('', { wide: true, locked: !!opts.locked, onClose: () => { open = null; } });
+  open = m; m.el.classList.add('auth-modal'); if (opts.locked) m.el.classList.add('au-locked');
   const v = (id: string): string => (($('#' + id, m.el) as HTMLInputElement | null)?.value ?? '');
   const c = (id: string): boolean => !!($('#' + id, m.el) as HTMLInputElement | null)?.checked;
   const note = (t: string): void => { const n = $('#auNote', m.el); if (n) n.textContent = t; };
@@ -185,7 +185,16 @@ export async function initAuth(): Promise<void> {
   const slot = $('#meBtn')?.closest('.me-wrap') as HTMLElement | null;
   const btn = h(`<button class="btn btn-primary" id="authBtn">${icon('user')}<span>Log in</span></button>`) as HTMLElement;
   slot?.after(btn); btn.onclick = () => { sfx.click(); openAuth(); };
-  const setSignedIn = (on: boolean): void => { signedIn = on; btn.hidden = on; };
+  // Signed out = nothing of the site is usable: a login screen that cannot be dismissed covers it and the user widgets are hidden.
+  // Only the legal pages stay readable, so the Terms link in the form works.
+  const publicRoute = (): boolean => location.hash.startsWith('#/terms') || location.hash.startsWith('#/privacy') || location.hash.startsWith('#/responsible');
+  const applyGate = (): void => {
+    document.body.classList.toggle('logged-out', !signedIn);
+    if (signedIn || publicRoute()) { if (open && (open as { el: HTMLElement }).el?.classList.contains('au-locked')) open.close(); }
+    else if (!open) openAuth({ locked: true });
+  };
+  window.addEventListener('hashchange', applyGate);
+  const setSignedIn = (on: boolean): void => { signedIn = on; btn.hidden = on; applyGate(); };
   if (!backendEnabled()) { setSignedIn(activeAccount() !== null); return; }
 
   try { const e = await finishSteamLogin(); if (e) toast(e, 'error'); } catch { /* the toast above covers the usual failures */ }

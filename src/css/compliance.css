@@ -144,3 +144,8 @@ body.no-fx .confetti, body.no-fx .fx-layer { display: none !important; }
 @media (max-width: 800px) { .ov-top, .ov-rewards { grid-template-columns: 1fr; } .ov-stats { grid-template-columns: repeat(2, 1fr); } }
 #authBtn { padding: 9px 16px; } @media (max-width: 560px) { #authBtn { padding: 9px 12px; } #authBtn span { display: none; } }
 @media (max-width: 760px) { .modal.auth-modal { grid-template-columns: minmax(0, 1fr); } .au-side { display: none; } }
+
+/* signed out: no balance, claim button, avatar menu or other user widgets, and the login screen cannot be closed */
+body.logged-out #freeBtn, body.logged-out .balance, body.logged-out #muteBtn, body.logged-out .me-wrap, body.logged-out #chatBtn, body.logged-out .rg-clock { display: none !important; }
+body.logged-out .app { filter: blur(6px); pointer-events: none; user-select: none; }
+.modal-back.locked { background: rgba(4,6,12,.9); } .modal-back.locked .modal-x { display: none; }

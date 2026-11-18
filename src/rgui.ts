@@ -4,6 +4,7 @@ import { acknowledgeReality, addPlayTime, confirmAge, realityDue, sessionSummary
 import { $, fmt, h, icon } from './ui.js';
 import { openAccount } from './account.js';
 import { sfx } from './sfx.js';
+import { activeAccount } from './accounts.js';
 import { rngHealth } from './rng.js';
 import { toast } from './ui.js';
 
@@ -51,7 +52,7 @@ function clockLabel(): string {
 /** Call once at start-up (after the top bar exists). */
 export function initRg(): void {
   startSession(state.rg); save();
-  if (!state.rg.ageConfirmedAt) showAgeGate();
+  if (!state.rg.ageConfirmedAt && activeAccount()) showAgeGate(); // signed-out visitors see the login screen instead; its 18+ tickbox covers this
 
   const slot = $('#freeBtn');
   if (slot) {

@@ -187,12 +187,13 @@ export function wireAmount(root: ParentNode, input: any, getBalance: () => numbe
 }
 
 /** Simple modal. Returns { el, close }. */
-export function modal(html: string, { onClose, wide = false }: { onClose?: () => void; wide?: boolean } = {}): { el: any; close: () => void } {
+export function modal(html: string, { onClose, wide = false, locked = false }: { onClose?: () => void; wide?: boolean; locked?: boolean } = {}): { el: any; close: () => void } {
   const wrap = h(`<div class="modal-back"><div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="Close">×</button>${html}</div></div>`);
   const close = () => { wrap.classList.add('out'); setTimeout(() => wrap.remove(), 200); document.removeEventListener('keydown', esc); onClose?.(); };
-  const esc = e => { if (e.key === 'Escape') close(); };
-  wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
+  const esc = e => { if (e.key === 'Escape' && !locked) close(); };
+  wrap.addEventListener('click', e => { if (e.target === wrap && !locked) close(); });
   wrap.querySelector('.modal-x').onclick = close;
+  if (locked) wrap.classList.add('locked');
   document.addEventListener('keydown', esc);
   document.body.append(wrap);
   return { el: wrap.querySelector('.modal'), close };
