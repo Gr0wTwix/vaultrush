@@ -4,10 +4,12 @@ import { getFair, setClientSeed, rotate, randHex } from './fair.js';
 import { BOTS } from './data.js';
 import { $, $$, esc, fmt, money, icon, avatar, toast, modal } from './ui.js';
 import { sfx } from './sfx.js';
+import { renderResponsible } from './account-rg.js';
+import { renderVerification } from './account-kyc.js';
 
 const TABS = [
   ['account', 'Account', 'user'], ['security', 'Security', 'lock'], ['affiliates', 'Affiliates', 'users'], ['options', 'Options', 'gear'],
-  ['history', 'Game History', 'list'], ['tx', 'Transactions', 'clock'], ['exclude', 'Self Exclusion', 'ban'],
+  ['history', 'Game History', 'list'], ['tx', 'Transactions', 'clock'], ['kyc', 'Verification', 'id'], ['responsible', 'Responsible Play', 'heart'],
 ];
 
 /** Interface switches that live outside the modal (chat visibility, streamer mode). Call once at start-up and after changes. */
@@ -44,6 +46,7 @@ function pager(page, pages) {
 let current = null;
 
 export function openAccount(tab = 'account') {
+  if (tab === 'exclude') tab = 'responsible';
   if (current) return current.go(tab);
   const m = modal('', { wide: true, onClose: () => { current = null; } });
   m.el.classList.add('acct');
@@ -54,6 +57,7 @@ export function openAccount(tab = 'account') {
   const pg = { history: { page: 1, per: 10, filter: 'all' }, tx: { page: 1, per: 10, filter: 'all' } };
   let tabNow = tab;
 
+  const ctx = { rerender: () => VIEWS[tabNow]?.(), close: () => m.close() };
   const VIEWS = {
     // ---- Account ------------------------------------------------------------------------------------------
     account() {
@@ -176,38 +180,23 @@ export function openAccount(tab = 'account') {
 
     // ---- Transactions -------------------------------------------------------------------------------------
     tx() {
-      const p = pg.tx, cat = t => (t.type === 'Free coins' || t.type === 'Coin rain' ? 'Coins' : /case|gift|key/i.test(t.type) ? 'Cases' : 'Rewards');
+      const p = pg.tx, cat = t => (t.type === 'Free coins' || t.type === 'Coin rain' || /^Payout/.test(t.type) ? 'Coins' : /case|gift|key/i.test(t.type) ? 'Cases' : 'Rewards');
       const rows = state.tx.filter(t => p.filter === 'all' || cat(t) === p.filter), pages = Math.max(1, Math.ceil(rows.length / p.per));
       p.page = Math.min(p.page, pages);
       const slice = rows.slice((p.page - 1) * p.per, p.page * p.per);
       pane.innerHTML = `${head('Transactions', 'Coins and items you received outside of bets: free coins, rain, rakeback, rewards and free cases.')}
         <div class="ac-pills">${['all', 'Coins', 'Rewards', 'Cases'].map(g => `<button data-f="${g}" class="${g === p.filter ? 'on' : ''}">${g === 'all' ? 'All' : g}</button>`).join('')}</div>
         <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Id</th><th>Type</th><th>Status</th><th>Amount</th><th class="r">Time</th></tr></thead><tbody>
-        ${slice.map(t => `<tr><td class="muted">${t.id}</td><td>${esc(t.type)}${t.note ? `<small class="ac-subtle">${esc(t.note)}</small>` : ''}</td><td><span class="ac-ok">Complete</span></td><td class="pos">${money(t.amount)}</td><td class="r muted">${ago(t.at)}</td></tr>`).join('') || '<tr><td colspan="5" class="ac-empty">Nothing here yet. Claim free coins or open a reward case.</td></tr>'}
+        ${slice.map(t => `<tr><td class="muted">${t.id}</td><td>${esc(t.type)}${t.note ? `<small class="ac-subtle">${esc(t.note)}</small>` : ''}</td><td><span class="ac-ok">Complete</span></td><td class="${t.amount < 0 ? 'neg' : 'pos'}">${money(t.amount)}</td><td class="r muted">${ago(t.at)}</td></tr>`).join('') || '<tr><td colspan="5" class="ac-empty">Nothing here yet. Claim free coins or open a reward case.</td></tr>'}
         </tbody></table></div>
         <div class="ac-foot"><label>Rows per page <select id="acPer">${[10, 25, 50].map(n => `<option ${n === p.per ? 'selected' : ''}>${n}</option>`).join('')}</select></label><span class="muted small">${rows.length ? `${(p.page - 1) * p.per + 1}–${Math.min(rows.length, p.page * p.per)} of ${rows.length}` : '0 transactions'}</span></div>
         ${pager(p.page, pages)}`;
       wireList(p, 'tx');
     },
 
-    // ---- Self exclusion -----------------------------------------------------------------------------------
-    exclude() {
-      const OPT = [['1 hour', 3600e3], ['24 hours', 864e5], ['3 days', 3 * 864e5], ['7 days', 7 * 864e5], ['14 days', 14 * 864e5], ['30 days', 30 * 864e5]] as [string, number][];
-      let pick = 1;
-      const draw = () => {
-        pane.innerHTML = `${head('Self Exclusion', 'Game responsibly.')}
-          <p class="ac-sub">Take a break from betting. While a self-exclusion runs you cannot place bets on any game. Rewards, browsing and the Fairness tools keep working. It cannot be lifted early.</p>
-          ${isExcluded() ? `<div class="ac-card ac-warn"><h3>Betting is paused</h3><p class="ac-note">Self-exclusion ends <b>${new Date(state.excludedUntil).toLocaleString()}</b>.</p></div>` : `
-          <div class="ac-card"><h3>Break length</h3><div class="ac-pills" id="acEx">${OPT.map(([l], i) => `<button data-i="${i}" class="${i === pick ? 'on' : ''}">${l}</button>`).join('')}</div>
-            <label class="check ac-agree"><input type="checkbox" id="acAgree"> I understand that nothing can lift this break early</label>
-            <button class="btn btn-danger block" id="acExGo" disabled>Self exclude for ${OPT[pick][0]}</button></div>`}`;
-        $$('#acEx button', pane).forEach(b => b.onclick = () => { pick = +b.dataset.i; draw(); });
-        const agree = $('#acAgree', pane), go = $('#acExGo', pane);
-        if (agree) agree.onchange = () => { go.disabled = !agree.checked; };
-        if (go) go.onclick = () => { state.excludedUntil = Date.now() + OPT[pick][1]; save(); toast('Self-exclusion started'); draw(); };
-      };
-      draw();
-    },
+    // ---- Verification (KYC / AML, sandbox) and Responsible Play: see account-kyc.ts and account-rg.ts ----
+    kyc() { renderVerification(pane, ctx); },
+    responsible() { renderResponsible(pane, ctx); },
   };
 
   /** Shared wiring for the two paged tables. */

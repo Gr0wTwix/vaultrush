@@ -4,6 +4,7 @@ import './css/games.css';
 import './css/home.css';
 import './css/account.css';
 import './css/battles2.css';
+import './css/compliance.css';
 import { state, save, on, credit, logTx, FREE_COINS, FREE_COINS_EVERY_MS } from './state.js';
 import { initFair } from './fair.js';
 import { startFeed, drops } from './feed.js';
@@ -11,6 +12,9 @@ import { RARITY, CASES, REWARD_CASES } from './data.js';
 import { $, $$, esc, fmt, coin, icon, avatar, toast, h, itemArt, caseArt } from './ui.js';
 import { sfx } from './sfx.js';
 import { openAccount, applyUi } from './account.js';
+import { initRg } from './rgui.js';
+import * as responsible from './views/responsible.js';
+import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
 import * as home from './views/home.js';
 import * as cases from './views/cases.js';
@@ -57,6 +61,8 @@ const ROUTES: Route[] = [
   [/^#\/upgrade$/, upgrade.render, 'upgrade'],
   [/^#\/mines$/, mines.render, 'mines'],
   [/^#\/fair$/, fair.render, 'fair'],
+  [/^#\/responsible$/, responsible.render, 'fair'],
+  [/^#\/rng$/, rngLab.render, 'fair'],
   [/^#\/inventory$/, inventory.render, 'inventory'],
 ];
 
@@ -216,6 +222,7 @@ async function boot() {
   renderSidebar();
   renderTopbar();
   applyUi();
+  initRg();
   initChatDock();
   startFeed();
   renderTicker();

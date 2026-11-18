@@ -1,5 +1,7 @@
 // Player state (play money only), persisted in localStorage. In production this lives on the server.
 import type { GameState, InvEntry, Item } from './types.js';
+import { betBlockReason, defaultRg, recordSettled, recordStake } from './rg.js';
+import { defaultKyc } from './kyc.js';
 
 const KEY = 'vaultrush.state.v1';
 export const START_BALANCE = 100;
@@ -11,7 +13,7 @@ export const DAY = 24 * 60 * 60 * 1000;
 export const RAKEBACK = { instant: 0.004, daily: 0.003, weekly: 0.003 } as const;
 export const XP_PER_COIN = 10;
 
-const defaults = (): GameState => ({
+export const newGameState = (): GameState => ({
   name: 'You', balance: START_BALANCE, inv: [], lastClaim: 0, muted: false, speed: 'normal',
   stats: { wagered: 0, won: 0, bets: 0 },
   xp: 0, keysUsed: [],                      // level-case tiers already opened
@@ -22,7 +24,9 @@ const defaults = (): GameState => ({
   history: [], excludedUntil: 0,
   ui: { chat: true, levelPopup: true, streamer: false },
   blocked: [], tx: [], betSeq: 0,
+  rg: defaultRg(), kyc: defaultKyc(), aml: { alerts: [], payouts: [], seq: 0 },
 });
+const defaults = newGameState;
 
 function load(): GameState {
   try {
@@ -30,7 +34,8 @@ function load(): GameState {
     if (!raw) return defaults();
     const saved = JSON.parse(raw) as Partial<GameState>;
     const d = defaults();
-    return { ...d, ...saved, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui } };
+    return { ...d, ...saved, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui },
+      rg: { ...d.rg, ...saved.rg, limits: { ...d.rg.limits, ...saved.rg?.limits } }, kyc: { ...d.kyc, ...saved.kyc }, aml: { ...d.aml, ...saved.aml } };
   } catch { return defaults(); }
 }
 
@@ -64,11 +69,12 @@ export function isExcluded(): boolean { return state.excludedUntil > Date.now();
 /** Take a wager. Returns false if the balance is too low or the player is self-excluded. */
 export function debit(amount: number): boolean {
   amount = round2(amount);
-  if (!(amount > 0) || !canAfford(amount) || isExcluded()) return false;
+  if (!(amount > 0) || !canAfford(amount) || betBlockReason(state, amount)) return false;
   const before = level();
   state.balance = round2(state.balance - amount);
   state.stats.wagered = round2(state.stats.wagered + amount);
   state.stats.bets++;
+  recordStake(state.rg, amount);
   // Every wager feeds XP, rakeback and today's race total.
   state.xp += Math.round(amount * XP_PER_COIN);
   state.rakeback.instant += amount * RAKEBACK.instant;
@@ -84,7 +90,7 @@ export function debit(amount: number): boolean {
 }
 
 /** Why a bet was refused, for the toast. */
-export const debitError = (amount: number): string => (isExcluded() ? 'Self-exclusion is active. Betting is paused.' : !canAfford(amount) ? 'Not enough coins. Claim free coins at the top.' : 'Invalid amount');
+export const debitError = (amount: number): string => (!(amount > 0) ? 'Invalid amount' : betBlockReason(state, amount) ?? (!canAfford(amount) ? 'Not enough coins. Claim free coins at the top.' : 'Invalid amount'));
 
 export function credit(amount: number): void {
   if (!(amount > 0)) return;
@@ -125,6 +131,7 @@ export function removeItems(uids: string[]): void {
 export function recordBet(b: { game: string; amount: number; multi: number; payout: number }): void {
   state.history.unshift({ id: ++state.betSeq, game: b.game, amount: b.amount, multi: b.multi, payout: b.payout, at: Date.now() });
   state.history.length = Math.min(state.history.length, 500);
+  recordSettled(state.rg, b.amount, b.payout);
   save();
 }
 

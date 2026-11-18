@@ -89,6 +89,8 @@ export const ICONS = {
   ban: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   logout: '<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  id: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.6 1.7-2.3 2.5-2.3s1.9.7 2.5 2.3M14 10h4M14 13h3"/>',
   skull: '<path d="M12 3a7 7 0 0 0-7 7c0 2.4 1.2 4.1 3 5.3V19h8v-3.7c1.8-1.2 3-2.9 3-5.3a7 7 0 0 0-7-7zM9.5 11h.01M14.5 11h.01M10 19v2M14 19v2"/>',
   crown: '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>',
   target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>',

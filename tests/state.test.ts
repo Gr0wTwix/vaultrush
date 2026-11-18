@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { confirmAge } from '../src/rg.js';
 import {
   START_BALANCE, XP_PER_COIN, credit, debit, debitError, grant, isExcluded, level, levelFromXp, logTx, recordBet,
   resetAccount, round2, state, xpForLevel, addItems, removeItems,
 } from '../src/state.js';
 
-beforeEach(() => { resetAccount(); });
+beforeEach(() => { resetAccount(); confirmAge(state.rg); });
 
 describe('wallet', () => {
   it('starts with the demo balance', () => {
@@ -22,6 +23,7 @@ describe('wallet', () => {
   });
 
   it('refuses a bet that is invalid or larger than the balance and changes nothing', () => {
+    state.kyc.tier = 2;                                       // out of the way of the unverified bet cap
     for (const bad of [0, -5, NaN, START_BALANCE + 0.01]) expect(debit(bad)).toBe(false);
     expect(state.balance).toBe(START_BALANCE);
     expect(state.stats.bets).toBe(0);
@@ -45,6 +47,27 @@ describe('wallet', () => {
     expect(round2(0.1 + 0.2)).toBe(0.3);
     debit(0.333);
     expect(state.balance).toBe(99.67);
+  });
+});
+
+describe('verification cap and responsible-gambling gate', () => {
+  it('explains a bet that is above the unverified cap, and lifts it with verification', () => {
+    state.balance = 1000;
+    expect(debit(51)).toBe(false);
+    expect(debitError(51)).toMatch(/higher verification level/);
+    state.kyc.tier = 1;
+    expect(debit(51)).toBe(true);
+  });
+  it('blocks all bets until the player confirms they are 18+', () => {
+    resetAccount();
+    expect(debit(1)).toBe(false);
+    expect(debitError(1)).toMatch(/18/);
+  });
+  it('tracks stakes and settled results for the limits', () => {
+    debit(10);
+    recordBet({ game: 'Crash', amount: 10, multi: 0, payout: 0 });
+    const day = Object.values(state.rg.days)[0];
+    expect(day).toEqual({ staked: 10, wagered: 10, paid: 0 });
   });
 });
 
