@@ -6,10 +6,11 @@ import { $, $$, esc, fmt, money, icon, avatar, toast, modal } from './ui.js';
 import { sfx } from './sfx.js';
 import { renderResponsible } from './account-rg.js';
 import { renderVerification } from './account-kyc.js';
+import { renderCloud } from './account-cloud.js';
 
 const TABS = [
   ['account', 'Account', 'user'], ['security', 'Security', 'lock'], ['affiliates', 'Affiliates', 'users'], ['options', 'Options', 'gear'],
-  ['history', 'Game History', 'list'], ['tx', 'Transactions', 'clock'], ['kyc', 'Verification', 'id'], ['responsible', 'Responsible Play', 'heart'],
+  ['history', 'Game History', 'list'], ['tx', 'Transactions', 'clock'], ['kyc', 'Verification', 'id'], ['responsible', 'Responsible Play', 'heart'], ['cloud', 'Cloud Account', 'users'],
 ];
 
 /** Interface switches that live outside the modal (chat visibility, streamer mode). Call once at start-up and after changes. */
@@ -197,6 +198,7 @@ export function openAccount(tab = 'account') {
     // ---- Verification (KYC / AML, sandbox) and Responsible Play: see account-kyc.ts and account-rg.ts ----
     kyc() { renderVerification(pane, ctx); },
     responsible() { renderResponsible(pane, ctx); },
+    cloud() { void renderCloud(pane, ctx); },
   };
 
   /** Shared wiring for the two paged tables. */
