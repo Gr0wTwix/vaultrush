@@ -9,6 +9,7 @@ Vaultrush is an original **play-money** skin-game demo. Coins cannot be bought, 
 | [compliance.md](compliance.md) | Responsible-gambling tools, sandbox KYC and AML, the RNG lab, provably fair maths |
 | [deploy-and-workflow.md](deploy-and-workflow.md) | Commands, tests, environment variables, Supabase setup, Vercel and GitHub steps, mistakes to avoid |
 | [history.md](history.md) | What was built in which order, why decisions were made, and what is still open |
+| [ux-review-2026-11-18.md](ux-review-2026-11-18.md) | The UI/UX and accessibility review backlog, prioritized |
 
 The top-level [README](../README.md) has the feature list and quick start. Backend details are in [../supabase/README.md](../supabase/README.md).
 
