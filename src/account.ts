@@ -4,14 +4,20 @@ import { getFair, setClientSeed, rotate, randHex } from './fair.js';
 import { BOTS } from './data.js';
 import { $, $$, esc, fmt, money, icon, avatar, toast, modal } from './ui.js';
 import { sfx } from './sfx.js';
+import { renderResponsible } from './account-rg.js';
+import { renderVerification } from './account-kyc.js';
+import { renderCloud, renderSecurityCloud } from './account-cloud.js';
+import { renderOverview } from './account-overview.js';
+import { activeId, fairKeyFor, stateKeyFor } from './accounts.js';
 
 const TABS = [
   ['account', 'Account', 'user'], ['security', 'Security', 'lock'], ['affiliates', 'Affiliates', 'users'], ['options', 'Options', 'gear'],
-  ['history', 'Game History', 'list'], ['tx', 'Transactions', 'clock'], ['exclude', 'Self Exclusion', 'ban'],
+  ['history', 'Game History', 'list'], ['tx', 'Transactions', 'clock'], ['kyc', 'Verification', 'id'], ['responsible', 'Responsible Play', 'heart'], ['cloud', 'Cloud Account', 'users'],
 ];
 
 /** Interface switches that live outside the modal (chat visibility, streamer mode). Call once at start-up and after changes. */
 export function applyUi() {
+  document.body.classList.toggle('no-fx', !state.ui.fx);
   document.body.classList.toggle('no-chat', !state.ui.chat);
   document.body.classList.toggle('streamer', !!state.ui.streamer);
 }
@@ -44,6 +50,7 @@ function pager(page, pages) {
 let current = null;
 
 export function openAccount(tab = 'account') {
+  if (tab === 'exclude') tab = 'responsible';
   if (current) return current.go(tab);
   const m = modal('', { wide: true, onClose: () => { current = null; } });
   m.el.classList.add('acct');
@@ -54,36 +61,10 @@ export function openAccount(tab = 'account') {
   const pg = { history: { page: 1, per: 10, filter: 'all' }, tx: { page: 1, per: 10, filter: 'all' } };
   let tabNow = tab;
 
+  const ctx = { rerender: () => VIEWS[tabNow]?.(), close: () => m.close() };
   const VIEWS = {
     // ---- Account ------------------------------------------------------------------------------------------
-    account() {
-      const lvl = level(), base = xpForLevel(lvl), next = xpForLevel(lvl + 1), pct = Math.max(0, Math.min(100, ((state.xp - base) / (next - base)) * 100));
-      const s = state.stats, net = s.won - s.wagered, best = state.history.reduce((a, h) => Math.max(a, h.payout), 0);
-      pane.innerHTML = `${head('Account', 'Your profile and progress. Everything here is play money.')}
-        <div class="ac-card ac-who">${avatar(state.name, 68)}
-          <div class="ac-who-info"><b>${esc(state.name)}</b><span class="muted">Level ${lvl} · ${state.xp.toLocaleString('en-US')} / ${next.toLocaleString('en-US')} XP</span><div class="ac-bar"><i style="width:${pct.toFixed(1)}%"></i></div></div></div>
-        <div class="ac-stats">
-          <div class="ac-stat"><span>Balance</span>${money(state.balance)}</div>
-          <div class="ac-stat"><span>Wagered</span>${money(s.wagered)}</div>
-          <div class="ac-stat"><span>Total won</span>${money(s.won)}</div>
-          <div class="ac-stat"><span>Net</span><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : ''}${fmt(net)}</b></div>
-          <div class="ac-stat"><span>Bets placed</span><b>${s.bets.toLocaleString('en-US')}</b></div>
-          <div class="ac-stat"><span>Biggest payout</span>${money(best)}</div>
-        </div>
-        <div class="ac-card"><h3>Display name</h3><p class="ac-note">2–20 characters: letters, numbers, spaces, _ and -.</p>
-          <div class="ac-inline"><input id="acName" maxlength="20" value="${esc(state.name)}" autocomplete="off"><button class="btn btn-primary" id="acNameSave">Save</button></div></div>
-        <div class="ac-links"><a class="btn btn-ghost" href="#/inventory">${icon('bag')} Inventory (${state.inv.length})</a><a class="btn btn-ghost" href="#/rewards">${icon('gift')} Rewards</a><a class="btn btn-ghost" href="#/leaderboard">${icon('trophy')} Daily race</a><a class="btn btn-ghost" href="#/fair">${icon('fair')} Fairness</a></div>`;
-      $('#acNameSave', pane).onclick = () => {
-        const v = $('#acName', pane).value.trim();
-        if (!/^[\w \-]{2,20}$/.test(v)) return toast('Use 2–20 letters, numbers, spaces, _ or -', 'error');
-        if (BOTS.some(b => b.toLowerCase() === v.toLowerCase())) return toast('That name belongs to another player', 'error');
-        state.name = v; save(); sfx.click(); toast('Display name saved', 'win');
-        const me = $('.me .avatar'); if (me) me.outerHTML = avatar(v, 32);
-        VIEWS.account();
-      };
-      $('#acName', pane).onkeydown = e => { if (e.key === 'Enter') $('#acNameSave', pane).click(); };
-      $$('.ac-links a', pane).forEach(a => a.addEventListener('click', () => m.close()));
-    },
+    account() { renderOverview(pane, ctx, go); },
 
     // ---- Security -----------------------------------------------------------------------------------------
     security() {
@@ -91,7 +72,8 @@ export function openAccount(tab = 'account') {
         <div class="ac-card"><h3>Back up your progress</h3><p class="ac-note">Download your balance, items, levels and history as a file, or restore it on another browser. Clearing site data erases it, so a backup is the only way to recover.</p>
           <div class="ac-links"><button class="btn btn-primary" id="acExport">Download backup</button><label class="btn btn-ghost" for="acImport">Restore from file</label><input type="file" id="acImport" accept="application/json,.json" hidden></div></div>
         <div class="ac-card"><h3>Active sessions</h3><p class="ac-note">Sessions on this device. A real account would list other devices here and let you sign them out.</p>
-          <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Device</th><th>Location</th><th>Started</th></tr></thead><tbody><tr><td>${esc(device())}</td><td>This device</td><td><b class="pos">Current session</b></td></tr></tbody></table></div></div>
+          <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Device</th><th>Location</th><th>Started</th></tr></thead><tbody><tr><td>${esc(device())}</td><td>This device</td><td><b class="pos">Current session</b> <span class="muted small">since ${new Date(state.rg.sessionStart || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td></tr></tbody></table></div></div>
+        <div id="acSecCloud"></div>
         <div class="ac-card ac-danger"><div><h3>Reset demo account</h3><p class="ac-note">Back to ${fmt(START_BALANCE)} coins, level 0, an empty inventory and no history. This cannot be undone.</p></div><button class="btn btn-ghost" id="acReset">Reset account</button></div>`;
       $('#acExport', pane).onclick = () => {
         const blob = new Blob([JSON.stringify({ app: 'vaultrush', version: 1, savedAt: new Date().toISOString(), state, fair: getFair() }, null, 2)], { type: 'application/json' });
@@ -103,12 +85,13 @@ export function openAccount(tab = 'account') {
           const data = JSON.parse(await f.text());
           if (data.app !== 'vaultrush' || typeof data.state?.balance !== 'number') throw new Error('bad file');
           if (!confirm('Replace your current progress with this backup?')) return;
-          localStorage.setItem('vaultrush.state.v1', JSON.stringify(data.state));
-          if (data.fair) localStorage.setItem('vaultrush.fair.v1', JSON.stringify(data.fair));
+          localStorage.setItem(stateKeyFor(activeId()), JSON.stringify(data.state));
+          if (data.fair) localStorage.setItem(fairKeyFor(activeId()), JSON.stringify(data.fair));
           location.reload();
         } catch { toast('That is not a Vaultrush backup', 'error'); }
       };
       $('#acReset', pane).onclick = () => { if (confirm('Reset your demo account? This cannot be undone.')) { resetAccount(); applyUi(); toast('Account reset'); VIEWS.security(); } };
+      void renderSecurityCloud($('#acSecCloud', pane), ctx);
     },
 
     // ---- Affiliates ---------------------------------------------------------------------------------------
@@ -176,38 +159,24 @@ export function openAccount(tab = 'account') {
 
     // ---- Transactions -------------------------------------------------------------------------------------
     tx() {
-      const p = pg.tx, cat = t => (t.type === 'Free coins' || t.type === 'Coin rain' ? 'Coins' : /case|gift|key/i.test(t.type) ? 'Cases' : 'Rewards');
+      const p = pg.tx, cat = t => (t.type === 'Free coins' || t.type === 'Coin rain' || /^Payout/.test(t.type) ? 'Coins' : /case|gift|key/i.test(t.type) ? 'Cases' : 'Rewards');
       const rows = state.tx.filter(t => p.filter === 'all' || cat(t) === p.filter), pages = Math.max(1, Math.ceil(rows.length / p.per));
       p.page = Math.min(p.page, pages);
       const slice = rows.slice((p.page - 1) * p.per, p.page * p.per);
       pane.innerHTML = `${head('Transactions', 'Coins and items you received outside of bets: free coins, rain, rakeback, rewards and free cases.')}
         <div class="ac-pills">${['all', 'Coins', 'Rewards', 'Cases'].map(g => `<button data-f="${g}" class="${g === p.filter ? 'on' : ''}">${g === 'all' ? 'All' : g}</button>`).join('')}</div>
         <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Id</th><th>Type</th><th>Status</th><th>Amount</th><th class="r">Time</th></tr></thead><tbody>
-        ${slice.map(t => `<tr><td class="muted">${t.id}</td><td>${esc(t.type)}${t.note ? `<small class="ac-subtle">${esc(t.note)}</small>` : ''}</td><td><span class="ac-ok">Complete</span></td><td class="pos">${money(t.amount)}</td><td class="r muted">${ago(t.at)}</td></tr>`).join('') || '<tr><td colspan="5" class="ac-empty">Nothing here yet. Claim free coins or open a reward case.</td></tr>'}
+        ${slice.map(t => `<tr><td class="muted">${t.id}</td><td>${esc(t.type)}${t.note ? `<small class="ac-subtle">${esc(t.note)}</small>` : ''}</td><td><span class="ac-ok">Complete</span></td><td class="${t.amount < 0 ? 'neg' : 'pos'}">${money(t.amount)}</td><td class="r muted">${ago(t.at)}</td></tr>`).join('') || '<tr><td colspan="5" class="ac-empty">Nothing here yet. Claim free coins or open a reward case.</td></tr>'}
         </tbody></table></div>
         <div class="ac-foot"><label>Rows per page <select id="acPer">${[10, 25, 50].map(n => `<option ${n === p.per ? 'selected' : ''}>${n}</option>`).join('')}</select></label><span class="muted small">${rows.length ? `${(p.page - 1) * p.per + 1}–${Math.min(rows.length, p.page * p.per)} of ${rows.length}` : '0 transactions'}</span></div>
         ${pager(p.page, pages)}`;
       wireList(p, 'tx');
     },
 
-    // ---- Self exclusion -----------------------------------------------------------------------------------
-    exclude() {
-      const OPT = [['1 hour', 3600e3], ['24 hours', 864e5], ['3 days', 3 * 864e5], ['7 days', 7 * 864e5], ['14 days', 14 * 864e5], ['30 days', 30 * 864e5]] as [string, number][];
-      let pick = 1;
-      const draw = () => {
-        pane.innerHTML = `${head('Self Exclusion', 'Game responsibly.')}
-          <p class="ac-sub">Take a break from betting. While a self-exclusion runs you cannot place bets on any game. Rewards, browsing and the Fairness tools keep working. It cannot be lifted early.</p>
-          ${isExcluded() ? `<div class="ac-card ac-warn"><h3>Betting is paused</h3><p class="ac-note">Self-exclusion ends <b>${new Date(state.excludedUntil).toLocaleString()}</b>.</p></div>` : `
-          <div class="ac-card"><h3>Break length</h3><div class="ac-pills" id="acEx">${OPT.map(([l], i) => `<button data-i="${i}" class="${i === pick ? 'on' : ''}">${l}</button>`).join('')}</div>
-            <label class="check ac-agree"><input type="checkbox" id="acAgree"> I understand that nothing can lift this break early</label>
-            <button class="btn btn-danger block" id="acExGo" disabled>Self exclude for ${OPT[pick][0]}</button></div>`}`;
-        $$('#acEx button', pane).forEach(b => b.onclick = () => { pick = +b.dataset.i; draw(); });
-        const agree = $('#acAgree', pane), go = $('#acExGo', pane);
-        if (agree) agree.onchange = () => { go.disabled = !agree.checked; };
-        if (go) go.onclick = () => { state.excludedUntil = Date.now() + OPT[pick][1]; save(); toast('Self-exclusion started'); draw(); };
-      };
-      draw();
-    },
+    // ---- Verification (KYC / AML, sandbox) and Responsible Play: see account-kyc.ts and account-rg.ts ----
+    kyc() { renderVerification(pane, ctx); },
+    responsible() { renderResponsible(pane, ctx); },
+    cloud() { void renderCloud(pane, ctx); },
   };
 
   /** Shared wiring for the two paged tables. */

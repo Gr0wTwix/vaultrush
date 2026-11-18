@@ -4,6 +4,7 @@ import './css/games.css';
 import './css/home.css';
 import './css/account.css';
 import './css/battles2.css';
+import './css/compliance.css';
 import { state, save, on, credit, logTx, FREE_COINS, FREE_COINS_EVERY_MS } from './state.js';
 import { initFair } from './fair.js';
 import { startFeed, drops } from './feed.js';
@@ -11,6 +12,11 @@ import { RARITY, CASES, REWARD_CASES } from './data.js';
 import { $, $$, esc, fmt, coin, icon, avatar, toast, h, itemArt, caseArt } from './ui.js';
 import { sfx } from './sfx.js';
 import { openAccount, applyUi } from './account.js';
+import { initRg } from './rgui.js';
+import { openAuth, initAuth, isSignedIn, localSignedIn, logout } from './auth.js';
+import * as legal from './views/legal.js';
+import * as responsible from './views/responsible.js';
+import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
 import * as home from './views/home.js';
 import * as cases from './views/cases.js';
@@ -57,6 +63,10 @@ const ROUTES: Route[] = [
   [/^#\/upgrade$/, upgrade.render, 'upgrade'],
   [/^#\/mines$/, mines.render, 'mines'],
   [/^#\/fair$/, fair.render, 'fair'],
+  [/^#\/responsible$/, responsible.render, 'fair'],
+  [/^#\/terms$/, legal.renderTerms, 'fair'],
+  [/^#\/privacy$/, legal.renderPrivacy, 'fair'],
+  [/^#\/rng$/, rngLab.render, 'fair'],
   [/^#\/inventory$/, inventory.render, 'inventory'],
 ];
 
@@ -73,7 +83,6 @@ const ME_MENU = [
   ['options', 'Settings', 'gear'],
   ['tx', 'Transactions', 'clock'],
   ['history', 'Game History', 'list'],
-  ['security', 'Logout', 'logout', 'danger'],
 ];
 
 /** Floating chat button (like the reference sites): hides or shows the chat column, with an unread badge while it is closed. */
@@ -114,7 +123,7 @@ function renderTopbar() {
     <div class="me-wrap">
       <button class="me" id="meBtn" aria-haspopup="menu" aria-expanded="false" title="Account">${avatar(state.name, 32)}<span class="me-lvl" id="meLvl">${level()}</span></button>
       <div class="me-menu" id="meMenu" role="menu" hidden>
-        ${ME_MENU.map(([tab, label, ic, cls]) => `<button role="menuitem" data-tab="${tab}" class="${cls || ''}">${icon(ic)}<span>${label}</span></button>`).join('')}
+        ${ME_MENU.map(([tab, label, ic, cls]) => `<button role="menuitem" data-tab="${tab}" class="${cls || ''}">${icon(ic)}<span>${label}</span></button>`).join('')}<span id="meLogout"></span>
       </div>
     </div>`;
   on('levelup', lvl => {
@@ -125,9 +134,12 @@ function renderTopbar() {
   });
 
   const meBtn = $('#meBtn'), meMenu = $('#meMenu');
-  const setMenu = open => { meMenu.hidden = !open; meBtn.setAttribute('aria-expanded', String(open)); };
+  const setMenu = open => {
+    if (open) $('#meLogout').innerHTML = (isSignedIn() || localSignedIn()) ? `<button role="menuitem" data-tab="logout" class="danger">${icon('logout')}<span>Log out</span></button>` : '';
+    meMenu.hidden = !open; meBtn.setAttribute('aria-expanded', String(open));
+  };
   meBtn.onclick = e => { e.stopPropagation(); sfx.click(); setMenu(meMenu.hidden); };
-  meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); sfx.click(); openAccount(b.dataset.tab); };
+  meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); sfx.click(); if (b.dataset.tab === 'logout') void logout(); else openAccount(b.dataset.tab); };
   document.addEventListener('click', e => { if (!meMenu.hidden && !(e.target as Element).closest('.me-wrap')) setMenu(false); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !meMenu.hidden) { setMenu(false); meBtn.focus(); } });
   $('#muteBtn').onclick = () => { state.muted = !state.muted; save(); $('#muteBtn').innerHTML = icon(state.muted ? 'mute' : 'sound'); };
@@ -216,6 +228,8 @@ async function boot() {
   renderSidebar();
   renderTopbar();
   applyUi();
+  initRg();
+  void initAuth();
   initChatDock();
   startFeed();
   renderTicker();

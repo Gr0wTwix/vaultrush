@@ -1,9 +1,11 @@
 // Provably fair: result floats = HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:${round}`), 4 bytes per float.
 // DEMO NOTE: here the server seed lives in the browser. In production it must stay on the server
 // and only its SHA-256 hash is shown until the player rotates seeds.
+import { rngHealth } from './rng.js';
+import { activeId, fairKeyFor } from './accounts.js';
 import type { BetEntry, BetParams, DoubleColor, DoubleLane, FairState, Risk, SeedPair } from './types.js';
 
-const KEY = 'vaultrush.fair.v1';
+const KEY = fairKeyFor(activeId());
 const enc = new TextEncoder();
 const toHex = (buf: ArrayBuffer): string => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 export const randHex = (n: number): string => toHex(crypto.getRandomValues(new Uint8Array(n)).buffer);
@@ -56,6 +58,7 @@ export const getFair = (): FairState => fair;
 export async function bet(game: string, count: number, params?: BetParams): Promise<{ floats: number[]; entry: BetEntry }> {
   const nonce = fair.nonce++;
   const floats = await floatsFor(fair.serverSeed, fair.clientSeed, nonce, count);
+  for (const f of floats) rngHealth.observe(f);       // continuous health monitoring of the live generator
   const entry: BetEntry = { id: `${fair.serverHash.slice(0, 6)}-${nonce}`, game, nonce, clientSeed: fair.clientSeed, serverHash: fair.serverHash, at: Date.now(), count };
   if (params) entry.params = params;
   fair.history.unshift(entry);

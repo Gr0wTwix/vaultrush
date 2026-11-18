@@ -2,6 +2,7 @@ import { CASES, REWARD_CASES, CASE, ticketOf, entryForTicket } from '../data.js'
 import { getFair, setClientSeed, rotate, sha256, floatsFor, crashPoint, minePositions, doubleRoll, doubleColor, plinkoPath, plinkoTable, HOUSE } from '../fair.js';
 import { verifyAll, rtpTest, uniformityTest, SNIPPET } from '../verify.js';
 import { $, $$, esc, fmt, icon, toast } from '../ui.js';
+import { isAuthed, requireLogin } from '../state.js';
 
 const GAMES = [['crash', 'Crash'], ['double', 'Double'], ['cases', 'Case opening'], ['battles', 'Case battles'], ['mines', 'Mines'], ['plinko', 'Plinko'], ['coinflip', 'Coinflip'], ['upgrade', 'Upgrade roll']];
 const pct = x => `${(x * 100).toFixed(2)}%`;
@@ -39,7 +40,7 @@ export function render(el) {
       </div>
 
       <div class="fair-grid">
-        <div class="panel">
+        ${isAuthed() ? `        <div class="panel">
           <div class="panel-head"><h2>Your seeds</h2></div>
           <div class="field"><label>Active server seed hash (SHA-256)</label><div class="mono box">${f.serverHash}</div></div>
           <div class="field"><label>Next server seed hash <span class="tag">committed</span></label><div class="mono box">${f.next.serverHash}</div><span class="muted small">This seed is already fixed. It becomes active when you rotate, so it cannot be chosen after seeing your bets.</span></div>
@@ -48,6 +49,7 @@ export function render(el) {
           <button class="btn btn-primary block" id="rot">Rotate &amp; reveal server seed</button>
           ${revealed.length ? `<h3>Revealed seeds</h3><div class="revealed">${revealed.slice(0, 10).map(r => `<div class="rev"><div class="small muted">Server seed (nonces 0–${Math.max(0, r.nonces - 1)}, last client seed <b>${esc(r.clientSeed)}</b>)</div><div class="mono">${r.serverSeed}</div><div class="small muted">Committed hash <span class="mono">${r.serverHash.slice(0, 16)}…</span></div><button class="btn btn-sm btn-ghost use" data-s="${r.serverSeed}" data-c="${esc(r.clientSeed)}">Use in verifier</button></div>`).join('')}</div>` : ''}
         </div>
+        ` : `<div class="panel"><div class="panel-head"><h2>Your seeds</h2></div><p class="muted">Your seeds, nonce and revealed history belong to your account. Log in or register to get them.</p><button class="btn btn-primary block" id="seedLogin">Log in / Register</button></div>`}
         <div class="panel">
           <div class="panel-head"><h2>Verifier</h2></div>
           <div class="field"><label>Game</label><select id="vg">${GAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
@@ -56,7 +58,7 @@ export function render(el) {
           <div class="field" id="vminesF"><label>Grid tiles / mines</label><div class="row"><select id="vgrid" style="width:auto">${[16, 25, 36, 49, 64].map(n => `<option ${n === 25 ? 'selected' : ''}>${n}</option>`).join('')}</select><input id="vmines" type="number" min="1" max="63" value="3" style="width:90px"></div></div>
           <div class="field" id="vplinkoF"><label>Rows / risk</label><div class="row"><select id="vrows" style="width:auto">${[8, 10, 12, 14, 16].map(n => `<option ${n === 12 ? 'selected' : ''}>${n}</option>`).join('')}</select><select id="vrisk" style="width:auto"><option>low</option><option selected>normal</option><option>high</option></select></div></div>
           <div class="field"><label>Server seed (revealed)</label><input id="vs" class="mono"></div>
-          <div class="field"><label>Client seed</label><input id="vc" class="mono" value="${esc(f.clientSeed)}"></div>
+          <div class="field"><label>Client seed</label><input id="vc" class="mono" value="${isAuthed() ? esc(f.clientSeed) : ''}"></div>
           <div class="field"><label>Nonce</label><input id="vn" type="number" min="0" value="0"></div>
           <button class="btn btn-primary block" id="verify">Verify</button>
           <div class="verify-out" id="vout"></div>
@@ -93,8 +95,9 @@ export function render(el) {
       </div>`;
 
     // ---- seeds
-    $('#csSave', el).onclick = () => { setClientSeed($('#cs', el).value.trim()); toast('Client seed saved'); draw(); };
-    $('#rot', el).onclick = async () => { await rotate(); toast('Server seed revealed and rotated'); draw(); };
+    if (!isAuthed()) $('#seedLogin', el).onclick = () => requireLogin('Log in or register to get your own seeds.');
+    else $('#csSave', el).onclick = () => { setClientSeed($('#cs', el).value.trim()); toast('Client seed saved'); draw(); };
+    if (isAuthed()) $('#rot', el).onclick = async () => { await rotate(); toast('Server seed revealed and rotated'); draw(); };
     $$('.use', el).forEach(b => b.onclick = () => { $('#vs', el).value = b.dataset.s; $('#vc', el).value = b.dataset.c; $('#vs', el).scrollIntoView({ block: 'center' }); });
     $('#copyCode', el).onclick = () => { navigator.clipboard?.writeText(SNIPPET).then(() => toast('Code copied'), () => toast('Select the code and copy it', 'error')); };
     $('#exp', el).onclick = () => {

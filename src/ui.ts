@@ -52,10 +52,14 @@ const AV_COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dab
 export function avatar(name, size = 28) {
   let hsh = 0; for (const ch of name) hsh = (hsh * 31 + ch.charCodeAt(0)) | 0;
   const col = name === state.name ? '#c6ff3d' : AV_COLORS[Math.abs(hsh) % AV_COLORS.length];
+  // The signed-in player's own picture (from Steam or Google) replaces the initial. Only https image URLs are used.
+  const pic = name === state.name && typeof state.avatar === 'string' && /^https:\/\//.test(state.avatar) ? state.avatar : '';
+  if (pic) return `<span class="avatar has-img" style="--av:${col};width:${size}px;height:${size}px"><img src="${esc(pic)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()"></span>`;
   return `<span class="avatar" style="--av:${col};width:${size}px;height:${size}px;font-size:${size * 0.42}px">${esc(name[0].toUpperCase())}</span>`;
 }
 
 export function toast(msg, kind = 'info') {
+  if (!state.ui.notify && kind !== 'error') return;      // Settings > Notifications off: only errors still show
   const el = h(`<div class="toast toast-${kind}">${msg}</div>`);
   document.getElementById('toasts').append(el);
   setTimeout(() => el.classList.add('out'), 2600);
@@ -89,6 +93,8 @@ export const ICONS = {
   ban: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   logout: '<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  id: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.6 1.7-2.3 2.5-2.3s1.9.7 2.5 2.3M14 10h4M14 13h3"/>',
   skull: '<path d="M12 3a7 7 0 0 0-7 7c0 2.4 1.2 4.1 3 5.3V19h8v-3.7c1.8-1.2 3-2.9 3-5.3a7 7 0 0 0-7-7zM9.5 11h.01M14.5 11h.01M10 19v2M14 19v2"/>',
   crown: '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>',
   target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>',
@@ -184,12 +190,13 @@ export function wireAmount(root: ParentNode, input: any, getBalance: () => numbe
 }
 
 /** Simple modal. Returns { el, close }. */
-export function modal(html: string, { onClose, wide = false }: { onClose?: () => void; wide?: boolean } = {}): { el: any; close: () => void } {
+export function modal(html: string, { onClose, wide = false, locked = false }: { onClose?: () => void; wide?: boolean; locked?: boolean } = {}): { el: any; close: () => void } {
   const wrap = h(`<div class="modal-back"><div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="Close">×</button>${html}</div></div>`);
   const close = () => { wrap.classList.add('out'); setTimeout(() => wrap.remove(), 200); document.removeEventListener('keydown', esc); onClose?.(); };
-  const esc = e => { if (e.key === 'Escape') close(); };
-  wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
+  const esc = e => { if (e.key === 'Escape' && !locked) close(); };
+  wrap.addEventListener('click', e => { if (e.target === wrap && !locked) close(); });
   wrap.querySelector('.modal-x').onclick = close;
+  if (locked) wrap.classList.add('locked');
   document.addEventListener('keydown', esc);
   document.body.append(wrap);
   return { el: wrap.querySelector('.modal'), close };

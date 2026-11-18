@@ -1,6 +1,6 @@
 import { CASES, ITEMS, RARITY } from '../data.js';
 import { bets, drops } from '../feed.js';
-import { state, save, on, levelFromXp, xpForLevel } from '../state.js';
+import { state, save, on, levelFromXp, xpForLevel, isAuthed } from '../state.js';
 import { $, $$, esc, fmt, money, icon, avatar, caseArt, itemArt } from '../ui.js';
 import { eyeBtn } from '../preview.js';
 import { applyUi } from '../account.js';
@@ -51,21 +51,18 @@ export function render(el) {
     { cls: 's-mines', eyebrow: `${icon('mines')} Original`, title: 'Mines.<br><span class="grad">Find the gems.</span>', text: 'Pick a grid from 4×4 up to 8×8, choose your mines and cash out whenever you like. One wrong tile and the bet is gone.',
       cta: '<a class="btn btn-primary btn-lg" href="#/mines">Play Mines</a>',
       art: `<div class="hm-mines">${['', 'g', '', 'g', '', '', 'g', '', 'g', 'b', 'g', '', '', 'g', '', '', 'g', 'g'].map(c => `<i class="${c}"></i>`).join('')}</div>` },
-    { cls: 's-fair', eyebrow: `${icon('fair')} Provably fair`, title: 'Don’t trust us.<br><span class="grad">Check every bet.</span>', text: 'Seed hashes are committed before you play and revealed after. Verify any past bet on the Fairness page, or run the house-edge test yourself.',
-      cta: '<a class="btn btn-primary btn-lg" href="#/fair">Open Fairness</a>',
-      art: `<div class="hm-code"><span>server_hash</span><em>9f2c71d0…a41b</em><span>client_seed</span><em>vaultrush</em><span>nonce</span><em>0</em><span>HMAC-SHA256</span><em>0.73418209</em><span>result</span><em class="ok">✓ verified</em></div>` },
   ];
 
   const lvl = levelFromXp(state.xp), base = xpForLevel(lvl), next = xpForLevel(lvl + 1);
   const pct = Math.max(0, Math.min(100, ((state.xp - base) / (next - base)) * 100));
 
   el.innerHTML = `
-    <section class="hm-welcome">
+    ${isAuthed() ? `    <section class="hm-welcome">
       ${avatar(state.name, 44)}
       <div class="hm-who"><span class="muted small">Welcome back</span><b>${esc(state.name)}</b></div>
       <div class="hm-level"><span class="hm-lvl">LVL ${lvl}</span><div class="hm-bar"><i style="width:${pct.toFixed(1)}%"></i></div><span class="muted small">${Math.round(next - state.xp).toLocaleString('en-US')} XP to level ${lvl + 1}</span></div>
       <div class="hm-welcome-cta"><a class="btn btn-ghost" href="#/rewards">${icon('gift')} Rewards</a><a class="btn btn-ghost" href="#/leaderboard">${icon('trophy')} Race</a></div>
-    </section>
+    </section>` : ''}
 
     <section class="hm-car" id="car" aria-roledescription="carousel">
       ${slides.map((s, i) => `<article class="hm-slide ${s.cls} ${i ? '' : 'on'}"><div class="hm-copy"><span class="eyebrow">${s.eyebrow}</span><h1>${s.title}</h1><p>${s.text}</p><div class="hero-cta">${s.cta}</div></div><div class="hm-art">${s.art}</div></article>`).join('')}

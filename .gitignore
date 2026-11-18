@@ -15,3 +15,9 @@ ANALYSIS.md
 
 # Original image sources and generated packs. The site only uses public/assets.
 source-art/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+supabase/.temp/

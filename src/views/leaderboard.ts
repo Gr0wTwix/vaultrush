@@ -15,7 +15,7 @@ export function render(el) {
       <section class="podium">${[1, 0, 2].map(i => { const p = top3[i]; return p ? `<div class="pod pod-${i + 1} ${p.me ? 'mine' : ''}">${avatar(p.name, 46)}<b>${esc(p.name)}</b><span class="muted small">${money(p.wagered)} wagered</span><div class="pod-prize">${money(p.prize)}</div><div class="pod-rank">${i + 1}</div></div>` : ''; }).join('')}</section>
       <div class="panel"><div class="table-wrap"><table class="bets"><thead><tr><th>#</th><th>Player</th><th>Wagered</th><th>Prize</th></tr></thead><tbody>
         ${rest.map(p => `<tr class="${p.me ? 'mine' : ''}"><td>${p.rank}</td><td class="user-cell">${avatar(p.name, 22)}<span>${esc(p.name)}</span></td><td>${money(p.wagered)}</td><td>${money(p.prize)}</td></tr>`).join('')}
-        ${me.rank > 10 ? `<tr class="mine"><td>${me.rank}</td><td class="user-cell">${avatar(me.name, 22)}<span>${esc(me.name)} (you)</span></td><td>${money(me.wagered)}</td><td class="muted">wager ${fmt(Math.max(0, list[9].wagered - me.wagered + 0.01))} more for top 10</td></tr>` : ''}
+        ${me && me.rank > 10 ? `<tr class="mine"><td>${me.rank}</td><td class="user-cell">${avatar(me.name, 22)}<span>${esc(me.name)} (you)</span></td><td>${money(me.wagered)}</td><td class="muted">wager ${fmt(Math.max(0, list[9].wagered - me.wagered + 0.01))} more for top 10</td></tr>` : ''}
       </tbody></table></div></div>
       <div class="panel"><div class="panel-head"><h2>Yesterday's winners</h2></div><div class="prev-winners">${prev.map(p => `<div class="prev">${avatar(p.name, 30)}<div><b>${esc(p.name)}</b><span class="muted small">#${p.rank} · ${money(p.prize)}</span></div></div>`).join('')}</div></div>`;
   };
