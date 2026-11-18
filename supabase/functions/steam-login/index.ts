@@ -14,10 +14,11 @@ Deno.serve(async req => {
   const url = new URL(req.url);
   const site = safeSite(url.searchParams.get('site'), allowed);
   if (!site) return new Response('Unknown site', { status: 400 });
-  const self = `${url.origin}${url.pathname}`;
+  // Behind Supabase's gateway the request URL is http and has lost the /functions/v1 prefix, so build the public address from SUPABASE_URL.
+  const self = `${Deno.env.get('SUPABASE_URL')!.replace(/\/+$/, '')}/functions/v1/steam-login`;
   const returnTo = `${self}?action=cb&site=${encodeURIComponent(site)}`;
 
-  if (url.searchParams.get('action') === 'start') return Response.redirect(buildAuthUrl(returnTo, url.origin), 302);
+  if (url.searchParams.get('action') === 'start') return Response.redirect(buildAuthUrl(returnTo, new URL(self).origin), 302);
 
   const result = await verifySteamAssertion(url.searchParams, returnTo, (u, init) => fetch(u, init));
   if (!result.ok) return Response.redirect(`${site}#steam_error=${encodeURIComponent(result.reason)}`, 302);
