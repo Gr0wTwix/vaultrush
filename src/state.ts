@@ -53,7 +53,7 @@ export const on = <T = any>(type: string, fn: (detail: T) => void): (() => void)
 };
 
 export function save(): void {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* storage blocked: keep in memory */ }
+  try { if (authed) localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* storage blocked: keep in memory */ }
   emit('state', state);
 }
 
@@ -73,7 +73,13 @@ export function isExcluded(): boolean { return state.excludedUntil > Date.now();
 let authed = true;
 let loginHook: (reason: string) => void = () => {};
 export const LOGIN_REASON = 'Log in or register to place bets.';
-export const setAuthed = (on: boolean): void => { authed = on; };
+/** Signed out = a blank, throw-away state (no balance, items, seeds or history) that is never written to storage. Signing in loads the real one. */
+export function setAuthed(on: boolean): void {
+  if (on === authed) return;
+  authed = on;
+  Object.assign(state, on ? load() : { ...newGameState(), balance: 0 });
+  emit('state', state);
+}
 export const isAuthed = (): boolean => authed;
 export const onLoginRequired = (fn: (reason: string) => void): void => { loginHook = fn; };
 /** True when signed in. Otherwise opens the login/register popup and returns false. */

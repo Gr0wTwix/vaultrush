@@ -6,9 +6,9 @@ import {
   backendEnabled, completeSignup, currentUser, finishSteamLogin, hasProfile, onAuthChange, resetPassword, signInOAuth, signInPassword, signOut, signUp, startSteamLogin,
   steamEnabled, verifyLogin2fa,
 } from './backend.js';
-import { activeAccount, adoptGuestProgress, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
+import { activeAccount, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
 import { confirmAge } from './rg.js';
-import { newGameState, onLoginRequired, save, setAuthed, state } from './state.js';
+import { isAuthed, newGameState, onLoginRequired, requireLogin, save, setAuthed, state } from './state.js';
 import { TERMS_VERSION, validateEmail, validatePassword, validateRegistration, type Errors } from './signup.js';
 import { $, $$, esc, h, icon, modal, toast } from './ui.js';
 import { sfx } from './sfx.js';
@@ -53,8 +53,7 @@ export async function logout(): Promise<void> {
 /** Starts a fresh account's progress from the guest session and makes it the active one. The page reloads to load that account's state. */
 function enterLocalAccount(id: string, username: string, fresh: boolean): void {
   if (fresh) {
-    adoptGuestProgress(id);
-    const base = JSON.parse(localStorage.getItem(stateKeyFor(id)) ?? 'null') ?? newGameState();
+    const base = newGameState();
     base.name = username; base.legal = { termsAt: Date.now(), termsVersion: TERMS_VERSION };
     base.rg = { ...newGameState().rg, ...base.rg }; if (!base.rg.ageConfirmedAt) base.rg.ageConfirmedAt = Date.now();
     localStorage.setItem(stateKeyFor(id), JSON.stringify(base));
@@ -187,8 +186,10 @@ export async function initAuth(): Promise<void> {
   slot?.after(btn); btn.onclick = () => { sfx.click(); openAuth(); };
   // Signed out visitors can browse, but the balance and account widgets are hidden and any wager or claim opens this popup (see requireLogin in state.ts).
   onLoginRequired(reason => { if (!open) openAuth({ reason }); });
+  guardActions();
   const setSignedIn = (on: boolean): void => { signedIn = on; btn.hidden = on; setAuthed(on); document.body.classList.toggle('logged-out', !on); if (on) open?.close(); };
   if (!backendEnabled()) { setSignedIn(activeAccount() !== null); return; }
+  setSignedIn(false); // cloud: signed out until the session check below says otherwise
 
   try { const e = await finishSteamLogin(); if (e) toast(e, 'error'); } catch { /* the toast above covers the usual failures */ }
   setSignedIn(!!(await currentUser().catch(() => null)));
@@ -203,4 +204,23 @@ export async function initAuth(): Promise<void> {
     } catch (e) { toast(e instanceof Error ? e.message : String(e), 'error'); }
   };
   await onAuthChange((event, on) => { setSignedIn(on); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure(); });
+}
+
+// Buttons that spend, claim, sell, create or join. While signed out, a click on one opens the login popup and the page's own handler never runs.
+// (Browsing, filters, tabs and links are not in this list. debit() and grant() in state.ts still refuse as a second line of defence.)
+const ACTIONS = ['.btn-primary', '.btn-lg', '[data-rb]', '[data-lvl]', '[data-join]', '.cal-day.next', '.cf-make', '.sell', '#sellAll', '#upBtn', '#welcome', '#dailyCase', '#reset', '#createBtn', '.call-bot', '#callAll', '#rematch', '#drop', '#openBtn', '#lobbies [data-id]'].join(',');
+const REASONS: [RegExp, string][] = [[/battles/, 'Log in or register to create or join a battle.'], [/rewards/, 'Log in or register to claim rewards.'], [/upgrade/, 'Log in or register to upgrade items.'], [/inventory/, 'Log in or register to manage your inventory.']];
+function guardActions(): void {
+  const reason = (): string => REASONS.find(([re]) => re.test(location.hash))?.[1] ?? 'Log in or register to place bets.';
+  const stop = (e: Event): void => { e.preventDefault(); e.stopImmediatePropagation(); requireLogin(reason()); };
+  document.addEventListener('click', e => {
+    if (isAuthed()) return;
+    const t = e.target as Element | null, b = t?.closest?.('button, a[href^="#/battles/create"]');
+    if (b && b.closest('#view') && (b.matches(ACTIONS) || b.tagName === 'A')) stop(e);
+  }, true);
+  document.addEventListener('submit', e => {
+    const f = e.target as Element;
+    if (isAuthed() || !f.closest?.('#view, #chat')) return;
+    e.preventDefault(); e.stopImmediatePropagation(); requireLogin(f.closest('#chat') ? 'Log in or register to chat.' : reason());
+  }, true);
 }

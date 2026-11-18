@@ -1,6 +1,6 @@
 // Daily race: simulated rivals with deterministic totals per day, so standings are stable on reload.
 import { BOTS } from './data.js';
-import { state, grant, save, todayKey, DAY } from './state.js';
+import { state, grant, save, todayKey, DAY, isAuthed } from './state.js';
 
 export interface RaceRow { name: string; wagered: number; me?: boolean }
 export interface RankedRow extends RaceRow { rank: number; prize: number }
@@ -28,7 +28,7 @@ export function rivals(key: string, progress: number): RaceRow[] {
 export function standings(key: string = todayKey(), now: number = Date.now()): RankedRow[] {
   const progress = Math.min(1, Math.max(0, (now - dayStart(key)) / DAY));
   const mine = state.race.date === key ? state.race.wagered : 0;
-  const list: RaceRow[] = [...rivals(key, progress), { name: state.name, wagered: mine, me: true }];
+  const list: RaceRow[] = [...rivals(key, progress), ...(isAuthed() ? [{ name: state.name, wagered: mine, me: true }] : [])];
   list.sort((a, b) => b.wagered - a.wagered);
   return list.map((p, i) => ({ ...p, rank: i + 1, prize: PRIZES[i] ?? 0 }));
 }
