@@ -8,6 +8,7 @@ import { renderResponsible } from './account-rg.js';
 import { renderVerification } from './account-kyc.js';
 import { renderCloud, renderSecurityCloud } from './account-cloud.js';
 import { renderOverview } from './account-overview.js';
+import { activeId, fairKeyFor, stateKeyFor } from './accounts.js';
 
 const TABS = [
   ['account', 'Account', 'user'], ['security', 'Security', 'lock'], ['affiliates', 'Affiliates', 'users'], ['options', 'Options', 'gear'],
@@ -84,8 +85,8 @@ export function openAccount(tab = 'account') {
           const data = JSON.parse(await f.text());
           if (data.app !== 'vaultrush' || typeof data.state?.balance !== 'number') throw new Error('bad file');
           if (!confirm('Replace your current progress with this backup?')) return;
-          localStorage.setItem('vaultrush.state.v1', JSON.stringify(data.state));
-          if (data.fair) localStorage.setItem('vaultrush.fair.v1', JSON.stringify(data.fair));
+          localStorage.setItem(stateKeyFor(activeId()), JSON.stringify(data.state));
+          if (data.fair) localStorage.setItem(fairKeyFor(activeId()), JSON.stringify(data.fair));
           location.reload();
         } catch { toast('That is not a Vaultrush backup', 'error'); }
       };

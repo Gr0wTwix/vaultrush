@@ -20,8 +20,8 @@ export const ERROR_TEXT: Record<string, string> = {
   self_excluded: 'Self-exclusion is active. Betting is paused.', cool_off: 'A cool-off is active. Betting is paused.',
   max_bet_exceeded: 'That is above your maximum bet limit.', tier_cap_exceeded: 'Bets this large need a higher verification level.',
   daily_loss_limit: 'This bet could pass your daily loss limit.', insufficient_funds: 'Not enough coins.',
-  under_age: 'You must be 18 or older to play.', terms_required: 'Accept the Terms of Service first.', name_taken: 'That username is already taken.',
-  invalid_name: 'Use 2 to 20 letters, numbers, spaces, _ or -.', invalid_dob: 'Enter a valid date of birth.', account_closed: 'This account has been closed.',
+  adult_required: 'Confirm that you are at least 18 years old.', terms_required: 'Accept the Terms of Service first.', name_taken: 'That username is already taken.',
+  invalid_name: 'Use 2 to 20 letters, numbers, spaces, _ or -.', account_closed: 'This account has been closed.',
   invalid_amount: 'Enter a valid amount (up to 2 decimals).', invalid_target: 'The cash-out target must be between 1.01 and 1000.', unsupported_game: 'That game is not available on the server yet.',
 };
 /** Turn a Postgres/PostgREST error into plain language. */
@@ -50,7 +50,7 @@ export const currentUser = async (): Promise<{ id: string; email?: string } | nu
 
 export interface Account { display_name: string; balance: number; created: boolean }
 /** Creates the profile on first use (age and terms are checked by the database); returns the existing one afterwards. */
-export const completeSignup = (name: string, dob: string, termsVersion: string) => call<Account>('complete_signup', { p_name: name, p_dob: dob, p_terms_version: termsVersion });
+export const completeSignup = (name: string, termsVersion: string, adult: boolean) => call<Account>('complete_signup', { p_name: name, p_terms_version: termsVersion, p_adult: adult });
 export const exportMyData = () => call<Record<string, unknown>>('export_my_data');
 /** Anonymises the profile on the database, then asks the close-login Edge Function to ban the login. */
 export async function deleteAccount(): Promise<void> {
@@ -63,8 +63,8 @@ export async function deleteAccount(): Promise<void> {
 
 // ---- sign-in methods ----------------------------------------------------------------------------------------------
 const here = (): string => window.location.origin + window.location.pathname;
-export type OAuthProvider = 'google' | 'discord' | 'twitch';
-export interface SignUpMeta { display_name: string; dob: string; terms_version: string }
+export type OAuthProvider = 'google';
+export interface SignUpMeta { display_name: string; terms_version: string; adult: boolean }
 
 /** With email confirmation switched on in Supabase, no session exists until the link in the email is clicked. */
 export async function signUp(email: string, password: string, meta: SignUpMeta): Promise<{ needsConfirmation: boolean }> {

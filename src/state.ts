@@ -2,8 +2,9 @@
 import type { GameState, InvEntry, Item } from './types.js';
 import { betBlockReason, defaultRg, recordSettled, recordStake } from './rg.js';
 import { defaultKyc } from './kyc.js';
+import { activeId, stateKeyFor } from './accounts.js';
 
-const KEY = 'vaultrush.state.v1';
+const KEY = stateKeyFor(activeId());       // guests use the original key; each signed-in account has its own
 export const START_BALANCE = 100;
 export const FREE_COINS = 25;
 export const FREE_COINS_EVERY_MS = 10 * 60 * 1000;

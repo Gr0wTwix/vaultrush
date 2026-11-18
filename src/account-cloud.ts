@@ -24,13 +24,13 @@ export async function renderCloud(pane: HTMLElement, ctx: PaneCtx): Promise<void
     pane.insertAdjacentHTML('beforeend', `<div class="ac-card"><h3>Not connected</h3>
       ${hint('This copy of Vaultrush runs entirely in your browser. To turn the cloud account on, create a free Supabase project, run <code>supabase/migrations/0001_core.sql</code>, and set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> (see <code>supabase/README.md</code>).')}
       <ul class="rgp-list"><li>Accounts: your coins and history follow you across devices.</li><li>Real fairness: the server holds the seed and makes every roll.</li><li>Leaderboards from real players, and realtime chat.</li></ul>
-      <div class="ac-links"><button class="btn btn-ghost" id="cLocal">Create or edit my local profile</button></div></div>`);
-    $('#cLocal', pane).onclick = () => { ctx.close(); openAuth({ cloud: false }); };
+      <div class="ac-links"><button class="btn btn-ghost" id="cLocal">Create a browser account</button></div></div>`);
+    $('#cLocal', pane).onclick = () => { ctx.close(); openAuth({ tab: 'register' }); };
     return;
   }
   const user = await currentUser().catch(() => null);
   if (!user) {
-    pane.insertAdjacentHTML('beforeend', `<div class="ac-card"><h3>Sign in</h3>${hint(`Connected to <code>${esc(BACKEND_URL)}</code>. Log in or register with email and password, Google, Discord, Twitch or Steam.`)}
+    pane.insertAdjacentHTML('beforeend', `<div class="ac-card"><h3>Sign in</h3>${hint(`Connected to <code>${esc(BACKEND_URL)}</code>. Log in or register with email and password, Google or Steam.`)}
       <div class="ac-links"><button class="btn btn-primary" id="cIn">Log in</button><button class="btn btn-ghost" id="cReg">Register</button></div></div>`);
     $('#cIn', pane).onclick = () => { ctx.close(); openAuth({ tab: 'login' }); };
     $('#cReg', pane).onclick = () => { ctx.close(); openAuth({ tab: 'register' }); };
@@ -52,7 +52,7 @@ export async function renderCloud(pane: HTMLElement, ctx: PaneCtx): Promise<void
       <div class="ac-links"><button class="btn btn-ghost" id="cRot">Rotate seed</button></div></div>
     <div class="ac-card"><h3>Recent server bets</h3>${bets.length ? `<div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Amount</th><th>Target</th><th>Crash point</th><th>Payout</th><th>Check</th></tr></thead><tbody>${bets.map(b => `<tr><td>${money(b.amount)}</td><td>${b.result.target}×</td><td>${b.result.crash_point}×</td><td class="${b.payout > 0 ? 'pos' : 'neg'}">${b.payout > 0 ? `+${fmt(b.payout)}` : '0.00'}</td><td data-chk="${b.id}" class="muted">after rotation</td></tr>`).join('')}</tbody></table></div>` : '<div class="ac-empty">No server bets yet.</div>'}</div>
     <div class="ac-card"><h3>Today's race (real players)</h3>${race.length ? `<div class="table-wrap"><table class="bets ac-table"><thead><tr><th>#</th><th>Player</th><th>Wagered</th><th class="r">Bets</th></tr></thead><tbody>${race.slice(0, 10).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.display_name)}</td><td>${money(r.wagered)}</td><td class="r muted">${r.bets}</td></tr>`).join('')}</tbody></table></div>` : '<div class="ac-empty">Nobody has wagered today.</div>'}</div>
-    <div class="ac-card"><h3>Your data</h3>${hint('Download everything the server holds about you, or delete your account. Deleting anonymises your profile, removes your chat messages and date of birth, closes the login and zeroes your balance. Bets and ledger entries stay, without your name, as financial records.')}
+    <div class="ac-card"><h3>Your data</h3>${hint('Download everything the server holds about you, or delete your account. Deleting anonymises your profile, removes your chat messages, closes the login and zeroes your balance. Bets and ledger entries stay, without your name, as financial records.')}
       <div class="ac-links"><button class="btn btn-ghost" id="cExport">Download my data</button></div></div>
     <div class="ac-card ac-danger"><div><h3>Delete my account</h3><p class="ac-note">This cannot be undone. Type <b>DELETE</b> to confirm.</p></div>
       <div class="ac-inline"><input id="cDelWord" placeholder="DELETE" aria-label="Type DELETE" style="max-width:130px"><button class="btn btn-ghost" id="cDel" disabled>Delete</button></div></div>`);

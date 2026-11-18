@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { passwordStrength, validateDob, validateEmail, validatePassword, validateRegistration, validateUsername } from '../src/signup.js';
+import { passwordStrength, validateEmail, validatePassword, validateRegistration, validateUsername } from '../src/signup.js';
 
-const T0 = Date.UTC(2026, 10, 18);
-const good = { username: 'Skyline_9', email: 'sky@example.com', password: 'correct horse battery', dob: '1994-05-20', terms: true, adult: true, region: true };
+const good = { username: 'Skyline_9', email: 'sky@example.com', password: 'correct horse battery', confirm: 'correct horse battery', terms: true, adult: true };
 
 describe('usernames', () => {
   it('accepts normal names', () => { for (const n of ['Sky', 'sky_line-9', 'Two Words', 'ab']) expect(validateUsername(n)).toBeNull(); });
@@ -45,21 +44,26 @@ describe('passwords', () => {
   });
 });
 
-describe('date of birth and the registration form', () => {
-  it('requires an adult, on the exact birthday', () => {
-    expect(validateDob('2008-11-18', T0)).toBeNull();
-    expect(validateDob('2008-11-19', T0)).toMatch(/18 or older/);
-    expect(validateDob('', T0)).toMatch(/Enter/);
-    expect(validateDob('1850-01-01', T0)).not.toBeNull();
+describe('the registration form', () => {
+  it('accepts a complete form', () => {
+    expect(validateRegistration(good, true)).toEqual({ ok: true, errors: {} });
   });
-  it('accepts a complete form and reports every problem at once otherwise', () => {
-    expect(validateRegistration(good, true, T0)).toEqual({ ok: true, errors: {} });
-    const bad = validateRegistration({ username: 'a', email: 'nope', password: 'short', dob: '2015-01-01', terms: false, adult: false, region: false }, true, T0);
+  it('reports every problem at once', () => {
+    const bad = validateRegistration({ username: 'a', email: 'nope', password: 'short', confirm: 'x', terms: false, adult: false }, true);
     expect(bad.ok).toBe(false);
-    expect(Object.keys(bad.errors).sort()).toEqual(['age', 'dob', 'email', 'password', 'region', 'terms', 'username']);
+    expect(Object.keys(bad.errors).sort()).toEqual(['age', 'email', 'password', 'terms', 'username']);
   });
-  it('a local profile needs no email or password', () => {
-    expect(validateRegistration({ ...good, email: '', password: '' }, false, T0).ok).toBe(true);
-    expect(validateRegistration({ ...good, email: '', password: '' }, true, T0).ok).toBe(false);
+  it('needs the two passwords to match, and says so only once the password itself is fine', () => {
+    expect(validateRegistration({ ...good, confirm: 'correct horse battery' + '!' }, true).errors).toEqual({ confirm: 'The passwords do not match.' });
+    expect(validateRegistration({ ...good, password: 'short', confirm: 'other' }, true).errors.confirm).toBeUndefined();
+  });
+  it('requires the age confirmation and the terms, but not a date of birth or a region statement', () => {
+    expect(validateRegistration({ ...good, adult: false }, true).errors).toEqual({ age: 'Confirm that you are at least 18 years old.' });
+    expect(validateRegistration({ ...good, terms: false }, true).errors.terms).toMatch(/Terms/);
+    expect(Object.keys(validateRegistration(good, true).errors)).not.toContain('dob');
+  });
+  it('the finish-profile step after Google or Steam needs no email or password', () => {
+    expect(validateRegistration({ username: 'Skyline_9', terms: true, adult: true }, false).ok).toBe(true);
+    expect(validateRegistration({ username: 'Skyline_9', terms: true, adult: true }, true).ok).toBe(false);
   });
 });

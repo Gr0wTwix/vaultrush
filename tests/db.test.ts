@@ -39,7 +39,7 @@ const rpc = async (uid: string, fn: string, ...args: unknown[]): Promise<any> =>
     return (r.rows[0] as { v: unknown }).v;
   });
 const TERMS = '2026-11-18';
-const signup = (uid: string, name: string, dob = '1990-01-01') => rpc(uid, 'complete_signup', name, dob, TERMS);
+const signup = (uid: string, name: string, adult = true) => rpc(uid, 'complete_signup', name, TERMS, adult);
 const bet = (uid: string, amount: number, target: number, idem?: string) => rpc(uid, 'place_bet', 'crash', amount, { target }, idem ?? null);
 const sql = async (q: string, params: unknown[] = []) => (await db.query(q, params)).rows as any[];
 const fails = async (p: Promise<unknown>, code: string) => { await expect(p).rejects.toThrow(code); };
@@ -68,33 +68,26 @@ describe('account creation', () => {
 
 describe('sign-up is checked by the server, not the form', () => {
   const user = async (n: number) => { const id = `aaaaaaaa-0000-0000-0000-${String(n).padStart(12, '0')}`; await sql(`insert into auth.users (id, email) values ($1, $2)`, [id, `u${n}@example.com`]); return id; };
-  it('refuses minors, even with a forged form, and refuses a missing terms version', async () => {
+  it('requires the 18+ confirmation and a terms version, even with a forged form', async () => {
     const kid = await user(1);
-    await fails(signup(kid, 'Kid', new Date(Date.now() - 17 * 365.25 * 864e5).toISOString().slice(0, 10)), 'under_age');
-    await fails(rpc(kid, 'complete_signup', 'Kid', '1990-01-01', ''), 'terms_required');
-    await fails(rpc(kid, 'complete_signup', 'Kid', null, TERMS), 'invalid_dob');
-    await fails(signup(kid, 'Kid', '2999-01-01'), 'invalid_dob');
-    await fails(signup(kid, 'Kid', '1800-01-01'), 'invalid_dob');
+    await fails(signup(kid, 'Kid', false), 'adult_required');
+    await fails(rpc(kid, 'complete_signup', 'Kid', TERMS, null), 'adult_required');
+    await fails(rpc(kid, 'complete_signup', 'Kid', '', true), 'terms_required');
+    await fails(rpc(kid, 'complete_signup', 'Kid', null, true), 'terms_required');
     expect((await sql(`select count(*)::int n from public.profiles where id = $1`, [kid]))[0].n).toBe(0);
-  });
-  it('turns the exact 18th birthday into an adult, and one day short into a minor', async () => {
-    const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() - 18);
-    const today = d.toISOString().slice(0, 10), tomorrow = new Date(d.getTime() + 864e5).toISOString().slice(0, 10);
-    await fails(signup(await user(2), 'Almost', tomorrow), 'under_age');
-    expect((await signup(await user(3), 'Exactly', today)).created).toBe(true);
   });
   it('validates and reserves names, case-insensitively', async () => {
     const probe = await user(10);
     for (const bad of ['a', 'x'.repeat(21), 'bad<name>', 'player-123456', 'Deleted-0001', '']) await fails(signup(probe, bad), 'invalid_name');
     await fails(signup(await user(11), 'ALICE'), 'name_taken');
   });
-  it('records the date of birth, terms version and age confirmation, and starts with 100 coins and two seeds', async () => {
+  it('records the terms version and the age confirmation, and starts with 100 coins and two seeds', async () => {
     const id = await user(20);
-    expect(await signup(id, 'Fresh_One', '1985-03-04')).toEqual({ display_name: 'Fresh_One', balance: 100, created: true });
-    const p = (await sql(`select date_of_birth::text d, terms_version, terms_accepted_at is not null t, age_confirmed_at is not null a from public.profiles where id = $1`, [id]))[0];
-    expect(p).toEqual({ d: '1985-03-04', terms_version: TERMS, t: true, a: true });
+    expect(await signup(id, 'Fresh_One')).toEqual({ display_name: 'Fresh_One', balance: 100, created: true });
+    const p = (await sql(`select terms_version, terms_accepted_at is not null t, age_confirmed_at is not null a from public.profiles where id = $1`, [id]))[0];
+    expect(p).toEqual({ terms_version: TERMS, t: true, a: true });
     expect((await sql(`select count(*)::int n from public.seed_pairs where user_id = $1`, [id]))[0].n).toBe(2);
-    await expect(as(id, () => db.query(`select date_of_birth from public.profiles`))).resolves.toBeTruthy();       // own row only
+    expect((await as(id, async () => (await db.query(`select id from public.profiles`)).rows as any[])).map(r => r.id)).toEqual([id]);       // own row only
   });
 });
 
@@ -115,9 +108,9 @@ describe('export and deletion', () => {
   it('anonymises the profile, zeroes the wallet with an audit entry, removes chat, and blocks further play', async () => {
     const before = Number((await sql(`select balance from public.wallets where user_id = $1`, [FRED]))[0].balance);
     await rpc(FRED, 'delete_account');
-    const p = (await sql(`select display_name, date_of_birth, deleted_at is not null del from public.profiles where id = $1`, [FRED]))[0];
+    const p = (await sql(`select display_name, deleted_at is not null del from public.profiles where id = $1`, [FRED]))[0];
     expect(p.display_name).toMatch(/^deleted-[0-9a-f]{8}$/);
-    expect(p.date_of_birth).toBeNull(); expect(p.del).toBe(true);
+    expect(p.del).toBe(true);
     expect(Number((await sql(`select balance from public.wallets where user_id = $1`, [FRED]))[0].balance)).toBe(0);
     const last = (await sql(`select kind, amount::float a, balance_after::float b from public.ledger where user_id = $1 order by id desc limit 1`, [FRED]))[0];
     expect(last).toEqual({ kind: 'adjustment', a: -before, b: 0 });

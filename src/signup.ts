@@ -1,7 +1,6 @@
 // Sign-up rules shared by the register form (instant feedback) and the tests. The server re-checks age, terms and the name
 // itself (complete_signup in supabase/migrations), so nothing here is a security boundary: it only makes errors friendly.
 import { BOTS } from './data.js';
-import { ageFromDob } from './kyc.js';
 
 export const TERMS_VERSION = '2026-11-18';
 export const USERNAME_RE = /^[A-Za-z0-9_ -]{2,20}$/;
@@ -9,7 +8,7 @@ const RESERVED = ['admin', 'administrator', 'support', 'moderator', 'mod', 'staf
 const COMMON_PASSWORDS = ['password', 'password1', 'password123', '1234567890', '12345678910', 'qwertyuiop', 'qwerty12345', 'iloveyou123', 'letmein123',
   'welcome123', 'admin12345', 'abc1234567', 'football123', 'baseball123', 'monkey12345', 'dragon12345', 'passw0rd123', '0123456789', '9876543210', 'vaultrush'];
 
-export type Field = 'username' | 'email' | 'password' | 'dob' | 'terms' | 'age' | 'region';
+export type Field = 'username' | 'email' | 'password' | 'confirm' | 'terms' | 'age';
 export type Errors = Partial<Record<Field, string>>;
 
 export function validateUsername(name: string, taken: readonly string[] = BOTS): string | null {
@@ -45,26 +44,17 @@ export function validatePassword(pw: string, ctx: { username?: string; email?: s
   if (local && local.length >= 4 && low.includes(local)) return 'Your password should not contain your email.';
   return null;
 }
-export function validateDob(dob: string, now: number = Date.now()): string | null {
-  const age = ageFromDob(dob, now);
-  if (age === null) return 'Enter your date of birth.';
-  if (age < 18) return 'You must be 18 or older to play.';
-  if (age > 120) return 'Enter a valid date of birth.';
-  return null;
-}
-
-export interface RegistrationInput { username: string; email?: string; password?: string; dob: string; terms: boolean; adult: boolean; region: boolean }
-/** `cloud` registrations need an email and password; local profiles do not. */
-export function validateRegistration(i: RegistrationInput, cloud: boolean, now: number = Date.now()): { ok: boolean; errors: Errors } {
+export interface RegistrationInput { username: string; email?: string; password?: string; confirm?: string; terms: boolean; adult: boolean }
+/** Cloud and local accounts need an email and a password (typed twice). `withPassword: false` is for the finish-profile step after Google or Steam. */
+export function validateRegistration(i: RegistrationInput, withPassword: boolean): { ok: boolean; errors: Errors } {
   const errors: Errors = {};
   const u = validateUsername(i.username); if (u) errors.username = u;
-  if (cloud) {
+  if (withPassword) {
     const e = validateEmail(i.email ?? ''); if (e) errors.email = e;
     const p = validatePassword(i.password ?? '', { username: i.username, email: i.email }); if (p) errors.password = p;
+    else if ((i.confirm ?? '') !== (i.password ?? '')) errors.confirm = 'The passwords do not match.';
   }
-  const d = validateDob(i.dob, now); if (d) errors.dob = d;
-  if (!i.adult) errors.age = 'Confirm that you are 18 or older.';
-  if (!i.region) errors.region = 'Confirm that online gambling content is allowed where you live.';
+  if (!i.adult) errors.age = 'Confirm that you are at least 18 years old.';
   if (!i.terms) errors.terms = 'Accept the Terms of Service and Privacy Policy.';
   return { ok: Object.keys(errors).length === 0, errors };
 }

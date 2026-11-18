@@ -142,3 +142,5 @@ body.no-fx .confetti, body.no-fx .fx-layer { display: none !important; }
 .ov-wins { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; } .ov-win { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); } .ov-win > span:nth-child(2) { flex: 1; } .ov-win b { display: block; font-size: 14px; } .ov-win small { color: var(--muted); font-size: 12px; }
 .fa-setup { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; } .fa-setup img { background: #fff; padding: 6px; border-radius: 10px; } .fa-setup code { display: block; margin: 4px 0 10px; letter-spacing: .08em; }
 @media (max-width: 800px) { .ov-top, .ov-rewards { grid-template-columns: 1fr; } .ov-stats { grid-template-columns: repeat(2, 1fr); } }
+#authBtn { padding: 9px 16px; } @media (max-width: 560px) { #authBtn { padding: 9px 12px; } #authBtn span { display: none; } }
+@media (max-width: 760px) { .modal.auth-modal { grid-template-columns: minmax(0, 1fr); } .au-side { display: none; } }

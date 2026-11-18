@@ -2,9 +2,10 @@
 // DEMO NOTE: here the server seed lives in the browser. In production it must stay on the server
 // and only its SHA-256 hash is shown until the player rotates seeds.
 import { rngHealth } from './rng.js';
+import { activeId, fairKeyFor } from './accounts.js';
 import type { BetEntry, BetParams, DoubleColor, DoubleLane, FairState, Risk, SeedPair } from './types.js';
 
-const KEY = 'vaultrush.fair.v1';
+const KEY = fairKeyFor(activeId());
 const enc = new TextEncoder();
 const toHex = (buf: ArrayBuffer): string => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 export const randHex = (n: number): string => toHex(crypto.getRandomValues(new Uint8Array(n)).buffer);
