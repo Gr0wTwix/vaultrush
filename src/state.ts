@@ -68,9 +68,21 @@ export const level = (): number => levelFromXp(state.xp);
 
 export function isExcluded(): boolean { return state.excludedUntil > Date.now(); }
 
+// Visitors can browse without an account but cannot wager or claim anything. auth.ts sets the real value at start-up and runs the hook
+// that opens the login/register popup. The default is "signed in" so code that never starts the UI (the tests) is unaffected.
+let authed = true;
+let loginHook: (reason: string) => void = () => {};
+export const LOGIN_REASON = 'Log in or register to place bets.';
+export const setAuthed = (on: boolean): void => { authed = on; };
+export const isAuthed = (): boolean => authed;
+export const onLoginRequired = (fn: (reason: string) => void): void => { loginHook = fn; };
+/** True when signed in. Otherwise opens the login/register popup and returns false. */
+export function requireLogin(reason: string = LOGIN_REASON): boolean { if (!authed) loginHook(reason); return authed; }
+
 /** Take a wager. Returns false if the balance is too low or the player is self-excluded. */
 export function debit(amount: number): boolean {
   amount = round2(amount);
+  if (!requireLogin()) return false;
   if (!(amount > 0) || !canAfford(amount) || betBlockReason(state, amount)) return false;
   const before = level();
   state.balance = round2(state.balance - amount);
@@ -92,7 +104,7 @@ export function debit(amount: number): boolean {
 }
 
 /** Why a bet was refused, for the toast. */
-export const debitError = (amount: number): string => (!(amount > 0) ? 'Invalid amount' : betBlockReason(state, amount) ?? (!canAfford(amount) ? 'Not enough coins. Claim free coins at the top.' : 'Invalid amount'));
+export const debitError = (amount: number): string => (!authed ? LOGIN_REASON : !(amount > 0) ? 'Invalid amount' : betBlockReason(state, amount) ?? (!canAfford(amount) ? 'Not enough coins. Claim free coins at the top.' : 'Invalid amount'));
 
 export function credit(amount: number): void {
   if (!(amount > 0)) return;
@@ -103,7 +115,7 @@ export function credit(amount: number): void {
 
 /** Bonus money (rewards, promo codes) doesn't count as winnings. */
 export function grant(amount: number, type = 'Bonus'): void {
-  if (!(amount > 0)) return;
+  if (!(amount > 0) || !requireLogin('Log in or register to claim rewards.')) return;
   state.balance = round2(state.balance + amount);
   logTx(type, amount);
   save();

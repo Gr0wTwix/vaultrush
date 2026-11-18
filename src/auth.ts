@@ -8,7 +8,7 @@ import {
 } from './backend.js';
 import { activeAccount, adoptGuestProgress, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
 import { confirmAge } from './rg.js';
-import { newGameState, save, state } from './state.js';
+import { newGameState, onLoginRequired, save, setAuthed, state } from './state.js';
 import { TERMS_VERSION, validateEmail, validatePassword, validateRegistration, type Errors } from './signup.js';
 import { $, $$, esc, h, icon, modal, toast } from './ui.js';
 import { sfx } from './sfx.js';
@@ -62,12 +62,12 @@ function enterLocalAccount(id: string, username: string, fresh: boolean): void {
   setActive(id); location.hash = '#/'; location.reload();
 }
 
-export function openAuth(opts: { tab?: Tab; locked?: boolean } = {}): void {
+export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
   open?.close();
   const cloud = backendEnabled();
   let tab: Tab = opts.tab ?? 'login', lockUntil = 0, fails = 0;
-  const m = modal('', { wide: true, locked: !!opts.locked, onClose: () => { open = null; } });
-  open = m; m.el.classList.add('auth-modal'); if (opts.locked) m.el.classList.add('au-locked');
+  const m = modal('', { wide: true, onClose: () => { open = null; } });
+  open = m; m.el.classList.add('auth-modal');
   const v = (id: string): string => (($('#' + id, m.el) as HTMLInputElement | null)?.value ?? '');
   const c = (id: string): boolean => !!($('#' + id, m.el) as HTMLInputElement | null)?.checked;
   const note = (t: string): void => { const n = $('#auNote', m.el); if (n) n.textContent = t; };
@@ -87,7 +87,7 @@ export function openAuth(opts: { tab?: Tab; locked?: boolean } = {}): void {
       ${cloud ? '' : '<p class="au-local">No server is connected, so accounts are stored in this browser only.</p>'}`;
 
   const draw = (): void => {
-    m.el.innerHTML = `<button class="modal-x" aria-label="Close">×</button>${side()}<section class="au-main"><div class="au-tabs" role="tablist"><button role="tab" data-t="login" class="${tab === 'login' ? 'on' : ''}">Log In</button><button role="tab" data-t="register" class="${tab === 'register' ? 'on' : ''}">Register</button></div>${tab === 'login' ? loginForm() : registerForm()}</section>`;
+    m.el.innerHTML = `<button class="modal-x" aria-label="Close">×</button>${side()}<section class="au-main">${opts.reason ? `<div class="au-reason" role="status">${esc(opts.reason)}</div>` : ''}<div class="au-tabs" role="tablist"><button role="tab" data-t="login" class="${tab === 'login' ? 'on' : ''}">Log In</button><button role="tab" data-t="register" class="${tab === 'register' ? 'on' : ''}">Register</button></div>${tab === 'login' ? loginForm() : registerForm()}</section>`;
     $('.modal-x', m.el).onclick = m.close;
     $$('.au-tabs button', m.el).forEach((b: HTMLElement) => b.onclick = () => { tab = b.dataset.t as Tab; draw(); });
     $$('[data-show]', m.el).forEach((b: HTMLElement) => b.onclick = () => { const i = $('#' + b.dataset.show, m.el) as HTMLInputElement; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Show' : 'Hide'; });
@@ -185,16 +185,9 @@ export async function initAuth(): Promise<void> {
   const slot = $('#meBtn')?.closest('.me-wrap') as HTMLElement | null;
   const btn = h(`<button class="btn btn-primary" id="authBtn">${icon('user')}<span>Log in</span></button>`) as HTMLElement;
   slot?.after(btn); btn.onclick = () => { sfx.click(); openAuth(); };
-  // Signed out = nothing of the site is usable: a login screen that cannot be dismissed covers it and the user widgets are hidden.
-  // Only the legal pages stay readable, so the Terms link in the form works.
-  const publicRoute = (): boolean => location.hash.startsWith('#/terms') || location.hash.startsWith('#/privacy') || location.hash.startsWith('#/responsible');
-  const applyGate = (): void => {
-    document.body.classList.toggle('logged-out', !signedIn);
-    if (signedIn || publicRoute()) { if (open && (open as { el: HTMLElement }).el?.classList.contains('au-locked')) open.close(); }
-    else if (!open) openAuth({ locked: true });
-  };
-  window.addEventListener('hashchange', applyGate);
-  const setSignedIn = (on: boolean): void => { signedIn = on; btn.hidden = on; applyGate(); };
+  // Signed out visitors can browse, but the balance and account widgets are hidden and any wager or claim opens this popup (see requireLogin in state.ts).
+  onLoginRequired(reason => { if (!open) openAuth({ reason }); });
+  const setSignedIn = (on: boolean): void => { signedIn = on; btn.hidden = on; setAuthed(on); document.body.classList.toggle('logged-out', !on); if (on) open?.close(); };
   if (!backendEnabled()) { setSignedIn(activeAccount() !== null); return; }
 
   try { const e = await finishSteamLogin(); if (e) toast(e, 'error'); } catch { /* the toast above covers the usual failures */ }

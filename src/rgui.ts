@@ -52,7 +52,7 @@ function clockLabel(): string {
 /** Call once at start-up (after the top bar exists). */
 export function initRg(): void {
   startSession(state.rg); save();
-  if (!state.rg.ageConfirmedAt && activeAccount()) showAgeGate(); // signed-out visitors see the login screen instead; its 18+ tickbox covers this
+  if (!state.rg.ageConfirmedAt && activeAccount()) showAgeGate(); // signed-out visitors can browse; the register form's 18+ tickbox covers this
 
   const slot = $('#freeBtn');
   if (slot) {
