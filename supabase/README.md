@@ -39,11 +39,11 @@ Never put the `service_role` key in the website: it bypasses every protection he
 | Method | Set up |
 |---|---|
 | Email and password | Authentication > Providers > Email (keep "Confirm email" on). Add your site URL and `http://localhost:5173` under URL configuration. |
-| Google, Discord, Twitch | Enable the provider in Authentication > Providers and paste the client ID and secret from that service. |
+| Google | Google Cloud Console > APIs & Services > Credentials > Create OAuth client ID (Web application). Add Supabase's callback URL (shown on Authentication > Providers > Google, `https://<ref>.supabase.co/auth/v1/callback`) as an authorized redirect URI. Paste the client ID and secret into that Supabase page and turn Google on. |
 | Two-factor authentication (TOTP) | Authentication > Multi-factor: enable TOTP. Players set it up under Account > Security. |
 | Steam | Not built into Supabase. Deploy the `steam-login` Edge Function: `supabase secrets set SITE_URLS=https://your-site.example,http://localhost:5173`, then `supabase functions deploy steam-login`, and set `VITE_STEAM_LOGIN=on`. |
 | Account deletion | Deploy `close-login` as well: `supabase functions deploy close-login`. |
 
-Every new player finishes through `complete_signup()`: the database checks that they are 18 or older (from the date of birth), that a terms version was accepted, and that the username is valid and unused, then creates the wallet and the first two seeds. The form checks the same things only to give friendly messages.
+Every new player finishes through `complete_signup()`: the database checks that they confirmed they are an adult (a tickbox, no date of birth is collected), that a terms version was accepted, and that the username is valid and unused, then creates the wallet and the first two seeds. Google and Steam players pick a username in a one-step form after their first login.
 
 The Edge Functions have not been run against live Steam or Supabase. Their logic is covered by `tests/steam.test.ts`.
