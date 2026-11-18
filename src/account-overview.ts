@@ -15,9 +15,9 @@ import { applyUi } from './account.js';
 const when = (t: number): string => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const left = (ms: number): string => { const m = Math.max(0, Math.ceil(ms / 60_000)); return m >= 120 ? `${Math.floor(m / 60)} h` : `${m} min`; };
 const tile = (tab: string, ic: string, status: string, label: string, cls = ''): string =>
-  `<button class="ov-tile ${cls}" data-go="${tab}"><span class="ov-ic">${icon(ic)}</span><span><b>${esc(status)}</b><small>${esc(label)}</small></span></button>`;
+  `<button class="ov-tile ${cls}" data-go="${tab}"><span class="ov-ic">${icon(ic)}</span><span><b>${esc(label)}</b><small>${esc(status)}</small></span></button>`;
 const sw = (id: string, ic: string, label: string, on: boolean): string =>
-  `<label class="ov-set ${on ? 'on' : ''}"><span class="ov-ic">${icon(ic)}</span><span><b>${on ? 'Enabled' : 'Disabled'}</b><small>${label}</small></span><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><i></i></label>`;
+  `<label class="ov-set ${on ? 'on' : ''}"><span class="ov-ic">${icon(ic)}</span><span><b>${label}</b><small>${on ? 'On' : 'Off'}</small></span><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><i></i></label>`;
 
 export function renderOverview(pane: HTMLElement, ctx: PaneCtx, go: (tab: string) => void): void {
   const now = Date.now(), lvl = level(), base = xpForLevel(lvl), next = xpForLevel(lvl + 1);
@@ -28,7 +28,7 @@ export function renderOverview(pane: HTMLElement, ctx: PaneCtx, go: (tab: string
   const best = state.bestDrop, bestItem = best ? ITEM[best.id] : undefined;
   const bestCase = best ? [...CASES].find(c => c.name === best.source) : undefined;
   const kycLabel = state.kyc.docStatus === 'hold' ? 'On hold' : state.kyc.tier === 0 ? 'Not verified' : `Level ${state.kyc.tier}`;
-  const excl = isExcluded() ? `Until ${when(state.excludedUntil)}` : state.rg.coolOffUntil > now ? `Cool-off to ${when(state.rg.coolOffUntil)}` : 'Disabled';
+  const excl = isExcluded() ? `Until ${when(state.excludedUntil)}` : state.rg.coolOffUntil > now ? `Cool-off until ${when(state.rg.coolOffUntil)}` : 'Not active';
 
   pane.innerHTML = `
     <h2 class="ac-h">Account</h2>
@@ -36,6 +36,10 @@ export function renderOverview(pane: HTMLElement, ctx: PaneCtx, go: (tab: string
       <div class="ac-card ov-who">${avatar(state.name, 72)}<div class="ov-name"><b>${esc(state.name)}</b><span class="muted">Coins</span>${money(state.balance)}</div></div>
       <div class="ac-card ov-level"><div class="ov-lvl-n">${lvl}</div><div class="ov-lvl-info"><b>${state.xp.toLocaleString('en-US')} XP</b><span class="muted small">${Math.max(0, next - state.xp).toLocaleString('en-US')} XP remaining to level ${lvl + 1}</span><div class="ac-bar"><i style="width:${pct.toFixed(1)}%"></i></div></div><div class="ov-lvl-n dim">${lvl + 1}</div></div>
     </div>
+
+    <h3 class="ov-h">Display name</h3>
+    <div class="ac-card"><p class="ac-note">2 to 20 characters: letters, numbers, spaces, _ and -.</p>
+      <div class="ac-inline"><input id="acName" maxlength="20" value="${esc(state.name)}" autocomplete="off" aria-label="Display name"><button class="btn btn-primary" id="acNameSave">Save</button></div></div>
 
     <h3 class="ov-h">Level cases</h3>
     <div class="ov-cases">${LEVEL_CASES.map(([req, id]) => { const used = state.keysUsed.includes(req), ok = lvl >= req;
@@ -52,14 +56,14 @@ export function renderOverview(pane: HTMLElement, ctx: PaneCtx, go: (tab: string
     <div class="ov-tiles">
       ${tile('affiliates', 'users', 'Not active', 'Affiliate wallet')}
       ${tile('kyc', 'id', kycLabel, 'Verification', state.kyc.tier > 0 ? 'good' : '')}
-      <button class="ov-tile" id="ovFa" data-go="security"><span class="ov-ic">${icon('lock')}</span><span><b>${backendEnabled() ? 'Checking…' : 'Cloud only'}</b><small>Two-factor authentication</small></span></button>
-      ${tile('responsible', 'ban', excl, 'Self lockdown', isExcluded() ? 'good' : '')}
+      <button class="ov-tile" id="ovFa" data-go="security"><span class="ov-ic">${icon('lock')}</span><span><b>Two-factor authentication</b><small>${backendEnabled() ? 'Checking…' : 'Cloud accounts only'}</small></span></button>
+      ${tile('responsible', 'ban', excl, 'Self-exclusion', isExcluded() || state.rg.coolOffUntil > now ? 'warn' : '')}
       ${tile('kyc', 'chat', state.kyc.emailVerifiedAt ? 'Verified' : 'Not verified', 'Email')}
       ${tile('responsible', 'heart', state.rg.limits.maxBet !== null || state.rg.limits.lossDaily !== null ? 'Limits set' : 'No limits', 'Responsible play')}
     </div>
 
     <h3 class="ov-h">Settings</h3>
-    <div class="ov-sets">${sw('ovAnon', 'user', 'Anonymous mode', state.ui.anonymous)}${sw('ovSnd', 'sound', 'Sound effects', !state.muted)}${sw('ovFx', 'bolt', 'Visual effects', state.ui.fx)}${sw('ovNot', 'chat', 'Notifications', state.ui.notify)}${sw('ovStream', 'lock', 'Streamer mode', state.ui.streamer)}${sw('ovLvl', 'star', 'Level-up pop-ups', state.ui.levelPopup)}</div>
+    <div class="ov-sets">${sw('ovAnon', 'user', 'Anonymous mode', state.ui.anonymous)}${sw('ovSnd', 'sound', 'Sound effects', !state.muted)}${sw('ovFx', 'bolt', 'Visual effects', state.ui.fx)}${sw('ovNot', 'chat', 'Notifications', state.ui.notify)}${sw('ovStream', 'lock', 'Streamer mode', state.ui.streamer)}${sw('ovChat', 'chat', 'Show chat', state.ui.chat)}${sw('ovLvl', 'star', 'Level-up pop-ups', state.ui.levelPopup)}</div>
 
     <h3 class="ov-h">Free rewards stats</h3>
     <div class="ov-stats">
@@ -82,10 +86,7 @@ export function renderOverview(pane: HTMLElement, ctx: PaneCtx, go: (tab: string
 
     <h3 class="ov-h">Inventory</h3>
     <div class="ac-card ac-split"><div><b>${state.inv.length} item${state.inv.length === 1 ? '' : 's'} worth ${money(invValue)}</b><p class="ac-note">Sell or keep what you unboxed. It is play money, so nothing can be withdrawn.</p></div><a class="btn btn-ghost" href="#/inventory">${icon('bag')} Open inventory</a></div>
-
-    <h3 class="ov-h">Display name</h3>
-    <div class="ac-card"><p class="ac-note">2 to 20 characters: letters, numbers, spaces, _ and -.</p>
-      <div class="ac-inline"><input id="acName" maxlength="20" value="${esc(state.name)}" autocomplete="off" aria-label="Display name"><button class="btn btn-primary" id="acNameSave">Save</button></div></div>`;
+`;
 
   $$('[data-go]', pane).forEach((b: HTMLElement) => b.onclick = () => go(b.dataset.go as string));
   $$('.ac-split a, .ov-reward, .ov-case', pane).forEach((a: HTMLElement) => a.addEventListener('click', () => ctx.close()));
@@ -96,6 +97,7 @@ export function renderOverview(pane: HTMLElement, ctx: PaneCtx, go: (tab: string
   flip('ovNot', on => { state.ui.notify = on; });
   flip('ovStream', on => { state.ui.streamer = on; });
   flip('ovLvl', on => { state.ui.levelPopup = on; });
+  flip('ovChat', on => { state.ui.chat = on; });
   $('#acNameSave', pane).onclick = () => {
     const v = ($('#acName', pane) as HTMLInputElement).value.trim();
     const bad = validateUsername(v, v.toLowerCase() === state.name.toLowerCase() ? [] : BOTS);

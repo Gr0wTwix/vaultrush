@@ -2,7 +2,7 @@ import { CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf } from '../data.js'
 import { state, save, debit, credit, addItems, removeItems, round2, debitError } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop, pushBet } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, SPEEDS, speedSeg } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, SPEEDS, reelMs, speedSeg } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
 
@@ -60,7 +60,7 @@ export function renderCase(el, id) {
         <div class="muted">${c.entries.length} items · top drop ${money(c.entries[0].item.value)}</div>
         <div class="open-controls">
           <div class="seg" id="count">${[1, 2, 3, 4, 6].map(n => `<button class="${n === 1 ? 'active' : ''}" data-n="${n}">${n}</button>`).join('')}</div>
-          <button class="btn btn-primary btn-lg" id="openBtn"></button>
+          <button class="btn btn-primary btn-lg" id="openBtn" data-needs-auth="bet"></button>
           <button class="btn btn-ghost" id="demoBtn">Demo spin</button>
           ${speedSeg(state.speed)}
         </div>
@@ -95,7 +95,7 @@ export function renderCase(el, id) {
   const spinAll = winners => {
     const axis = winners.length > 2 ? 'y' : 'x';
     reels.innerHTML = winners.map(() => '<div class="reel-host"></div>').join('');
-    const dur = SPEEDS[state.speed] || SPEEDS.normal;
+    const dur = reelMs();
     return Promise.all([...reels.children].map((host, i) => spinReel(host, c.entries, winners[i], { axis, duration: dur + i * 90, sound: i === 0, ...(axis === 'y' ? { total: 40, winIndex: 34 } : {}) })));
   };
 

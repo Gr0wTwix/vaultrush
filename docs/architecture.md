@@ -56,7 +56,7 @@ Fairness seeds are separate (`fair.ts`, key `vaultrush.fair.v1.<id>`). The Fairn
 Two layers stop signed-out visitors from acting. Both live in `state.ts` and `auth.ts`.
 
 1. **State layer (cannot be bypassed from the UI).** `debit()` and `grant()` call `requireLogin()`. If nobody is signed in, the login popup opens and the call returns false (or does nothing). `debitError()` reports "Log in or register to place bets."
-2. **Click guard (explains the action).** `guardActions()` in `auth.ts` listens in the capture phase. For buttons inside `#view` that spend, claim, sell, create or join (and for the promo and chat forms, and the "Create battle" link) it stops the event, opens the popup with a reason, and never runs the page's own handler. The selector list is `ACTIONS` in `auth.ts`; add new action buttons there.
+2. **Click guard (explains the action).** `guardActions()` in `auth.ts` listens in the capture phase. It only acts on elements that opt in with `data-needs-auth="<kind>"` (`bet`, `battle`, `claim`, `upgrade`, `inventory`, `chat`, `rain`, `seeds`). For those it stops the event, opens the popup with the reason for that kind, and never runs the page's own handler. It also stops the promo and chat forms while signed out. Public tools (Verify, the RTP check, the RNG lab) never carry the attribute, so they keep working. Buttons with `data-auth-open="register|login"` simply open the popup on that tab.
 
 Browsing, filters, tabs and normal links are not guarded.
 
@@ -68,6 +68,15 @@ A bet also passes through `betBlockReason()` in `rg.ts` (age, self-exclusion, co
 
 ## Adding things
 
-- **A new game or action:** take the wager with `debit()` (it applies every gate), pay out with `credit()`, log bonuses with `grant()`. Add its button selector to `ACTIONS` in `auth.ts`.
+- **A new game or action:** take the wager with `debit()` (it applies every gate), pay out with `credit()`, log bonuses with `grant()`. Put `data-needs-auth="bet"` (or another kind) on its button.
 - **A new stored setting:** add it to `newGameState()` and `GameState` (`types.ts`). `load()` merges saved data over the defaults, so old saves keep working.
 - **A new page:** add a module under `views/`, import it in `app.ts`, add a route to `ROUTES`. Note the Race page route is `#/leaderboard`.
+
+## Accessibility building blocks
+
+- `modal()` in `ui.ts` is the one dialog helper: it names the dialog (from `label` or its first heading), moves focus in, traps Tab, makes `.app` inert, returns focus to the opener, and supports `locked` and `backdropClose: false`. The age gate and reality check in `rgui.ts` follow the same rules.
+- `toast()` messages go to a polite live region. `toastKeep()` (or `force`) is for messages that Settings > Notifications must never hide: limits, sign-in, breaks.
+- One global `:focus-visible` ring in `app.css`; `--dim` is for decoration only, small text uses `--muted`.
+- Account window redraws keep keyboard focus (`keepFocus` in `account.ts`).
+- Signed-in state changes emit an `auth` event; `app.ts` re-renders the current page on it.
+- The phone bottom bar shows Home, Cases, Battles and Crash plus a **More** sheet with every page.

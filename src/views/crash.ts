@@ -22,7 +22,7 @@ export function render(el) {
         ${amountField('amt', 1)}
         <div class="field"><label>Auto cash-out</label><div class="amount"><input id="auto" type="number" min="1.01" step="0.01" placeholder="Off"><button data-q="1.5">1.5×</button><button data-q="2">2×</button><button data-q="10">10×</button></div></div>
         <div class="field"><label>Cash out share</label><div class="seg" id="part">${[[0.25, '25%'], [0.5, '50%'], [0.75, '75%'], [1, 'All']].map(([v, l]) => `<button data-p="${v}" class="${v === 1 ? 'active' : ''}">${l}</button>`).join('')}</div></div>
-        <button class="btn btn-primary btn-lg block" id="actBtn">Place bet</button>
+        <button class="btn btn-primary btn-lg block" id="actBtn" data-needs-auth="bet">Place bet</button>
         <div class="muted small center" id="hint">Round starts in a few seconds</div>
       </div>
       <div class="crash-stage panel">

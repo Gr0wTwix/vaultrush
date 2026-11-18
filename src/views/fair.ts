@@ -49,7 +49,7 @@ export function render(el) {
           <button class="btn btn-primary block" id="rot">Rotate &amp; reveal server seed</button>
           ${revealed.length ? `<h3>Revealed seeds</h3><div class="revealed">${revealed.slice(0, 10).map(r => `<div class="rev"><div class="small muted">Server seed (nonces 0–${Math.max(0, r.nonces - 1)}, last client seed <b>${esc(r.clientSeed)}</b>)</div><div class="mono">${r.serverSeed}</div><div class="small muted">Committed hash <span class="mono">${r.serverHash.slice(0, 16)}…</span></div><button class="btn btn-sm btn-ghost use" data-s="${r.serverSeed}" data-c="${esc(r.clientSeed)}">Use in verifier</button></div>`).join('')}</div>` : ''}
         </div>
-        ` : `<div class="panel"><div class="panel-head"><h2>Your seeds</h2></div><p class="muted">Your seeds, nonce and revealed history belong to your account. Log in or register to get them.</p><button class="btn btn-primary block" id="seedLogin">Log in / Register</button></div>`}
+        ` : `<div class="panel"><div class="panel-head"><h2>Your seeds</h2></div><p class="muted">Your seeds, nonce and revealed history belong to your account. Log in or create a free account to get them.</p><button class="btn btn-primary block" id="seedLogin">Log in / Register</button></div>`}
         <div class="panel">
           <div class="panel-head"><h2>Verifier</h2></div>
           <div class="field"><label>Game</label><select id="vg">${GAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
@@ -95,7 +95,7 @@ export function render(el) {
       </div>`;
 
     // ---- seeds
-    if (!isAuthed()) $('#seedLogin', el).onclick = () => requireLogin('Log in or register to get your own seeds.');
+    if (!isAuthed()) $('#seedLogin', el).onclick = () => requireLogin('Log in or create a free account to get your own seeds.');
     else $('#csSave', el).onclick = () => { setClientSeed($('#cs', el).value.trim()); toast('Client seed saved'); draw(); };
     if (isAuthed()) $('#rot', el).onclick = async () => { await rotate(); toast('Server seed revealed and rotated'); draw(); };
     $$('.use', el).forEach(b => b.onclick = () => { $('#vs', el).value = b.dataset.s; $('#vc', el).value = b.dataset.c; $('#vs', el).scrollIntoView({ block: 'center' }); });

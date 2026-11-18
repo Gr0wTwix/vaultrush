@@ -69,7 +69,7 @@ export function render(el) {
     </section>
     <div class="lanes">${LANES.map(([k, label, key]) => `
       <div class="lane lane-${k}" data-lane="${k}">
-        <button class="lane-btn" data-bet="${k}"><span class="lb-ic">${LANE_GLYPH[k]}</span><span class="lb-txt">Place bet <small>${label}</small></span><b>Win ${DOUBLE_PAY[k]}×</b><kbd>${key}</kbd></button>
+        <button class="lane-btn" data-bet="${k}" data-needs-auth="bet"><span class="lb-ic">${LANE_GLYPH[k]}</span><span class="lb-txt">Place bet <small>${label}</small></span><b>Win ${DOUBLE_PAY[k]}×</b><kbd>${key}</kbd></button>
         <div class="lane-sum"><span id="cnt-${k}">${icon('user')} 0 users</span><span id="tot-${k}">${money(0)}</span></div>
         <div class="lane-list" id="list-${k}"></div>
       </div>`).join('')}

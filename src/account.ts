@@ -3,6 +3,7 @@ import { state, save, level, levelFromXp, xpForLevel, isExcluded, resetAccount, 
 import { getFair, setClientSeed, rotate, randHex } from './fair.js';
 import { BOTS } from './data.js';
 import { $, $$, esc, fmt, money, icon, avatar, toast, modal } from './ui.js';
+import { backendEnabled } from './backend.js';
 import { sfx } from './sfx.js';
 import { renderResponsible } from './account-rg.js';
 import { renderVerification } from './account-kyc.js';
@@ -52,7 +53,7 @@ let current = null;
 export function openAccount(tab = 'account') {
   if (tab === 'exclude') tab = 'responsible';
   if (current) return current.go(tab);
-  const m = modal('', { wide: true, onClose: () => { current = null; } });
+  const m = modal('', { wide: true, label: 'Account', onClose: () => { current = null; } });
   m.el.classList.add('acct');
   m.el.insertAdjacentHTML('beforeend', `
     <nav class="ac-rail"><div class="ac-rail-title">Account</div>${TABS.map(([k, label, ic]) => `<button data-t="${k}">${icon(ic)}<span>${label}</span></button>`).join('')}</nav>
@@ -61,14 +62,24 @@ export function openAccount(tab = 'account') {
   const pg = { history: { page: 1, per: 10, filter: 'all' }, tx: { page: 1, per: 10, filter: 'all' } };
   let tabNow = tab;
 
-  const ctx = { rerender: () => VIEWS[tabNow]?.(), close: () => m.close() };
+  // Redrawing the pane would throw keyboard focus away; remember the focused control (by id, else by position) and put focus back.
+  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])';
+  const keepFocus = (run: () => void): void => {
+    const a = document.activeElement as HTMLElement | null, inPane = !!a && pane.contains(a);
+    const id = inPane ? a.id : '', idx = inPane ? ([...pane.querySelectorAll(FOCUSABLE)] as HTMLElement[]).indexOf(a) : -1;
+    run();
+    if (!inPane) return;
+    const next = (id && pane.querySelector(`#${CSS.escape(id)}`)) || (idx >= 0 ? [...pane.querySelectorAll(FOCUSABLE)][idx] : null);
+    (next as HTMLElement | null)?.focus();
+  };
+  const ctx = { rerender: () => keepFocus(() => VIEWS[tabNow]?.()), close: () => m.close() };
   const VIEWS = {
     // ---- Account ------------------------------------------------------------------------------------------
     account() { renderOverview(pane, ctx, go); },
 
     // ---- Security -----------------------------------------------------------------------------------------
     security() {
-      pane.innerHTML = `${head('Security', 'This demo has no password or email, so there is nothing to hack. Your progress lives in this browser only.')}
+      pane.innerHTML = `${head('Security', backendEnabled() ? 'Your account is stored on a server and protected by your password. Manage two-factor authentication and your sessions below. Your play-money progress is also backed up here.' : 'Browser accounts are stored in this browser only, with a salted hash of the password. Anyone who can use this browser could change them, so keep a backup of your progress below.')}
         <div class="ac-card"><h3>Back up your progress</h3><p class="ac-note">Download your balance, items, levels and history as a file, or restore it on another browser. Clearing site data erases it, so a backup is the only way to recover.</p>
           <div class="ac-links"><button class="btn btn-primary" id="acExport">Download backup</button><label class="btn btn-ghost" for="acImport">Restore from file</label><input type="file" id="acImport" accept="application/json,.json" hidden></div></div>
         <div class="ac-card"><h3>Active sessions</h3><p class="ac-note">Sessions on this device. A real account would list other devices here and let you sign them out.</p>
@@ -114,7 +125,10 @@ export function openAccount(tab = 'account') {
       const f = getFair();
       pane.innerHTML = `${head('Options', 'Interface, sound and provably fair seeds.')}
         <div class="ac-card"><h3>User interface</h3>
+          ${switchRow('acAnon', 'Anonymous mode', state.ui.anonymous, 'Hides your name in the live feeds')}
           ${switchRow('acSnd', 'Sound effects', !state.muted)}
+          ${switchRow('acFx', 'Visual effects', state.ui.fx, 'Confetti, glow and big animations')}
+          ${switchRow('acNot', 'Notifications', state.ui.notify, 'Small pop-up messages. Errors, limits and sign-in messages always show')}
           ${switchRow('acChat', 'Show chat', state.ui.chat, 'Hide the chat column for a wider game area')}
           ${switchRow('acLvl', 'Level-up pop-ups', state.ui.levelPopup)}
           ${switchRow('acStream', 'Streamer mode', state.ui.streamer, 'Blurs your balance and name')}
@@ -128,6 +142,9 @@ export function openAccount(tab = 'account') {
           <div class="ac-split ac-rot"><div><b>Rotate server seed</b><p class="ac-note">Reveals the current seed so you can check your past games, and starts the pair you were shown above.</p></div><button class="btn btn-primary" id="acRotate">Rotate</button></div></div>
         <div class="ac-card"><h3>Ignored players</h3><p class="ac-note">Chat messages from these players are hidden. Click a name in chat to ignore someone.</p>
           <div id="acBlocked">${state.blocked.length ? state.blocked.map(u => `<div class="ac-row"><span class="ac-user">${avatar(u, 24)} ${esc(u)}</span><button class="btn btn-ghost btn-sm" data-un="${esc(u)}">Unignore</button></div>`).join('') : '<div class="ac-empty">No players ignored</div>'}</div></div>`;
+      $('#acAnon', pane).onchange = e => { state.ui.anonymous = e.target.checked; save(); };
+      $('#acFx', pane).onchange = e => { state.ui.fx = e.target.checked; save(); applyUi(); };
+      $('#acNot', pane).onchange = e => { state.ui.notify = e.target.checked; save(); };
       $('#acSnd', pane).onchange = e => { state.muted = !e.target.checked; save(); const b = $('#muteBtn'); if (b) b.innerHTML = icon(state.muted ? 'mute' : 'sound'); };
       $('#acChat', pane).onchange = e => { state.ui.chat = e.target.checked; save(); applyUi(); };
       $('#acLvl', pane).onchange = e => { state.ui.levelPopup = e.target.checked; save(); };

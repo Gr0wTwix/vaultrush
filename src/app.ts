@@ -35,6 +35,7 @@ import * as profile from './views/profile.js';
 import { settlePastRace } from './race.js';
 import { level } from './state.js';
 
+const MAIN_NAV = ['home', 'cases', 'battles', 'crash'];
 const NAV = [
   [null, 'Play'],
   ['#/', 'home', 'Home'], ['#/cases', 'cases', 'Cases'], ['#/battles', 'battles', 'Battles'], ['#/upgrade', 'upgrade', 'Upgrade'],
@@ -73,8 +74,18 @@ const ROUTES: Route[] = [
 function renderSidebar() {
   $('#sidebar').innerHTML = `
     <a class="logo" href="#/" aria-label="Vaultrush home"><span class="logo-mark">${icon('bolt')}</span><span class="logo-text">VAULT<b>RUSH</b></span></a>
-    <div class="nav">${NAV.map(([href, ic, label]) => (href === null ? `<div class="nav-group">${ic}</div>` : `<a class="nav-link" href="${href}" data-nav="${ic}">${icon(ic)}<span>${label}</span></a>`)).join('')}</div>
+    <div class="nav">${NAV.map(([href, ic, label]) => (href === null ? `<div class="nav-group">${ic}</div>` : `<a class="nav-link" href="${href}" data-nav="${ic}"${MAIN_NAV.includes(ic) ? ' data-main' : ''}>${icon(ic)}<span>${label}</span></a>`)).join('')}
+      <button type="button" class="nav-link nav-more" id="navMore" aria-expanded="false" aria-controls="navSheet">${icon('menu')}<span>More</span></button></div>
+    <div class="nav-sheet" id="navSheet" hidden>${NAV.map(([href, ic, label]) => (href === null ? `<div class="nav-group">${ic}</div>` : `<a class="nav-link" href="${href}" data-nav="${ic}">${icon(ic)}<span>${label}</span></a>`)).join('')}</div>
     <div class="side-foot"><span class="pill-demo">PLAY MONEY</span></div>`;
+  // Phones: the bottom bar shows the four main pages and a More button that opens the full list.
+  const more = $('#navMore'), sheet = $('#navSheet');
+  const setSheet = (open: boolean): void => { sheet.hidden = !open; more.setAttribute('aria-expanded', String(open)); };
+  more.onclick = () => setSheet(sheet.hidden);
+  sheet.onclick = e => { if ((e.target as Element).closest('a')) setSheet(false); };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) { setSheet(false); more.focus(); } });
+  document.addEventListener('click', e => { if (!sheet.hidden && !(e.target as Element).closest('#navSheet, #navMore')) setSheet(false); });
+  window.addEventListener('hashchange', () => setSheet(false));
 }
 
 // Avatar menu: every entry opens the Account window on the matching tab.
@@ -114,16 +125,16 @@ function initChatDock() {
 
 function renderTopbar() {
   $('#topbar').innerHTML = `
-    <a class="logo logo-mobile" href="#/">${icon('bolt')}</a>
+    <a class="logo logo-mobile" href="#/" aria-label="Vaultrush home">${icon('bolt')}</a><span class="pill-demo pill-mobile">PLAY MONEY</span>
     <div class="top-spacer"></div>
     <button class="btn btn-ghost free-btn" id="freeBtn">${icon('gift')}<span id="freeLabel">Free coins</span></button>
     <a class="balance" href="#/inventory" title="Balance and inventory">${coin()}<span id="bal">${fmt(state.balance)}</span><span class="inv-count" id="invCount">${icon('bag')}<b>${state.inv.length}</b></span></a>
     <button class="icon-btn" id="muteBtn" aria-label="Toggle sound">${icon(state.muted ? 'mute' : 'sound')}</button>
     <button class="icon-btn chat-toggle" id="chatBtn" aria-label="Toggle chat">${icon('chat')}</button>
     <div class="me-wrap">
-      <button class="me" id="meBtn" aria-haspopup="menu" aria-expanded="false" title="Account">${avatar(state.name, 32)}<span class="me-lvl" id="meLvl">${level()}</span></button>
-      <div class="me-menu" id="meMenu" role="menu" hidden>
-        ${ME_MENU.map(([tab, label, ic, cls]) => `<button role="menuitem" data-tab="${tab}" class="${cls || ''}">${icon(ic)}<span>${label}</span></button>`).join('')}<span id="meLogout"></span>
+      <button class="me" id="meBtn" aria-expanded="false" aria-controls="meMenu" aria-label="Account menu" title="Account">${avatar(state.name, 32)}<span class="me-lvl" id="meLvl">${level()}</span></button>
+      <div class="me-menu" id="meMenu" hidden>
+        ${ME_MENU.map(([tab, label, ic, cls]) => `<button data-tab="${tab}" class="${cls || ''}">${icon(ic)}<span>${label}</span></button>`).join('')}<span id="meLogout"></span>
       </div>
     </div>`;
   on('levelup', lvl => {
@@ -135,9 +146,11 @@ function renderTopbar() {
 
   const meBtn = $('#meBtn'), meMenu = $('#meMenu');
   const setMenu = open => {
-    if (open) $('#meLogout').innerHTML = (isSignedIn() || localSignedIn()) ? `<button role="menuitem" data-tab="logout" class="danger">${icon('logout')}<span>Log out</span></button>` : '';
+    if (open) $('#meLogout').innerHTML = (isSignedIn() || localSignedIn()) ? `<button data-tab="logout" class="danger">${icon('logout')}<span>Log out</span></button>` : '';
     meMenu.hidden = !open; meBtn.setAttribute('aria-expanded', String(open));
+    if (open) (meMenu.querySelector('button') as HTMLElement | null)?.focus();
   };
+  $('.me-wrap').addEventListener('focusout', (e: FocusEvent) => { if (!meMenu.hidden && !(e.relatedTarget && $('.me-wrap').contains(e.relatedTarget as Node))) setMenu(false); });
   meBtn.onclick = e => { e.stopPropagation(); sfx.click(); setMenu(meMenu.hidden); };
   meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); sfx.click(); if (b.dataset.tab === 'logout') void logout(); else openAccount(b.dataset.tab); };
   document.addEventListener('click', e => { if (!meMenu.hidden && !(e.target as Element).closest('.me-wrap')) setMenu(false); });
@@ -166,8 +179,10 @@ function renderTopbar() {
     shown = to;
     el.parentElement.classList.remove('bump-up', 'bump-down'); void el.offsetWidth;
     el.parentElement.classList.add(to >= from ? 'bump-up' : 'bump-down');
-    const anim = t => { const k = Math.min(1, (t - t0) / 450); el.textContent = fmt(from + (to - from) * (1 - (1 - k) ** 3)); if (k < 1) requestAnimationFrame(anim); };
-    requestAnimationFrame(anim);
+    // No count-up animation for people who asked for less motion or turned visual effects off.
+    const calm = !s.ui.fx || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (calm) el.textContent = fmt(to);
+    else { const anim = t => { const k = Math.min(1, (t - t0) / 450); el.textContent = fmt(from + (to - from) * (1 - (1 - k) ** 3)); if (k < 1) requestAnimationFrame(anim); }; requestAnimationFrame(anim); }
     $('#invCount b').textContent = s.inv.length;
   });
 }
@@ -230,6 +245,7 @@ async function boot() {
   applyUi();
   initRg();
   void initAuth();
+  on('auth', () => route());
   initChatDock();
   startFeed();
   renderTicker();

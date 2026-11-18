@@ -2,7 +2,7 @@ import { CASES, CASE, RARITY, randomBot, entryForTicket, ticketOf } from '../dat
 import { state, save, debit, credit, round2, debitError, handoff } from '../state.js';
 import { bet, annotate, pickWeighted } from '../fair.js';
 import { pushBet, pushDrop } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, speedSeg, modal, itemArt } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt } from '../ui.js';
 import { sfx } from '../sfx.js';
 
 export const FORMATS = {
@@ -155,7 +155,7 @@ export function renderCreate(el) {
       </div>
       <div class="bt2-bar">
         <div class="bt2-sum" id="sum"></div>
-        <div class="bt2-go"><div class="bt2-speed"><span class="muted small">Speed</span>${speedSeg(state.speed)}</div><button class="btn btn-primary btn-lg" id="createBtn"></button></div>
+        <div class="bt2-go"><div class="bt2-speed"><span class="muted small">Speed</span>${speedSeg(state.speed)}</div><button class="btn btn-primary btn-lg" id="createBtn" data-needs-auth="battle"></button></div>
       </div>
     </section>`;
 
@@ -292,7 +292,7 @@ export function renderList(el) {
         <p class="muted"><b class="bt2-live" id="stOpen">0</b> active battles · <span id="stPot"></span> in the pot. Join one below or start your own.</p></div>
       <div class="bt2-headr">
         <label class="bt2-sort"><span class="muted small">Sort</span><select id="lobSort"><option value="new">Newest</option><option value="cost">Highest cost</option><option value="cheap">Lowest cost</option></select></label>
-        <a class="btn btn-primary btn-lg" href="#/battles/create" id="goCreate">${icon('battles')} Create battle</a>
+        <a class="btn btn-primary btn-lg" href="#/battles/create" id="goCreate" data-needs-auth="battle">${icon('battles')} Create battle</a>
       </div>
     </div>
     <section class="bt2-open">
@@ -309,13 +309,13 @@ export function renderList(el) {
       <div class="bt2-lt"><span class="tag ${l.mode}">${MODES[l.mode].label}</span><b>${f.label}</b><small>${l.ids.length} round${l.ids.length === 1 ? '' : 's'}</small></div>
       <div class="bt2-ls">${l.bots.map(b => avatar(b, 30)).join('')}${Array.from({ length: open }, () => '<span class="seat-empty">+</span>').join('')}</div>
       <div class="bt2-lcost"><b>${money(cost)}</b><small>Battle cost</small></div>
-      <button class="btn btn-primary" data-id="${l.uid}">Join battle</button></div>`;
+      <button class="btn btn-primary" data-id="${l.uid}" data-needs-auth="battle">Join battle</button></div>`;
   };
   const drawLobbies = () => {
     let shown = lobbies.filter(l => filter === 'all' || (filter === 'solo' ? !FORMATS[l.format].teams : filter === 'team' ? FORMATS[l.format].teams : costOf(l.ids) < 5));
     if (sort === 'cost') shown = [...shown].sort((a, b) => costOf(b.ids) - costOf(a.ids));
     if (sort === 'cheap') shown = [...shown].sort((a, b) => costOf(a.ids) - costOf(b.ids));
-    $('#lobbies', el).innerHTML = shown.map(lobRow).join('') || '<div class="ac-empty muted">No battles match this filter right now. <a href="#/battles/create">Create one</a></div>';
+    $('#lobbies', el).innerHTML = shown.map(lobRow).join('') || '<div class="ac-empty muted">No battles match this filter right now. <a href="#/battles/create" data-needs-auth="battle">Create one</a></div>';
     $('#stOpen', el).textContent = lobbies.length;
     $('#stPot', el).innerHTML = money(round2(lobbies.reduce((sum, l) => sum + costOf(l.ids) * FORMATS[l.format].size, 0)));
     $$('#lobbies [data-id]', el).forEach(btn => btn.onclick = async () => {
@@ -352,7 +352,7 @@ export function renderBattle(el, id) {
   const hasSep = i => i > 0 && (!teams || teamOf(i) !== teamOf(i - 1));
   const seatHtml = i => (b.joined[i]
     ? `<div class="seat-wait ready">${icon('fair')}<b>Ready</b><span>to battle</span></div>`
-    : `<div class="seat-wait"><span class="spinner"></span><b>Waiting</b><button class="btn btn-sm btn-primary call-bot" data-seat="${i}">Call bot</button></div>`);
+    : `<div class="seat-wait"><span class="spinner"></span><b>Waiting</b><button class="btn btn-sm btn-primary call-bot" data-needs-auth="battle" data-seat="${i}">Call bot</button></div>`);
 
   const R = b.ids.length;
   const pad2 = n => String(n).padStart(2, '0');
@@ -378,7 +378,7 @@ export function renderBattle(el, id) {
       <div class="bt-ctl">${speedSeg(state.speed)}</div>
     </div>
     <div class="bt-status"><div><h2 id="bStatus">Waiting for players…</h2><span class="muted small">${MODES[b.mode].desc}</span></div>
-      <div class="row lobby-ctl" id="lobbyCtl"><button class="btn btn-primary" id="callAll">Call all bots</button><button class="btn btn-ghost" id="cancelB">Cancel battle</button></div></div>
+      <div class="row lobby-ctl" id="lobbyCtl"><button class="btn btn-primary" id="callAll" data-needs-auth="battle">Call all bots</button><button class="btn btn-ghost" id="cancelB">Cancel battle</button></div></div>
     <div id="jpRoll"></div>
     <div class="battle-stage bt-stage ${teams ? 'teams' : ''}" style="--P:${P}">
       <span class="stage-arrow l"></span><span class="stage-arrow r"></span><div class="stage-line"></div>
@@ -513,7 +513,7 @@ export function renderBattle(el, id) {
       $('#roundLbl', el).textContent = `${r + 1}/${b.ids.length}`;
       b.players.forEach((_, p) => $(`#slot${p}_${r}`, el).classList.add('active'));
       $('#bStatus', el).textContent = `${replay ? 'Replay · ' : ''}Round ${r + 1} of ${b.ids.length}`;
-      const dur = Math.round((SPEEDS[state.speed] || SPEEDS.normal) * 0.6);
+      const dur = Math.round(reelMs() * 0.6);
       await Promise.all(b.players.map((_, p) => spinReel($(`#reel${p}`, el), c.entries, b.results[p][r], { axis: 'y', duration: dur, total: 40, winIndex: 34, sound: p === 0 })));
       if (!live()) return;
       const top = Math.max(...b.players.map((_, p) => b.results[p][r].value));
@@ -571,7 +571,7 @@ export function renderBattle(el, id) {
       <button class="btn btn-ghost" id="replay">Replay</button>
       <button class="btn btn-ghost" id="editB">Edit</button>
       ${canUpgrade ? `<button class="btn btn-cash" id="upWin">${icon('upgrade')} Upgrade win</button>` : ''}
-      <button class="btn btn-primary" id="rematch">Recreate ${money(b.cost)}</button></div>`);
+      <button class="btn btn-primary" id="rematch" data-needs-auth="battle">Recreate ${money(b.cost)}</button></div>`);
     $('#replay', el).onclick = () => play(true);
     $('#editB', el).onclick = () => { draft = { ids: [...b.ids], format: b.format, mode: b.mode }; location.hash = '#/battles/create'; };
     if (canUpgrade) $('#upWin', el).onclick = () => { handoff.upgradeCoins = share; location.hash = '#/upgrade'; };

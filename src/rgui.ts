@@ -6,13 +6,25 @@ import { openAccount } from './account.js';
 import { sfx } from './sfx.js';
 import { activeAccount } from './accounts.js';
 import { rngHealth } from './rng.js';
-import { toast } from './ui.js';
+import { toast, toastKeep } from './ui.js';
 
 const TICK_MS = 5000;
 
+let overlaySeq = 0;
 function overlay(html: string, cls = ''): HTMLElement {
+  const opener = document.activeElement as HTMLElement | null;
   const el = h(`<div class="rg-overlay ${cls}" role="dialog" aria-modal="true"><div class="rg-box">${html}</div></div>`) as HTMLElement;
+  const heading = el.querySelector('h2, h3');
+  if (heading) { heading.id = `rgd${++overlaySeq}`; el.setAttribute('aria-labelledby', heading.id); }
   document.body.append(el);
+  document.querySelector('.app')?.setAttribute('inert', '');     // the page behind cannot be reached until the overlay is answered
+  (el.querySelector('button, a[href]') as HTMLElement | null)?.focus();
+  const remove = el.remove.bind(el);
+  el.remove = () => {
+    remove();
+    if (!document.querySelector('.modal-back, .rg-overlay')) document.querySelector('.app')?.removeAttribute('inert');
+    if (opener?.isConnected) opener.focus();
+  };
   return el;
 }
 
@@ -41,7 +53,7 @@ function showReality(): void {
   const done = (): void => { acknowledgeReality(state.rg); save(); el.remove(); };
   $('#rgGo', el).onclick = done;
   $('#rgLimits', el).onclick = () => { done(); openAccount('responsible'); };
-  $('#rgBreak', el).onclick = () => { startCoolOff(state.rg, 24 * 3_600_000); done(); toast('Cool-off started. See you tomorrow.'); };
+  $('#rgBreak', el).onclick = () => { const until = startCoolOff(state.rg, 24 * 3_600_000); done(); toastKeep(`Cool-off started. Betting is paused until ${new Date(until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.`); };
 }
 
 /** Call once at start-up (after the top bar exists). */

@@ -7,6 +7,7 @@ import { REPORTING_THRESHOLD, SOF_THRESHOLD, accountRisk, applyPayout, bonusCoin
 import type { PaneCtx } from './account-rg.js';
 import { $, $$, esc, fmt, icon, money, toast } from './ui.js';
 import { sfx } from './sfx.js';
+import { activeAccount } from './accounts.js';
 
 const when = (t: number): string => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const step = (done: boolean, title: string, body: string): string =>
@@ -31,7 +32,7 @@ export function renderVerification(pane: HTMLElement, ctx: PaneCtx): void {
 
     <div class="ac-card"><h3>Steps</h3>
       ${step(k.emailVerifiedAt > 0, 'Email', `<p class="ac-note">${k.emailVerifiedAt ? `Verified: ${esc(k.email)}` : 'We send a 6-digit code. In the sandbox it appears below instead of an inbox.'}</p>
-        ${k.emailVerifiedAt ? '' : `<div class="ac-inline"><input id="kEmail" type="email" placeholder="you@example.com" value="${esc(k.email)}"><button class="btn btn-ghost" id="kSend">Send code</button></div>
+        ${k.emailVerifiedAt ? '' : `<div class="ac-inline"><input id="kEmail" type="email" placeholder="you@example.com" value="${esc(k.email || activeAccount()?.email || '')}"><button class="btn btn-ghost" id="kSend">Send code</button></div>
         ${demoCode ? `<div class="kyc-inbox">Sandbox inbox: your code is <b>${demoCode}</b></div><div class="ac-inline"><input id="kCode" inputmode="numeric" maxlength="6" placeholder="6-digit code"><button class="btn btn-primary" id="kVerify">Verify</button></div>` : ''}`}`)}
       ${step(!!k.dob, 'Date of birth', `<p class="ac-note">${k.dob ? `Accepted. Only adults (18+) can play.` : 'Players must be 18 or older.'}</p>
         ${k.dob ? '' : '<div class="ac-inline"><input id="kDob" type="date"><button class="btn btn-ghost" id="kDobSave">Save</button></div>'}`)}
@@ -47,7 +48,7 @@ export function renderVerification(pane: HTMLElement, ctx: PaneCtx): void {
 
     <div class="ac-card"><h3>Payout simulator</h3>
       <p class="ac-note">Try a cash-out request to see the AML rules decide. Coins leave your balance only if approved, and <b>no real money is involved</b>. Payouts of ${REPORTING_THRESHOLD}+ need Level 2; bonus coins (${fmt(bonusCoins(state))} so far) must be wagered once first.</p>
-      <div class="ac-inline"><input id="pAmt" type="number" min="1" step="1" placeholder="Amount in coins"><button class="btn btn-primary" id="pGo">Request payout</button></div><div id="pRes"></div>
+      <div class="ac-inline"><input id="pAmt" type="number" min="1" step="1" placeholder="Amount in coins"><button class="btn btn-ghost" id="pGo">Simulate payout</button></div><div id="pRes"></div>
     </div>
 
     <div class="ac-card"><h3>Monitoring</h3>

@@ -95,8 +95,8 @@ export function render(el) {
       <div class="cf-create">
         <label class="dbl-amt cf-amt"><span class="amount-coin">${coin()}</span><input id="cfAmt" type="number" min="0.1" step="0.1" value="1" aria-label="Bet amount"></label>
         <button class="dbtn" data-op="half">1/2</button><button class="dbtn" data-op="double">X2</button><button class="dbtn" data-op="max">Max</button>
-        <button class="btn cf-make bolt" data-side="bolt">${sideChip('bolt', 20)} Create</button>
-        <button class="btn cf-make star" data-side="star">${sideChip('star', 20)} Create</button>
+        <button class="btn cf-make bolt" data-needs-auth="bet" data-side="bolt">${sideChip('bolt', 20)} Create</button>
+        <button class="btn cf-make star" data-needs-auth="bet" data-side="star">${sideChip('star', 20)} Create</button>
       </div>
     </section>
     <section><h2 class="cf-h">My games <span class="muted" id="myCount">0</span></h2><div class="cf-list" id="myGames"></div></section>
@@ -115,7 +115,7 @@ export function render(el) {
   const row = g => {
     const mineIn = g.mine;
     const action = g.status === 'waiting' && !g.mine
-      ? `<button class="btn btn-primary btn-sm" data-join="${g.id}">Join ${money(g.amount)}</button>`
+      ? `<button class="btn btn-primary btn-sm" data-join="${g.id}" data-needs-auth="bet">Join ${money(g.amount)}</button>`
       : `<button class="btn btn-ghost btn-sm" data-view="${g.id}">${g.status === 'done' ? 'Result' : 'View'}</button>`;
     return `<div class="cf-row ${mineIn ? 'mine' : ''} ${g.status}">
       ${seat(g.creator, g.creator.side, g)}
@@ -171,7 +171,7 @@ export function render(el) {
   function openMatch(g) {
     if (!g) return;
     if (view) view.m.close();
-    const m = modal('', { wide: true, onClose: () => { if (view && view.m === m) view = null; } });
+    const m = modal('', { wide: true, label: 'Coinflip', onClose: () => { if (view && view.m === m) view = null; } });
     m.el.classList.add('cf-modal');
     view = { g, m };
     drawMatch();

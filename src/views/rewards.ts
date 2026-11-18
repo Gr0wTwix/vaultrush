@@ -1,9 +1,9 @@
 // Rewards hub: level, rakeback, free cases (welcome, daily, level), promo codes and a login calendar.
 import { CASE, ITEM, RARITY, entryForTicket, ticketOf } from '../data.js';
-import { state, save, grant, credit, logTx, addItems, removeItems, round2, level, xpForLevel, todayKey, DAY } from '../state.js';
+import { state, save, grant, credit, logTx, addItems, removeItems, round2, level, xpForLevel, todayKey, DAY, isAuthed } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop } from '../feed.js';
-import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, SPEEDS } from '../ui.js';
+import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, SPEEDS, reelMs, guestCard } from '../ui.js';
 import { sfx } from '../sfx.js';
 
 export const LEVEL_CASES: [number, string][] = [[10, 'starter'], [20, 'neon'], [30, 'charmed'], [40, 'sniper'], [50, 'blade'], [60, 'high']];
@@ -22,7 +22,7 @@ export async function openFreeCase(c, label) {
   annotate(entry, `${label} ${c.name}: ticket #${ticket} → ${item.weapon} | ${item.skin}`, `${ticket}:${item.id}`);
   const [added] = addItems([item]);       // granted before the animation
   logTx(label, item.value, `${item.weapon} | ${item.skin}`);
-  await spinReel($('#freeReel', m.el), c.entries, item, { duration: SPEEDS[state.speed] || SPEEDS.normal });
+  await spinReel($('#freeReel', m.el), c.entries, item, { duration: reelMs() });
   pushDrop({ user: state.name, item, source: c.name });
   if (['legendary', 'mythic', 'epic'].includes(item.rarity)) { sfx.big(); confetti(RARITY[item.rarity].color); } else sfx.win();
   const res = $('#freeRes', m.el);
@@ -47,7 +47,8 @@ export function render(el) {
 
     el.innerHTML = `
       <div class="page-head"><h1>${icon('gift')} Rewards</h1><p class="muted">Every coin you wager earns XP and rakeback. Level up to unlock free cases.</p></div>
-      <section class="panel level-card">
+      ${!isAuthed() ? guestCard('Sign in to start earning XP', 'Every coin you wager earns XP and rakeback, and free cases unlock as you level up. The rewards below are a preview.') : ''}
+      <section class="panel level-card" ${isAuthed() ? '' : 'hidden'}>
         ${avatar(state.name, 56)}
         <div class="lvl-info"><div class="row"><b class="lvl-num">Level ${lvl}</b><span class="muted small">${(xp - cur).toLocaleString('en-US')} / ${(next - cur).toLocaleString('en-US')} XP</span></div>
           <div class="xp-bar"><i style="width:${Math.min(100, ((xp - cur) / (next - cur)) * 100)}%"></i></div>
@@ -56,18 +57,18 @@ export function render(el) {
 
       <h2 class="section-title">Rakeback</h2>
       <section class="reward-grid three">
-        <div class="panel rcard"><span class="muted small">Instant · 0.4%</span><b>${money(rb.instant)}</b><button class="btn btn-primary block" data-rb="instant" ${rb.instant >= 0.01 ? '' : 'disabled'}>Claim</button></div>
-        <div class="panel rcard"><span class="muted small">Daily · 0.3%</span><b>${money(rb.daily)}</b><button class="btn btn-primary block" data-rb="daily" ${dailyReady && rb.daily >= 0.01 ? '' : 'disabled'}>${dailyReady ? 'Claim' : `In ${left(DAY - (now - rb.lastDaily))}`}</button></div>
-        <div class="panel rcard"><span class="muted small">Weekly · 0.3%</span><b>${money(rb.weekly)}</b><button class="btn btn-primary block" data-rb="weekly" ${weeklyReady && rb.weekly >= 0.01 ? '' : 'disabled'}>${weeklyReady ? 'Claim' : `In ${left(WEEK - (now - rb.lastWeekly))}`}</button></div>
+        <div class="panel rcard"><span class="muted small">Instant · 0.4%</span><b>${money(rb.instant)}</b><button class="btn btn-primary block" data-rb="instant" data-needs-auth="claim" ${rb.instant >= 0.01 ? '' : 'disabled'}>Claim</button></div>
+        <div class="panel rcard"><span class="muted small">Daily · 0.3%</span><b>${money(rb.daily)}</b><button class="btn btn-primary block" data-rb="daily" data-needs-auth="claim" ${dailyReady && rb.daily >= 0.01 ? '' : 'disabled'}>${dailyReady ? 'Claim' : `In ${left(DAY - (now - rb.lastDaily))}`}</button></div>
+        <div class="panel rcard"><span class="muted small">Weekly · 0.3%</span><b>${money(rb.weekly)}</b><button class="btn btn-primary block" data-rb="weekly" data-needs-auth="claim" ${weeklyReady && rb.weekly >= 0.01 ? '' : 'disabled'}>${weeklyReady ? 'Claim' : `In ${left(WEEK - (now - rb.lastWeekly))}`}</button></div>
       </section>
 
       <h2 class="section-title">Free cases</h2>
       <section class="reward-grid">
-        <div class="panel rcase" style="--hue:${CASE.welcome.hue}">${caseArt(CASE.welcome)}<b>Welcome Crate</b><span class="muted small">${state.welcomeLeft} of 3 left</span><button class="btn btn-primary block" id="welcome" ${state.welcomeLeft > 0 ? '' : 'disabled'}>Open free</button></div>
-        <div class="panel rcase" style="--hue:${CASE.daily.hue}">${caseArt(CASE.daily)}<b>Daily Crate</b><span class="muted small">Once every 24 hours</span><button class="btn btn-primary block" id="dailyCase" ${dailyCaseReady ? '' : 'disabled'}>${dailyCaseReady ? 'Open free' : `In ${left(DAY - (now - state.lastDailyCase))}`}</button></div>
+        <div class="panel rcase" style="--hue:${CASE.welcome.hue}">${caseArt(CASE.welcome)}<b>Welcome Crate</b><span class="muted small">${state.welcomeLeft} of 3 left</span><button class="btn btn-primary block" id="welcome" data-needs-auth="claim" ${state.welcomeLeft > 0 ? '' : 'disabled'}>Open free</button></div>
+        <div class="panel rcase" style="--hue:${CASE.daily.hue}">${caseArt(CASE.daily)}<b>Daily Crate</b><span class="muted small">Once every 24 hours</span><button class="btn btn-primary block" id="dailyCase" data-needs-auth="claim" ${dailyCaseReady ? '' : 'disabled'}>${dailyCaseReady ? 'Open free' : `In ${left(DAY - (now - state.lastDailyCase))}`}</button></div>
         ${LEVEL_CASES.map(([req, id]) => {
           const used = state.keysUsed.includes(req), unlocked = lvl >= req;
-          return `<div class="panel rcase ${unlocked && !used ? '' : 'locked'}" style="--hue:${CASE[id].hue}">${caseArt(CASE[id])}<b>Level ${req} case</b><span class="muted small">${esc(CASE[id].name)} · worth ${money(CASE[id].price)}</span><button class="btn ${unlocked && !used ? 'btn-primary' : 'btn-ghost'} block" data-lvl="${req}" ${unlocked && !used ? '' : 'disabled'}>${used ? 'Opened' : unlocked ? 'Use key' : `Reach level ${req}`}</button></div>`;
+          return `<div class="panel rcase ${unlocked && !used ? '' : 'locked'}" style="--hue:${CASE[id].hue}">${caseArt(CASE[id])}<b>Level ${req} case</b><span class="muted small">${esc(CASE[id].name)} · worth ${money(CASE[id].price)}</span><button class="btn ${unlocked && !used ? 'btn-primary' : 'btn-ghost'} block" data-lvl="${req}" data-needs-auth="claim" ${unlocked && !used ? '' : 'disabled'}>${used ? 'Opened' : unlocked ? 'Use key' : `Reach level ${req}`}</button></div>`;
         }).join('')}
       </section>
 
@@ -77,7 +78,7 @@ export function render(el) {
           <div class="calendar">${CALENDAR.map((v, i) => {
             const done = i < shown;
             const isNext = i === nextDay;
-            return `<button class="cal-day ${done ? 'done' : ''} ${isNext ? 'next' : ''}" data-day="${i}" ${isNext ? '' : 'disabled'}><span>Day ${i + 1}</span><b>${money(v)}</b>${done ? '<i>✓</i>' : ''}</button>`;
+            return `<button class="cal-day ${done ? 'done' : ''} ${isNext ? 'next' : ''}" data-needs-auth="claim" data-day="${i}" ${isNext ? '' : 'disabled'}><span>Day ${i + 1}</span><b>${money(v)}</b>${done ? '<i>✓</i>' : ''}</button>`;
           }).join('')}</div>
         </section>
         <section class="panel">

@@ -18,6 +18,11 @@ The top-right **Log in** button opens the popup. Signing out is in the avatar me
 - Extra options: **Google** and **Steam** only. There is no Twitch or Discord, no date of birth and no "gambling is allowed where I live" tickbox. Age is a tickbox here and stronger checks live in the sandbox verification (see [compliance.md](compliance.md)).
 - Password rules (`signup.ts`): at least 10 characters, at most 72 bytes, not a common password, not containing the username or the email name.
 - The popup follows the site's own design (lime primary button, dark panels), not any reference site's.
+- First-time visitors sent here by a bet or claim land on **Register**; a browser that has had an account lands on **Log in** (`vaultrush.known` in `localStorage`). Typed email and username survive switching tabs; passwords do not.
+- Errors are linked to their fields (`aria-describedby`, `aria-invalid`), summarised once above the submit button, and focus moves to the first problem. The tabs are real ARIA tabs with arrow-key support.
+- The 2FA code field appears only after the server says the account uses 2FA. Without a backend, Google and Steam are shown switched off with a plain explanation.
+- After a cloud sign-up that needs e-mail confirmation the form is replaced by a "Check your inbox" panel with a resend button.
+- On phones the Register tab shows Google and Steam first, and the popup states that coins are play money.
 
 ## Two modes
 

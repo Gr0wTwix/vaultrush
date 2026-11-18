@@ -1,6 +1,6 @@
 import { standings, msToReset, PRIZES } from '../race.js';
-import { todayKey, DAY } from '../state.js';
-import { $, esc, fmt, money, icon, avatar } from '../ui.js';
+import { todayKey, DAY, isAuthed } from '../state.js';
+import { $, esc, fmt, money, icon, avatar, guestCard } from '../ui.js';
 
 const pad = n => String(n).padStart(2, '0');
 
@@ -11,6 +11,8 @@ export function render(el) {
     const prev = standings(todayKey(Date.now() - DAY), Date.parse(`${todayKey()}T00:00:00Z`) - 1).slice(0, 3);
     el.innerHTML = `
       <div class="page-head"><h1>${icon('trophy')} Daily race</h1><p class="muted">Every coin you wager today counts. The top 10 share a ${fmt(PRIZES.reduce((a, b) => a + b, 0))} coin prize pool when the day ends (00:00 UTC). Prizes are paid the next time you visit.</p></div>
+      ${isAuthed() ? '' : guestCard('Sign in to enter today\'s race', 'Every coin you wager today counts. Create a free account to appear on the board.')}
+      <p class="muted small race-demo"><span class="tag">Demo</span> The other players on this board are simulated.</p>
       <section class="race-head panel"><div><span class="muted small">Prize pool</span>${money(PRIZES.reduce((a, b) => a + b, 0), 'big')}</div><div class="countdown" id="cd"></div></section>
       <section class="podium">${[1, 0, 2].map(i => { const p = top3[i]; return p ? `<div class="pod pod-${i + 1} ${p.me ? 'mine' : ''}">${avatar(p.name, 46)}<b>${esc(p.name)}</b><span class="muted small">${money(p.wagered)} wagered</span><div class="pod-prize">${money(p.prize)}</div><div class="pod-rank">${i + 1}</div></div>` : ''; }).join('')}</section>
       <div class="panel"><div class="table-wrap"><table class="bets"><thead><tr><th>#</th><th>Player</th><th>Wagered</th><th>Prize</th></tr></thead><tbody>

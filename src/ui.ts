@@ -54,19 +54,31 @@ export function avatar(name, size = 28) {
   const col = name === state.name ? '#c6ff3d' : AV_COLORS[Math.abs(hsh) % AV_COLORS.length];
   // The signed-in player's own picture (from Steam or Google) replaces the initial. Only https image URLs are used.
   const pic = name === state.name && typeof state.avatar === 'string' && /^https:\/\//.test(state.avatar) ? state.avatar : '';
-  if (pic) return `<span class="avatar has-img" style="--av:${col};width:${size}px;height:${size}px"><img src="${esc(pic)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()"></span>`;
+  if (pic) return `<span class="avatar has-img" style="--av:${col};width:${size}px;height:${size}px;font-size:${size * 0.42}px">${esc(name[0].toUpperCase())}<img src="${esc(pic)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()"></span>`;
   return `<span class="avatar" style="--av:${col};width:${size}px;height:${size}px;font-size:${size * 0.42}px">${esc(name[0].toUpperCase())}</span>`;
 }
 
-export function toast(msg, kind = 'info') {
-  if (!state.ui.notify && kind !== 'error') return;      // Settings > Notifications off: only errors still show
+/**
+ * Short message. Settings > Notifications off hides the plain ones; errors and anything passed `force` (limits, sign-in, responsible-play
+ * messages) always show. The container is a polite live region, so screen readers announce them.
+ */
+export function toast(msg, kind = 'info', force = false) {
+  if (!state.ui.notify && kind !== 'error' && !force) return;
   const el = h(`<div class="toast toast-${kind}">${msg}</div>`);
   document.getElementById('toasts').append(el);
   setTimeout(() => el.classList.add('out'), 2600);
   setTimeout(() => el.remove(), 3000);
 }
 
+/** A card for signed-out visitors on pages that are about the player's own data. The buttons open the login popup (handled in auth.ts). */
+export const guestCard = (title: string, text: string): string =>
+  `<section class="panel guest-card"><div><b>${esc(title)}</b><span class="muted">${esc(text)}</span></div><div class="row"><button type="button" class="btn btn-primary" data-auth-open="register">Create free account</button><button type="button" class="btn btn-ghost" data-auth-open="login">Log in</button></div></section>`;
+
+/** A toast that Settings > Notifications can never hide. */
+export const toastKeep = (msg: string, kind = 'info'): void => toast(msg, kind, true);
+
 export const ICONS = {
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   home: '<path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/>',
   cases: '<path d="M3 8l9-4 9 4v9l-9 4-9-4zM3 8l9 4 9-4M12 12v9"/>',
   battles: '<path d="M4 4l9 9M4 4h4M4 4v4M20 4l-9 9M20 4h-4M20 4v4M7 15l-3 3 2 2 3-3M17 15l3 3-2 2-3-3"/>',
@@ -173,6 +185,8 @@ export function spinReel(host, pool, winner, { axis = 'x', duration = 5200, tota
 
 /** Reel durations for the three speeds the reference sites offer. */
 export const SPEEDS = { normal: 5200, fast: 2600, turbo: 1200 };
+/** Reel length in ms: the player's chosen speed, or the fastest one when their system asks for reduced motion. */
+export const reelMs = (): number => ((() => { try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })() ? SPEEDS.turbo : (SPEEDS[state.speed] || SPEEDS.normal));
 export const speedSeg = cur => `<div class="seg speed-seg" role="group" aria-label="Animation speed">${Object.keys(SPEEDS).map(s => `<button data-speed="${s}" class="${s === cur ? 'active' : ''}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;
 
 /** Bet amount input with ½ / 2× / Max buttons. Call wireAmount after rendering. */
@@ -189,17 +203,51 @@ export function wireAmount(root: ParentNode, input: any, getBalance: () => numbe
   input.addEventListener('input', () => onChange?.());
 }
 
-/** Simple modal. Returns { el, close }. */
-export function modal(html: string, { onClose, wide = false, locked = false }: { onClose?: () => void; wide?: boolean; locked?: boolean } = {}): { el: any; close: () => void } {
-  const wrap = h(`<div class="modal-back"><div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="Close">×</button>${html}</div></div>`);
-  const close = () => { wrap.classList.add('out'); setTimeout(() => wrap.remove(), 200); document.removeEventListener('keydown', esc); onClose?.(); };
-  const esc = e => { if (e.key === 'Escape' && !locked) close(); };
-  wrap.addEventListener('click', e => { if (e.target === wrap && !locked) close(); });
+/** Dialogs on screen, topmost last. Only the topmost traps Tab. */
+const dialogs: HTMLElement[] = [];
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let dialogSeq = 0;
+
+/**
+ * Accessible modal. Returns { el, close }.
+ * Focus moves into the dialog and comes back to the opener on close; Tab stays inside; the page behind is made inert.
+ * `label` names the dialog for screen readers (otherwise its first heading is used). `locked` removes Escape and backdrop closing.
+ */
+export function modal(html: string, { onClose, wide = false, locked = false, label = '', backdropClose = true }: { onClose?: () => void; wide?: boolean; locked?: boolean; label?: string; backdropClose?: boolean } = {}): { el: any; close: () => void } {
+  const opener = document.activeElement as HTMLElement | null;
+  const wrap = h(`<div class="modal-back"><div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" tabindex="-1"${label ? ` aria-label="${esc(label)}"` : ''}><button class="modal-x" aria-label="Close">×</button>${html}</div></div>`);
+  const box = wrap.querySelector('.modal') as HTMLElement;
+  if (!label) { const hd = box.querySelector('h1, h2, h3'); if (hd) { hd.id = hd.id || `dlg${++dialogSeq}`; box.setAttribute('aria-labelledby', hd.id); } }
+  let closed = false;
+  const close = () => {
+    if (closed) return; closed = true;
+    wrap.classList.add('out'); setTimeout(() => wrap.remove(), 200);
+    document.removeEventListener('keydown', onKey);
+    const i = dialogs.indexOf(wrap); if (i >= 0) dialogs.splice(i, 1);
+    if (!dialogs.length) document.querySelector('.app')?.removeAttribute('inert');
+    if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+    onClose?.();
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    if (dialogs[dialogs.length - 1] !== wrap) return;
+    if (e.key === 'Escape' && !locked) { close(); return; }
+    if (e.key !== 'Tab') return;
+    const items = ([...box.querySelectorAll(FOCUSABLE)] as HTMLElement[]).filter(el => el.offsetParent !== null || el === document.activeElement);
+    if (!items.length) { e.preventDefault(); box.focus(); return; }
+    const first = items[0] as HTMLElement, last = items[items.length - 1] as HTMLElement, at = document.activeElement;
+    if (e.shiftKey && (at === first || at === box || !box.contains(at))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (at === last || !box.contains(at))) { e.preventDefault(); first.focus(); }
+  };
+  wrap.addEventListener('click', e => { if (e.target === wrap && !locked && backdropClose) close(); });
   wrap.querySelector('.modal-x').onclick = close;
   if (locked) wrap.classList.add('locked');
-  document.addEventListener('keydown', esc);
+  document.addEventListener('keydown', onKey);
   document.body.append(wrap);
-  return { el: wrap.querySelector('.modal'), close };
+  dialogs.push(wrap);
+  document.querySelector('.app')?.setAttribute('inert', '');
+  const firstField = box.querySelector('input:not([type="hidden"]), select, textarea') as HTMLElement | null;
+  (firstField ?? box).focus({ preventScroll: true });
+  return { el: box, close };
 }
 
 export function confetti(color = '#c6ff3d') {

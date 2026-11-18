@@ -113,7 +113,8 @@ button.me:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px;
 .me-menu::before { content: ''; position: absolute; right: 14px; top: -6px; width: 12px; height: 12px; background: var(--panel); border-left: 1px solid var(--line2); border-top: 1px solid var(--line2); transform: rotate(45deg); }
 .me-menu button { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; border-radius: 9px; background: transparent; color: var(--text); font: 600 15px var(--body); text-align: left; cursor: pointer; transition: background .12s, color .12s; }
 .me-menu button .icon { width: 18px; height: 18px; color: var(--muted); transition: color .12s; }
-.me-menu button:hover, .me-menu button:focus-visible { background: rgba(198,255,61,.1); outline: none; }
+.me-menu button:hover, .me-menu button:focus-visible { background: rgba(198,255,61,.1); }
+.me-menu button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .me-menu button:hover .icon, .me-menu button:focus-visible .icon { color: var(--accent); }
 .me-menu button.danger { color: #ff7a6b; margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; }
 .me-menu button.danger .icon { color: #ff7a6b; }

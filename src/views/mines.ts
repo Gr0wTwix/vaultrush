@@ -66,7 +66,7 @@ export function render(el) {
         <div class="field"><label>Grid</label><div class="seg wrap" id="grid">${[16, 25, 36, 49, 64].map(n => `<button data-g="${n}" class="${n === 25 ? 'active' : ''}">${Math.sqrt(n)}×${Math.sqrt(n)}</button>`).join('')}</div></div>
         <div class="field"><label for="mcI">Mines</label><div class="amount"><input id="mcI" type="number" min="1" max="24" value="3"><span id="mc">${[1, 3, 5, 10].map(n => `<button data-n="${n}">${n}</button>`).join('')}</span></div></div>
         <div class="mines-stats"><div><span class="muted small">Next tile</span><b id="next">–</b></div><div><span class="muted small">Current</span><b id="cur">–</b></div></div>
-        <button class="btn btn-primary btn-lg block" id="act">Start game</button>
+        <button class="btn btn-primary btn-lg block" id="act" data-needs-auth="bet">Start game</button>
         <button class="btn btn-ghost block" id="rand" disabled>Pick random tile</button>
       </div>
       <div class="panel board-wrap" id="boardWrap">

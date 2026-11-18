@@ -1,5 +1,5 @@
 // Simulated chat with coin rain. A real site would run this over WebSockets.
-import { state, credit, logTx, save, emit } from './state.js';
+import { state, credit, logTx, save, emit, requireLogin } from './state.js';
 import { randomBot } from './data.js';
 import { shownName } from './feed.js';
 import { $, $$, esc, fmt, avatar, icon, coin, toast, h } from './ui.js';
@@ -68,7 +68,7 @@ export function initChat(root) {
     rainEl.hidden = false;
     const draw = () => {
       rainEl.innerHTML = `<div class="rain-info"><b>Coin rain</b><span>${coin()}${fmt(pot)} · ${left}s</span></div><button class="btn ${joined ? 'btn-ghost' : 'btn-primary'}" ${joined ? 'disabled' : ''}>${joined ? 'Joined' : 'Join'}</button>`;
-      rainEl.querySelector('button').onclick = () => { joined = true; sfx.click(); draw(); };
+      rainEl.querySelector('button').onclick = () => { if (!requireLogin('Log in or create a free account to join the coin rain.')) return; joined = true; sfx.click(); draw(); };
     };
     draw();
     const t = setInterval(() => {

@@ -22,7 +22,7 @@ export function render(el) {
         <div class="field"><label>Rows</label><div class="seg wrap" id="rows">${[8, 10, 12, 14, 16].map(n => `<button data-n="${n}" class="${n === 12 ? 'active' : ''}">${n}</button>`).join('')}</div></div>
         <div class="field"><label for="balls">Balls per drop: <b id="ballsV">1</b></label><input id="balls" type="range" min="1" max="10" value="1"></div>
         <div class="muted small" style="margin-bottom:10px">Total bet <b id="total"></b></div>
-        <button class="btn btn-primary btn-lg block" id="drop">Drop ball</button>
+        <button class="btn btn-primary btn-lg block" id="drop" data-needs-auth="bet">Drop ball</button>
       </div>
       <div class="panel plinko-stage">
         <canvas id="cv"></canvas>

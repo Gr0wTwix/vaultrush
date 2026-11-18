@@ -74,7 +74,7 @@ body.no-fx *, body.no-fx *::before, body.no-fx *::after { animation-duration: .0
 body.no-fx .confetti, body.no-fx .fx-layer { display: none !important; }
 
 /* ===== sign in / register ===== */
-.modal.auth-modal { width: min(860px, 100%); padding: 0; display: grid; grid-template-columns: 340px minmax(0, 1fr); overflow: hidden; border-radius: 20px; max-height: 92vh; }
+.modal.auth-modal { width: min(860px, 100%); padding: 0; display: grid; grid-template-columns: 340px minmax(0, 1fr); overflow: hidden; border-radius: 20px; max-height: 92vh; max-height: 92dvh; }
 .modal.auth-modal.au-finish { grid-template-columns: 1fr; width: min(480px, 100%); }
 .auth-modal .modal-x { z-index: 3; }
 .au-side { padding: 30px 28px; display: flex; flex-direction: column; gap: 14px; background: radial-gradient(420px 320px at 0 0, rgba(198,255,61,.2), transparent 65%), linear-gradient(180deg, #10200d, #0a1007); border-right: 1px solid rgba(198,255,61,.14); }
@@ -92,7 +92,7 @@ body.no-fx .confetti, body.no-fx .fx-layer { display: none !important; }
 .au-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .au-field label { font-size: 12.5px; font-weight: 700; color: var(--text); }
 .au-pass { position: relative; } .au-pass input { padding-right: 62px; }
-.au-show { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--muted); font: 700 12px var(--body); cursor: pointer; padding: 6px; }
+.au-show { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); min-height: 32px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: 700 12px var(--body); cursor: pointer; padding: 8px 10px; }
 .au-show:hover { color: var(--accent); }
 .au-err { min-height: 0; color: var(--red); font-size: 12.5px; } .au-err:empty { display: none; }
 .au-forgot { align-self: flex-start; margin: -4px 0 12px; font-size: 12.5px; }
@@ -107,8 +107,8 @@ body.no-fx .confetti, body.no-fx .fx-layer { display: none !important; }
 .au-prov { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--panel2); color: var(--text); font: 700 13.5px var(--body); cursor: pointer; transition: all .15s; }
 .au-prov svg { width: 18px; height: 18px; } .au-prov:hover { border-color: var(--accent); background: var(--panel3); }
 #authBtn { display: inline-flex; align-items: center; gap: 7px; } #authBtn .icon { width: 17px; height: 17px; } #authBtn[hidden] { display: none; }
+
 .legal h2 { font: 800 18px var(--display); margin: 22px 0 6px; } .legal h2:first-child { margin-top: 0; } .legal p { color: var(--muted); line-height: 1.7; max-width: 760px; margin: 0 0 8px; }
-@media (max-width: 760px) { .modal.auth-modal { grid-template-columns: 1fr; } .au-side { display: none; } .au-main { padding: 22px 18px; } }
 
 /* ===== account overview ===== */
 .ov-top { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr); gap: 12px; margin-bottom: 4px; }
@@ -139,9 +139,46 @@ body.no-fx .confetti, body.no-fx .fx-layer { display: none !important; }
 .ov-wins { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; } .ov-win { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); } .ov-win > span:nth-child(2) { flex: 1; } .ov-win b { display: block; font-size: 14px; } .ov-win small { color: var(--muted); font-size: 12px; }
 .fa-setup { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; } .fa-setup img { background: #fff; padding: 6px; border-radius: 10px; } .fa-setup code { display: block; margin: 4px 0 10px; letter-spacing: .08em; }
 @media (max-width: 800px) { .ov-top, .ov-rewards { grid-template-columns: 1fr; } .ov-stats { grid-template-columns: repeat(2, 1fr); } }
-#authBtn { padding: 9px 16px; } @media (max-width: 560px) { #authBtn { padding: 9px 12px; } #authBtn span { display: none; } }
-@media (max-width: 760px) { .modal.auth-modal { grid-template-columns: minmax(0, 1fr); } .au-side { display: none; } }
+#authBtn { padding: 9px 16px; } @media (max-width: 560px) { #authBtn { padding: 9px 12px; } }
 
 /* signed out: you can browse, but there is no balance, claim button, avatar menu or session clock to show */
 body.logged-out #freeBtn, body.logged-out .balance, body.logged-out .me-wrap { display: none !important; }
 .au-reason { margin: 0 40px 14px 0; padding: 11px 14px; border-radius: 11px; background: rgba(198,255,61,.12); border: 1px solid rgba(198,255,61,.35); color: var(--accent); font-weight: 700; font-size: 13.5px; }
+
+/* ===== sign in / register: form details ===== */
+.au-hint { font-weight: 400; color: var(--muted); }
+.au-panel { display: flex; flex-direction: column; }
+.au-formerr { min-height: 0; margin-top: 10px; padding: 0; color: var(--red); font-size: 13px; font-weight: 600; line-height: 1.4; } .au-formerr:empty { display: none; }
+.au-formerr + .btn { margin-top: 8px; }
+.au-note { margin-top: 10px; color: var(--muted); font-size: 12.5px; line-height: 1.45; } .au-note:empty { display: none; }
+.au-meter-t { margin-top: 4px; font-size: 12px; color: var(--muted); } .au-meter-t:empty { display: none; }
+.au-playmoney { display: none; margin: 0 40px 12px 0; font-size: 12.5px; color: var(--muted); }
+.au-out { margin: 14px 0 0; text-align: center; font-size: 13px; }
+.au-sent .au-sub { margin-bottom: 16px; } .au-sent .row { gap: 10px; }
+.au-prov:disabled { opacity: .5; cursor: not-allowed; } .au-prov:disabled:hover { border-color: var(--line2); background: var(--panel2); }
+.au-tabs button:focus-visible, .au-prov:focus-visible { outline-offset: -2px; }
+@media (max-width: 760px) {
+  .modal.auth-modal { grid-template-columns: minmax(0, 1fr); }
+  .au-side { display: none; }
+  .au-main { padding: 22px 18px; }
+  .au-playmoney { display: block; }
+  /* on a phone the quick Google and Steam options come first on the Register tab, so nobody scrolls past a long form to find them */
+  .au-panel.reg .au-provs { order: 1; } .au-panel.reg .au-or { order: 2; margin: 14px 0; } .au-panel.reg .au-form { order: 3; } .au-panel.reg .au-note { order: 1; margin: 8px 0 0; } .au-panel.reg .au-local { order: 4; }
+}
+
+/* ===== cards for signed-out visitors ===== */
+.guest-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; background: linear-gradient(100deg, rgba(198,255,61,.1), var(--panel) 70%); border-color: rgba(198,255,61,.25); }
+.guest-card > div:first-child { display: flex; flex-direction: column; gap: 4px; min-width: 220px; flex: 1; } .guest-card b { font: 800 17px var(--display); }
+.race-demo { margin: 0 0 12px; }
+
+/* ===== home carousel controls ===== */
+.hm-pause { position: absolute; right: 14px; bottom: 12px; z-index: 3; min-width: 34px; height: 34px; border-radius: 17px; border: 1px solid var(--line2); background: rgba(9,13,21,.7); color: var(--text); font-size: 11px; cursor: pointer; }
+.hm-pause:hover { border-color: var(--accent); color: var(--accent); }
+.hm-dots { gap: 0; padding: 2px 6px; }
+.hm-dots button { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.hm-dots button::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); transition: all .25s; }
+.hm-dots button.on { width: 24px; background: none; } .hm-dots button.on::before { width: 20px; border-radius: 6px; background: var(--accent); }
+
+.ov-tile.warn .ov-ic { background: rgba(255,197,61,.14); color: var(--gold); } .ov-tile.warn small { color: var(--gold); }
+.rg-hint { min-height: 0; margin-top: 4px; } .rg-hint:empty { display: none; }
+@media (max-width: 760px) { #authBtn .au-more { display: none; } }

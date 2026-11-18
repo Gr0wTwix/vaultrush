@@ -5,7 +5,7 @@ import {
   playedTodayMs, scorePgsi, sessionSummary, setLimit, stakedToday, startCoolOff,
 } from './rg.js';
 import type { RgLimitKey } from './types.js';
-import { $, $$, esc, fmt, icon, toast } from './ui.js';
+import { $, $$, esc, fmt, icon, toast, toastKeep } from './ui.js';
 import { sfx } from './sfx.js';
 
 export interface PaneCtx { rerender: () => void; close: () => void }
@@ -30,8 +30,10 @@ function limitRow(key: RgLimitKey): string {
   return `<div class="rg-limit" data-k="${key}">
     <div class="rg-limit-h"><b>${LIMIT_LABELS[key]}</b><span class="muted small">${cur === null ? 'No limit' : `${fmt(cur)} ${unit}`}</span></div>
     ${u ? `<div class="rg-use ${pct >= 90 ? 'hot' : ''}"><i style="width:${pct.toFixed(1)}%"></i></div><div class="muted small">${fmt(u.used)} of ${fmt(u.limit)} ${unit} used</div>` : ''}
-    <div class="ac-inline"><input type="number" min="0" step="1" placeholder="${cur === null ? 'Set a limit' : 'New value'}" aria-label="${LIMIT_LABELS[key]}"><button class="btn btn-ghost btn-sm" data-set>Set</button>${cur === null ? '' : '<button class="btn btn-ghost btn-sm" data-off>Remove</button>'}</div>
-    ${p ? `<div class="rg-pending">Change to <b>${p.value ?? 'no limit'}</b> takes effect in ${left(p.effectiveAt - Date.now())}. <button class="link" data-cancel>Cancel</button></div>` : ''}
+    <div class="ac-inline"><input type="number" min="0" step="1" placeholder="${cur === null ? 'Set a limit' : 'New value'}" aria-label="${LIMIT_LABELS[key]}"><button class="btn btn-ghost btn-sm" data-set>Set</button>${cur === null ? '' : '<button class="btn btn-ghost btn-sm" data-off aria-label="Remove this limit after 24 hours">Remove (after 24 h)</button>'}</div>
+    <div class="rg-hint muted small" data-hint aria-live="polite"></div>
+    ${cur === 0 ? '<div class="ac-note">A limit of 0 blocks betting until you raise it. Raising takes 24 hours.</div>' : ''}
+    ${p ? `<div class="rg-pending">Change to <b>${p.value === null ? 'no limit' : `${fmt(p.value)} ${unit}`}</b> takes effect on ${when(p.effectiveAt)} (in ${left(p.effectiveAt - Date.now())}). <button class="link" data-cancel>Cancel</button></div>` : ''}
   </div>`;
 }
 
@@ -45,7 +47,7 @@ export function renderResponsible(pane: HTMLElement, ctx: PaneCtx): void {
     ${blocked ? `<div class="ac-card ac-warn"><h3>Betting is paused</h3><p class="ac-note">${esc(blocked)}. Rewards, browsing and the Fairness tools keep working.</p></div>` : ''}
 
     <div class="ac-card"><h3>Limits</h3>
-      <p class="ac-note">A limit you tighten applies at once. Raising or removing a limit takes 24 hours and can be cancelled. Loss limits count settled bets, so winnings offset losses.</p>
+      <p class="ac-note">A limit you tighten applies at once. Raising or removing a limit takes 24 hours and can be cancelled. Type a new value and the note under the box tells you which of the two it is. Loss limits count settled bets, so winnings offset losses.</p>
       <div class="rg-limits">${[...MONEY_LIMITS, 'timeDailyMin' as RgLimitKey].map(limitRow).join('')}</div>
       <div class="ac-row"><span>Reality check<small>A reminder of your time and results</small></span>
         <select id="rgReality" aria-label="Reality check interval">${[[15, 'Every 15 min'], [30, 'Every 30 min'], [60, 'Every hour'], [0, 'Off']].map(([v, l]) => `<option value="${v}" ${rg.limits.realityMin === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -59,9 +61,9 @@ export function renderResponsible(pane: HTMLElement, ctx: PaneCtx): void {
     </div>
 
     <div class="ac-card"><h3>Take a break</h3>
-      <p class="ac-note"><b>Cool-off</b> is a short break that ends by itself and cannot be shortened. <b>Self-exclusion</b> is stronger and cannot be lifted early.</p>
+      <p class="ac-note">Both stop betting until they end, and neither can be shortened once started. Rewards, browsing and the Fairness tools keep working. <b>Cool-off</b> is a pause you choose to take. <b>Self-exclusion</b> is a firmer commitment and is shown on your account as such.</p>
       <div class="ac-pills" id="rgCool">${COOL_OFF_OPTIONS.map(([l, ms]) => `<button data-cool="${ms}">Cool-off ${l}</button>`).join('')}</div>
-      <div class="ac-pills" id="rgExcl">${[['1 hour', 3600e3], ['3 days', 3 * DAY_MS], ['14 days', 14 * DAY_MS], ['30 days', 30 * DAY_MS]].map(([l, ms]) => `<button class="warn" data-excl="${ms}">Self-exclude ${l}</button>`).join('')}</div>
+      <div class="ac-pills" id="rgExcl">${[['3 days', 3 * DAY_MS], ['14 days', 14 * DAY_MS], ['30 days', 30 * DAY_MS]].map(([l, ms]) => `<button class="warn" data-excl="${ms}">Self-exclude ${l}</button>`).join('')}</div>
     </div>
 
     <div class="ac-card"><h3>Self-assessment</h3>
@@ -81,26 +83,37 @@ export function renderResponsible(pane: HTMLElement, ctx: PaneCtx): void {
     const apply = (v: number | null) => {
       const r = setLimit(rg, key, v);
       if (r.status === 'invalid') return toast('Enter a number of zero or more', 'error');
-      if (r.status === 'same') return toast('That is already your limit');
+      if (r.status === 'same') return toastKeep('That is already your limit');
       save(); sfx.click();
-      toast(r.status === 'pending' ? 'Change requested: it takes effect in 24 hours' : 'Limit saved', 'win'); ctx.rerender();
+      toastKeep(r.status === 'pending' ? `Change requested: it takes effect on ${when(Date.now() + DAY_MS)}` : 'Limit saved', 'win'); ctx.rerender();
     };
+    const hint = $('[data-hint]', box) as HTMLElement;
+    input.addEventListener('input', () => {
+      const now = state.rg.limits[key], typed = input.value === '' ? null : Number(input.value);
+      if (typed === null) { hint.textContent = ''; return; }
+      if (!Number.isFinite(typed) || typed < 0) { hint.textContent = 'Enter zero or more.'; return; }
+      if (typed === now) { hint.textContent = 'That is already your limit.'; return; }
+      const tighter = now === null || typed < now;
+      hint.textContent = (tighter ? 'Tighter: applies now.' : `Looser: applies on ${when(Date.now() + DAY_MS)}.`) + (typed === 0 ? ' A limit of 0 stops betting.' : '');
+    });
     $('[data-set]', box).onclick = () => { if (input.value === '') return toast('Enter a value first', 'error'); apply(Number(input.value)); };
     $('[data-off]', box)?.addEventListener('click', () => apply(null));
     $('[data-cancel]', box)?.addEventListener('click', () => { cancelPending(rg, key); save(); ctx.rerender(); });
   });
   ($('#rgReality', pane) as HTMLSelectElement).onchange = e => {
     const r = setLimit(rg, 'realityMin', Number((e.target as HTMLSelectElement).value));
-    save(); toast(r.status === 'pending' ? 'Change requested: it takes effect in 24 hours' : 'Reality check updated', 'win'); ctx.rerender();
+    save(); toastKeep(r.status === 'pending' ? `Change requested: it takes effect on ${when(Date.now() + DAY_MS)}` : 'Reality check updated', 'win'); ctx.rerender();
   };
   $('[data-cancel-reality]', pane)?.addEventListener('click', () => { cancelPending(rg, 'realityMin'); save(); ctx.rerender(); });
   $$('[data-cool]', pane).forEach((b: HTMLElement) => b.onclick = () => {
-    if (!confirm(`Start a cool-off for ${b.textContent?.replace('Cool-off ', '')}? You cannot bet until it ends.`)) return;
-    startCoolOff(rg, Number(b.dataset.cool)); save(); toast('Cool-off started'); ctx.rerender();
+    const until = Date.now() + Number(b.dataset.cool);
+    if (!confirm(`Start a cool-off for ${b.textContent?.replace('Cool-off ', '')}? You cannot bet until ${when(until)}.`)) return;
+    startCoolOff(rg, Number(b.dataset.cool)); save(); toastKeep(`Cool-off started. Betting is paused until ${when(Math.max(until, rg.coolOffUntil))}.`); ctx.rerender();
   });
   $$('[data-excl]', pane).forEach((b: HTMLElement) => b.onclick = () => {
-    if (!confirm(`${b.textContent}? This cannot be lifted early.`)) return;
-    state.excludedUntil = Math.max(state.excludedUntil, Date.now() + Number(b.dataset.excl)); save(); toast('Self-exclusion started'); ctx.rerender();
+    const until = Date.now() + Number(b.dataset.excl);
+    if (!confirm(`${b.textContent}? You cannot bet until ${when(until)}, and it cannot be lifted early.`)) return;
+    state.excludedUntil = Math.max(state.excludedUntil, until); save(); toastKeep(`Self-exclusion started. Betting is paused until ${when(state.excludedUntil)}.`); ctx.rerender();
   });
   $('#rgPolicy', pane).onclick = () => ctx.close();
   $('#rgQuiz', pane).onclick = () => quiz($('#rgQuizBox', pane), ctx);
@@ -116,6 +129,6 @@ function quiz(box: HTMLElement, ctx: PaneCtx): void {
     state.rg.assessments.unshift({ at: Date.now(), score: r.score, band: r.band }); state.rg.assessments.length = Math.min(state.rg.assessments.length, 10);
     save();
     $('#rgQuizRes', box).innerHTML = `<div class="ac-card ${r.band === 'non-problem' || r.band === 'low risk' ? '' : 'ac-warn'}"><h3>${esc(r.band)}: ${r.score} / 27</h3><p class="ac-note">${esc(r.advice)}</p>${r.score >= 3 ? '<button class="btn btn-primary" id="rgSetNow">Set limits now</button>' : ''}</div>`;
-    $('#rgSetNow', box)?.addEventListener('click', ctx.rerender);
+    $('#rgSetNow', box)?.addEventListener('click', () => { const first = document.querySelector('.rg-limits input') as HTMLInputElement | null; first?.scrollIntoView({ block: 'center' }); first?.focus(); });
   };
 }

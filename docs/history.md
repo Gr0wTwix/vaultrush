@@ -17,7 +17,8 @@ A short log of how the project got here, why, and what is still open.
    - Signed-out visitors can browse but cannot bet or claim; anything like that opens the popup with a reason. Balance, inventory, seeds and the "You" player disappear while signed out.
    - The Steam profile name is the username, and the Steam or Google picture is the avatar.
 8. **Cleanups (owner feedback):** session timer removed from the top bar; the Provably fair banner removed from the home carousel (three slides left); the "Welcome back" bar hidden when signed out.
-9. **Production setup:** Supabase project created, schema applied, Google provider enabled, Steam and account-closing functions deployed, environment variables set on Vercel, site deployed, branch pushed and pull request opened.
+9. **UX review.** The Vantage reviewer audited the interface from source; every finding was fixed the same day (see [ux-review-2026-11-18.md](ux-review-2026-11-18.md)): opt-in click guard, accessible dialogs and forms, guest cards, phone navigation sheet, carousel pause, motion and contrast fixes, clearer limits and break wording.
+10. **Production setup:** Supabase project created, schema applied, Google provider enabled, Steam and account-closing functions deployed, environment variables set on Vercel, site deployed, branch pushed and pull request opened.
 
 ## Decisions worth remembering
 

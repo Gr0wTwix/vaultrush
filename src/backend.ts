@@ -91,6 +91,10 @@ export const signInOAuth = async (provider: OAuthProvider): Promise<void> => {
   const { error } = await (await getClient()).auth.signInWithOAuth({ provider, options: { redirectTo: here() } });
   if (error) throw new Error(explain(error));
 };
+export const resendSignup = async (email: string): Promise<void> => {
+  const { error } = await (await getClient()).auth.resend({ type: 'signup', email, options: { emailRedirectTo: here() } });
+  if (error) throw new Error(explain(error));
+};
 export const resetPassword = async (email: string): Promise<void> => {
   const { error } = await (await getClient()).auth.resetPasswordForEmail(email, { redirectTo: here() });
   if (error) throw new Error(explain(error));

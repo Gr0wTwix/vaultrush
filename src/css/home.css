@@ -46,8 +46,6 @@
 .hm-nav:hover { border-color: var(--accent); color: var(--accent); }
 .hm-nav.prev { left: 10px; } .hm-nav.next { right: 10px; }
 .hm-dots { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; display: flex; gap: 8px; padding: 6px 10px; border-radius: 20px; background: rgba(9,13,21,.6); }
-.hm-dots button { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 50%; background: var(--dim); cursor: pointer; transition: all .25s; }
-.hm-dots button.on { width: 24px; border-radius: 6px; background: var(--accent); }
 
 .hm-games { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .hm-game { --c: 198,255,61; position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-height: 240px; padding: 18px; border-radius: 18px; color: var(--text); border: 1px solid rgba(var(--c), .25); overflow: hidden; isolation: isolate;
@@ -140,3 +138,5 @@
 .hm-gicon img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
 .hm-gtext b { font-size: 28px; }
 @media (max-width: 700px) { .hm-game { min-height: 210px; } .hm-gicon { height: 110px; top: 26px; } .hm-gtext b { font-size: 20px; } }
+
+@media (max-width: 760px) { .hm-copy { padding-bottom: 46px; } }

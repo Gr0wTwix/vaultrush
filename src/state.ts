@@ -14,8 +14,11 @@ export const DAY = 24 * 60 * 60 * 1000;
 export const RAKEBACK = { instant: 0.004, daily: 0.003, weekly: 0.003 } as const;
 export const XP_PER_COIN = 10;
 
+/** People who ask their system for less motion start with visual effects off and the fastest reels. They can change both in Settings. */
+function prefersReducedMotion(): boolean { try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; } }
+
 export const newGameState = (): GameState => ({
-  name: 'You', avatar: '', balance: START_BALANCE, inv: [], lastClaim: 0, muted: false, speed: 'normal',
+  name: 'You', avatar: '', balance: START_BALANCE, inv: [], lastClaim: 0, muted: false, speed: prefersReducedMotion() ? 'turbo' : 'normal',
   stats: { wagered: 0, won: 0, bets: 0 },
   xp: 0, keysUsed: [],                      // level-case tiers already opened
   rakeback: { instant: 0, daily: 0, weekly: 0, lastDaily: 0, lastWeekly: 0 },
@@ -23,7 +26,7 @@ export const newGameState = (): GameState => ({
   calendar: { streak: 0, last: '' },
   race: { date: '', wagered: 0 }, racePaid: '',
   history: [], excludedUntil: 0,
-  ui: { chat: true, levelPopup: true, streamer: false, anonymous: false, fx: true, notify: true },
+  ui: { chat: true, levelPopup: true, streamer: false, anonymous: false, fx: !prefersReducedMotion(), notify: true },
   legal: { termsAt: 0, termsVersion: '' }, gameStats: {}, bestDrop: null,
   blocked: [], tx: [], betSeq: 0,
   rg: defaultRg(), kyc: defaultKyc(), aml: { alerts: [], payouts: [], seq: 0 },
@@ -72,7 +75,7 @@ export function isExcluded(): boolean { return state.excludedUntil > Date.now();
 // that opens the login/register popup. The default is "signed in" so code that never starts the UI (the tests) is unaffected.
 let authed = true;
 let loginHook: (reason: string) => void = () => {};
-export const LOGIN_REASON = 'Log in or register to place bets.';
+export const LOGIN_REASON = 'Log in or create a free account to place bets.';
 /** Signed out = a blank, throw-away state (no balance, items, seeds or history) that is never written to storage. Signing in loads the real one. */
 export function setAuthed(on: boolean): void {
   if (on === authed) return;
@@ -121,7 +124,7 @@ export function credit(amount: number): void {
 
 /** Bonus money (rewards, promo codes) doesn't count as winnings. */
 export function grant(amount: number, type = 'Bonus'): void {
-  if (!(amount > 0) || !requireLogin('Log in or register to claim rewards.')) return;
+  if (!(amount > 0) || !requireLogin('Log in or create a free account to claim rewards.')) return;
   state.balance = round2(state.balance + amount);
   logTx(type, amount);
   save();

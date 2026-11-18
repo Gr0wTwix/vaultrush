@@ -39,7 +39,7 @@ export function render(el) {
       <div class="seg" id="preset" aria-label="Pick a target by multiplier">${[1.5, 2, 5, 10].map(m => `<button data-m="${m}">${m}×</button>`).join('')}</div>
       <div class="seg" id="dir"><button data-d="under" class="active">Roll under</button><button data-d="over">Roll over</button></div>
       <label class="check"><input type="checkbox" id="fastUp" ${state.speed !== 'normal' ? 'checked' : ''}> Fast spin</label>
-      <button class="btn btn-primary btn-lg" id="upBtn">Select a stake and a target</button>
+      <button class="btn btn-primary btn-lg" id="upBtn" data-needs-auth="upgrade">Select a stake and a target</button>
     </div>
     <div class="upgrade-pickers">
       <div class="panel">
