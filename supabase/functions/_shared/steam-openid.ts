@@ -74,10 +74,19 @@ export function parsePersonaName(xml: string): string | null {
   return name || null;
 }
 
-export async function fetchPersonaName(steamId: string, fetchFn: Fetch, timeoutMs = 4000): Promise<string | null> {
-  if (!/^\d{17}$/.test(steamId)) return null;
+/** The large profile picture from the same XML. Only https URLs on Steam's image hosts are accepted. */
+export function parseAvatarUrl(xml: string): string | null {
+  const m = /<avatarFull>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([^<]*))\s*<\/avatarFull>/.exec(xml);
+  const url = (m?.[1] ?? m?.[2] ?? '').trim();
+  return /^https:\/\/[a-z0-9.-]+\.steamstatic\.com\/[\w./-]+$/i.test(url) ? url : null;
+}
+
+export async function fetchSteamProfile(steamId: string, fetchFn: Fetch, timeoutMs = 4000): Promise<{ name: string | null; avatar: string | null }> {
+  if (!/^\d{17}$/.test(steamId)) return { name: null, avatar: null };
   try {
     const res = await fetchFn(`https://steamcommunity.com/profiles/${steamId}?xml=1`, { signal: AbortSignal.timeout(timeoutMs) });
-    return res.ok ? parsePersonaName(await res.text()) : null;
-  } catch { return null; }
+    if (!res.ok) return { name: null, avatar: null };
+    const xml = await res.text();
+    return { name: parsePersonaName(xml), avatar: parseAvatarUrl(xml) };
+  } catch { return { name: null, avatar: null }; }
 }

@@ -15,7 +15,7 @@ export const RAKEBACK = { instant: 0.004, daily: 0.003, weekly: 0.003 } as const
 export const XP_PER_COIN = 10;
 
 export const newGameState = (): GameState => ({
-  name: 'You', balance: START_BALANCE, inv: [], lastClaim: 0, muted: false, speed: 'normal',
+  name: 'You', avatar: '', balance: START_BALANCE, inv: [], lastClaim: 0, muted: false, speed: 'normal',
   stats: { wagered: 0, won: 0, bets: 0 },
   xp: 0, keysUsed: [],                      // level-case tiers already opened
   rakeback: { instant: 0, daily: 0, weekly: 0, lastDaily: 0, lastWeekly: 0 },

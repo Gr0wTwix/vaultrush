@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { NONCE_WINDOW_MS, STEAM_OPENID, buildAuthUrl, fetchPersonaName, parsePersonaName, safeSite, steamEmail, usernameFromSteam, verifySteamAssertion } from '../supabase/functions/_shared/steam-openid.js';
+import { NONCE_WINDOW_MS, STEAM_OPENID, buildAuthUrl, fetchSteamProfile, parseAvatarUrl, parsePersonaName, safeSite, steamEmail, usernameFromSteam, verifySteamAssertion } from '../supabase/functions/_shared/steam-openid.js';
 
 const RETURN_TO = 'https://abc.functions.supabase.co/steam-login?action=cb&site=https%3A%2F%2Fvaultrush.example';
 const ID = 'https://steamcommunity.com/openid/id/76561198000000000';
@@ -92,10 +92,17 @@ describe('steam username', () => {
     expect(parsePersonaName('<profile><steamID>Plain</steamID></profile>')).toBe('Plain');
     expect(parsePersonaName('<response><error><![CDATA[The specified profile could not be found.]]></error></response>')).toBeNull();
   });
-  it('asks Steam for the name and tolerates failures', async () => {
-    const ok = async () => new Response('<profile><steamID><![CDATA[Rush Pilot]]></steamID></profile>');
-    expect(await fetchPersonaName(id, ok as never)).toBe('Rush Pilot');
-    expect(await fetchPersonaName(id, (async () => { throw new Error('down'); }) as never)).toBeNull();
-    expect(await fetchPersonaName('not-an-id', ok as never)).toBeNull();
+  it('reads the avatar and only accepts Steam image hosts', () => {
+    expect(parseAvatarUrl('<avatarFull><![CDATA[https://avatars.fastly.steamstatic.com/abc123_full.jpg]]></avatarFull>')).toBe('https://avatars.fastly.steamstatic.com/abc123_full.jpg');
+    expect(parseAvatarUrl('<avatarFull><![CDATA[https://evil.example/x.jpg]]></avatarFull>')).toBeNull();
+    expect(parseAvatarUrl('<avatarFull><![CDATA[javascript:alert(1)]]></avatarFull>')).toBeNull();
+    expect(parseAvatarUrl('<profile></profile>')).toBeNull();
+  });
+  it('asks Steam for the profile and tolerates failures', async () => {
+    const xml = '<profile><steamID><![CDATA[Rush Pilot]]></steamID><avatarFull><![CDATA[https://avatars.fastly.steamstatic.com/abc123_full.jpg]]></avatarFull></profile>';
+    const ok = async () => new Response(xml);
+    expect(await fetchSteamProfile(id, ok as never)).toEqual({ name: 'Rush Pilot', avatar: 'https://avatars.fastly.steamstatic.com/abc123_full.jpg' });
+    expect(await fetchSteamProfile(id, (async () => { throw new Error('down'); }) as never)).toEqual({ name: null, avatar: null });
+    expect(await fetchSteamProfile('not-an-id', ok as never)).toEqual({ name: null, avatar: null });
   });
 });

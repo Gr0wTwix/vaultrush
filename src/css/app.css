@@ -486,3 +486,5 @@ table.bets { width: 100%; border-collapse: collapse; font-size: 13px; }
   .sidebar { overflow-y: auto; scrollbar-width: none; }
   .pill-demo { font-size: 11.5px; padding: 7px 13px; }
 }
+
+.avatar.has-img { overflow: hidden; background: var(--panel2); } .avatar.has-img img { width: 100%; height: 100%; object-fit: cover; display: block; }

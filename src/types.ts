@@ -42,7 +42,7 @@ export interface GameStat { bets: number; wagered: number; paid: number; bestPay
 export interface TxEntry { id: number; type: string; amount: number; note: string; at: number }
 export interface InvEntry { uid: string; id: string; at: number }
 export interface GameState {
-  name: string; balance: number; inv: InvEntry[]; lastClaim: number; muted: boolean; speed: Speed;
+  name: string; avatar?: string; balance: number; inv: InvEntry[]; lastClaim: number; muted: boolean; speed: Speed;
   stats: { wagered: number; won: number; bets: number };
   xp: number; keysUsed: number[];
   rakeback: { instant: number; daily: number; weekly: number; lastDaily: number; lastWeekly: number };

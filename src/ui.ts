@@ -52,6 +52,9 @@ const AV_COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dab
 export function avatar(name, size = 28) {
   let hsh = 0; for (const ch of name) hsh = (hsh * 31 + ch.charCodeAt(0)) | 0;
   const col = name === state.name ? '#c6ff3d' : AV_COLORS[Math.abs(hsh) % AV_COLORS.length];
+  // The signed-in player's own picture (from Steam or Google) replaces the initial. Only https image URLs are used.
+  const pic = name === state.name && typeof state.avatar === 'string' && /^https:\/\//.test(state.avatar) ? state.avatar : '';
+  if (pic) return `<span class="avatar has-img" style="--av:${col};width:${size}px;height:${size}px"><img src="${esc(pic)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()"></span>`;
   return `<span class="avatar" style="--av:${col};width:${size}px;height:${size}px;font-size:${size * 0.42}px">${esc(name[0].toUpperCase())}</span>`;
 }
 

@@ -10,7 +10,7 @@ import { activeAccount, loginLocal, registerLocal, setActive, stateKeyFor } from
 import { confirmAge } from './rg.js';
 import { isAuthed, newGameState, onLoginRequired, requireLogin, save, setAuthed, state } from './state.js';
 import { TERMS_VERSION, validateEmail, validatePassword, validateRegistration, validateUsername, type Errors } from './signup.js';
-import { $, $$, esc, h, icon, modal, toast } from './ui.js';
+import { $, $$, avatar, esc, h, icon, modal, toast } from './ui.js';
 import { sfx } from './sfx.js';
 
 type Tab = 'login' | 'register';
@@ -214,7 +214,15 @@ export async function initAuth(): Promise<void> {
       openFinishProfile(typeof meta['steam_name'] === 'string' && meta['steam_name'] ? { name: meta['steam_name'], steam: true } : { name: typeof meta['display_name'] === 'string' ? meta['display_name'] : '' });
     } catch (e) { toast(e instanceof Error ? e.message : String(e), 'error'); }
   };
-  await onAuthChange((event, on) => { setSignedIn(on); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure(); });
+  // Profile picture from the login provider: Steam stores steam_avatar, Google stores avatar_url / picture.
+  const applyPicture = async (): Promise<void> => {
+    const u = await currentUser().catch(() => null); const meta = (u as { user_metadata?: Record<string, unknown> } | null)?.user_metadata ?? {};
+    const pic = [meta['steam_avatar'], meta['avatar_url'], meta['picture']].find(x => typeof x === 'string' && /^https:\/\//.test(x)) as string | undefined;
+    if (!pic || state.avatar === pic) return;
+    state.avatar = pic; save();
+    const me = $('.me .avatar'); if (me) me.outerHTML = avatar(state.name, 32);
+  };
+  await onAuthChange((event, on) => { setSignedIn(on); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure().then(applyPicture); });
 }
 
 // Buttons that spend, claim, sell, create or join. While signed out, a click on one opens the login popup and the page's own handler never runs.

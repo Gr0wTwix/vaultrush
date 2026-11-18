@@ -1,4 +1,4 @@
-// Responsible-gambling runtime: the 18+ gate, the session clock, play-time tracking and the reality check.
+// Responsible-gambling runtime: the 18+ gate, play-time tracking and the reality check.
 import { state, save } from './state.js';
 import { acknowledgeReality, addPlayTime, confirmAge, realityDue, sessionSummary, startCoolOff, startSession } from './rg.js';
 import { $, fmt, h, icon } from './ui.js';
@@ -44,27 +44,15 @@ function showReality(): void {
   $('#rgBreak', el).onclick = () => { startCoolOff(state.rg, 24 * 3_600_000); done(); toast('Cool-off started. See you tomorrow.'); };
 }
 
-function clockLabel(): string {
-  const mins = Math.floor((Date.now() - state.rg.sessionStart) / 60_000);
-  return `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
-}
-
 /** Call once at start-up (after the top bar exists). */
 export function initRg(): void {
   startSession(state.rg); save();
   if (!state.rg.ageConfirmedAt && activeAccount()) showAgeGate(); // signed-out visitors can browse; the register form's 18+ tickbox covers this
 
-  const slot = $('#freeBtn');
-  if (slot) {
-    const clock = h(`<button class="rg-clock" id="sessionClock" title="Session time. Click for responsible-play tools" aria-label="Session time">${icon('clock')}<span id="sessionClockT">0:00</span></button>`) as HTMLElement;
-    slot.before(clock);
-    clock.onclick = () => openAccount('responsible');
-  }
   let last = performance.now(), sinceSave = 0;
   setInterval(() => {
     const now = performance.now(), dt = now - last; last = now;
     if (!document.hidden) { addPlayTime(state.rg, Math.min(dt, TICK_MS * 3)); sinceSave += dt; }
-    const t = $('#sessionClockT'); if (t) t.textContent = clockLabel();
     if (sinceSave >= 30_000) { save(); sinceSave = 0; }
     if (state.rg.ageConfirmedAt && realityDue(state.rg)) showReality();
   }, TICK_MS);
