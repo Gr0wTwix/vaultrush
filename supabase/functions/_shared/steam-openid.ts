@@ -18,7 +18,7 @@ export function buildAuthUrl(returnTo: string, realm: string): string {
 }
 
 export type SteamResult = { ok: true; steamId: string } | { ok: false; reason: string };
-type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; text(): Promise<string> }>;
+type Fetch = (url: string, init: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) => Promise<{ ok: boolean; text(): Promise<string> }>;
 
 /** `query` is the callback's query string; `returnTo` is the exact URL this server sent to Steam. */
 export async function verifySteamAssertion(query: URLSearchParams, returnTo: string, fetchFn: Fetch, now: number = Date.now()): Promise<SteamResult> {
@@ -58,4 +58,26 @@ export function safeSite(candidate: string | null, allowed: string[]): string | 
   if (!candidate) return null;
   try { const u = new URL(candidate); return allowed.includes(u.origin) && (u.protocol === 'https:' || u.hostname === 'localhost') ? u.origin + u.pathname : null; }
   catch { return null; }
+}
+
+/** Steam's profile name -> a username the site accepts: 2 to 20 letters, digits, spaces, _ or -. Falls back to "Steam" + the last digits of the Steam ID. */
+export function usernameFromSteam(raw: string | null | undefined, steamId: string): string {
+  const cleaned = (raw ?? '').normalize('NFKD').replace(/\p{M}+/gu, '').replace(/[^A-Za-z0-9_ -]+/g, '_').replace(/_{2,}/g, '_').replace(/ {2,}/g, ' ')
+    .replace(/^[\s_-]+|[\s_-]+$/g, '').slice(0, 20).replace(/[\s_-]+$/g, '');
+  return cleaned.length >= 2 ? cleaned : `Steam${steamId.slice(-6)}`;
+}
+
+/** Reads the profile name from Steam's public XML profile (`?xml=1`), which needs no API key. Null when the profile is private or the reply is odd. */
+export function parsePersonaName(xml: string): string | null {
+  const m = /<steamID>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([^<]*))\s*<\/steamID>/.exec(xml);
+  const name = (m?.[1] ?? m?.[2] ?? '').trim();
+  return name || null;
+}
+
+export async function fetchPersonaName(steamId: string, fetchFn: Fetch, timeoutMs = 4000): Promise<string | null> {
+  if (!/^\d{17}$/.test(steamId)) return null;
+  try {
+    const res = await fetchFn(`https://steamcommunity.com/profiles/${steamId}?xml=1`, { signal: AbortSignal.timeout(timeoutMs) });
+    return res.ok ? parsePersonaName(await res.text()) : null;
+  } catch { return null; }
 }

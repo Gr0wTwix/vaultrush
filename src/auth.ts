@@ -9,7 +9,7 @@ import {
 import { activeAccount, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
 import { confirmAge } from './rg.js';
 import { isAuthed, newGameState, onLoginRequired, requireLogin, save, setAuthed, state } from './state.js';
-import { TERMS_VERSION, validateEmail, validatePassword, validateRegistration, type Errors } from './signup.js';
+import { TERMS_VERSION, validateEmail, validatePassword, validateRegistration, validateUsername, type Errors } from './signup.js';
 import { $, $$, esc, h, icon, modal, toast } from './ui.js';
 import { sfx } from './sfx.js';
 
@@ -162,20 +162,31 @@ export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
 }
 
 /** Shown when someone signed in with Google or Steam (or an email link) but has no profile yet: only what the database requires. */
-export function openFinishProfile(prefill: { name?: string } = {}): void {
+export function openFinishProfile(prefill: { name?: string; steam?: boolean } = {}): void {
   open?.close();
   const m = modal('', { onClose: () => { open = null; } });
   open = m; m.el.classList.add('auth-modal', 'au-finish');
-  m.el.innerHTML = `<button class="modal-x" aria-label="Close">×</button><section class="au-main"><h3 class="au-h">Choose a username</h3><p class="au-sub">One last step before you can play.</p>
-    <form id="auForm" novalidate>${field('auUser', 'Username', `<input id="auUser" maxlength="20" value="${esc(prefill.name ?? '')}" placeholder="Username">`)}${checks()}<button class="btn btn-primary btn-lg block" id="auGo" type="submit">Start playing</button></form></section>`;
+  m.el.innerHTML = `<button class="modal-x" aria-label="Close">×</button><section class="au-main"><h3 class="au-h">${prefill.steam ? 'Almost there' : 'Choose a username'}</h3><p class="au-sub">${prefill.steam ? `Signed in with Steam as <b>${esc(prefill.name ?? '')}</b>. Confirm the two boxes to start playing.` : 'One last step before you can play.'}</p>
+    <form id="auForm" novalidate>${prefill.steam ? `<input id="auUser" type="hidden" value="${esc(prefill.name ?? '')}"><small class="au-err" data-for="auUser" role="alert"></small>` : field('auUser', 'Username', `<input id="auUser" maxlength="20" value="${esc(prefill.name ?? '')}" placeholder="Username">`)}${checks()}<button class="btn btn-primary btn-lg block" id="auGo" type="submit">Start playing</button></form></section>`;
   $('.modal-x', m.el).onclick = m.close;
   const v = (id: string): string => ($('#' + id, m.el) as HTMLInputElement).value, c = (id: string): boolean => ($('#' + id, m.el) as HTMLInputElement).checked;
   ($('#auForm', m.el) as HTMLFormElement).onsubmit = async e => {
     e.preventDefault();
-    const r = validateRegistration({ username: v('auUser'), terms: c('auTerms'), adult: c('auAdult') }, false);
-    showErrors(m.el, r.errors); if (!r.ok) return;
-    try { await completeSignup(v('auUser').trim(), TERMS_VERSION, true); state.name = v('auUser').trim(); confirmAge(state.rg); save(); sfx.win(); toast('Welcome aboard!', 'win'); m.close(); }
-    catch (err) { const t = err instanceof Error ? err.message : String(err); showErrors(m.el, /username|name/i.test(t) ? { username: t } : {}); toast(t, 'error'); }
+    const base = v('auUser').trim();
+    const r = validateRegistration({ username: base, terms: c('auTerms'), adult: c('auAdult') }, false);
+    // A Steam name that the site rejects (taken or reserved) gets a short number added instead of asking the player to type one.
+    const nameErrOnly = !!prefill.steam && Object.keys(r.errors).every(k => k === 'username');
+    showErrors(m.el, prefill.steam ? { ...r.errors, username: undefined } : r.errors); if (!r.ok && !nameErrOnly) return;
+    const candidates = prefill.steam ? [base, ...[1, 2, 3, 4].map(() => `${base.slice(0, 15).trim()}_${Math.floor(100 + Math.random() * 900)}`)] : [base];
+    const nameProblem = /username|name|taken|exists|reserved/i;
+    let lastErr = '';
+    for (const name of candidates) {
+      if (validateUsername(name)) continue;
+      try { await completeSignup(name, TERMS_VERSION, true); state.name = name; confirmAge(state.rg); save(); sfx.win(); toast(`Welcome, ${name}!`, 'win'); m.close(); return; }
+      catch (err) { lastErr = err instanceof Error ? err.message : String(err); if (!nameProblem.test(lastErr)) break; }
+    }
+    if (prefill.steam && nameProblem.test(lastErr)) { toast('Could not use your Steam name. Please pick a username.', 'error'); openFinishProfile({ name: base }); return; }
+    showErrors(m.el, /username|name/i.test(lastErr) ? { username: lastErr } : {}); toast(lastErr || 'Could not finish sign-up', 'error');
   };
 }
 
@@ -200,7 +211,7 @@ export async function initAuth(): Promise<void> {
       if (typeof meta['display_name'] === 'string' && meta['adult'] === true && typeof meta['terms_version'] === 'string') {
         try { await completeSignup(meta['display_name'], meta['terms_version'], true); state.name = meta['display_name']; confirmAge(state.rg); save(); toast('Account ready', 'win'); return; } catch { /* name taken etc: ask */ }
       }
-      openFinishProfile({ name: typeof meta['display_name'] === 'string' ? meta['display_name'] : '' });
+      openFinishProfile(typeof meta['steam_name'] === 'string' && meta['steam_name'] ? { name: meta['steam_name'], steam: true } : { name: typeof meta['display_name'] === 'string' ? meta['display_name'] : '' });
     } catch (e) { toast(e instanceof Error ? e.message : String(e), 'error'); }
   };
   await onAuthChange((event, on) => { setSignedIn(on); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure(); });

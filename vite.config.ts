@@ -13,5 +13,7 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     include: ['tests/**/*.test.ts'],
+    // Tests always run without a backend, whatever is in the developer's local .env.
+    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '', VITE_STEAM_LOGIN: '' },
   },
 });

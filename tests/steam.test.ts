@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { NONCE_WINDOW_MS, STEAM_OPENID, buildAuthUrl, safeSite, steamEmail, verifySteamAssertion } from '../supabase/functions/_shared/steam-openid.js';
+import { NONCE_WINDOW_MS, STEAM_OPENID, buildAuthUrl, fetchPersonaName, parsePersonaName, safeSite, steamEmail, usernameFromSteam, verifySteamAssertion } from '../supabase/functions/_shared/steam-openid.js';
 
 const RETURN_TO = 'https://abc.functions.supabase.co/steam-login?action=cb&site=https%3A%2F%2Fvaultrush.example';
 const ID = 'https://steamcommunity.com/openid/id/76561198000000000';
@@ -66,5 +66,36 @@ describe('helpers', () => {
     expect(safeSite('https://vaultrush.example/app', ok)).toBe('https://vaultrush.example/app');
     expect(safeSite('http://localhost:5173/', ok)).toBe('http://localhost:5173/');
     for (const bad of ['https://evil.example', 'https://vaultrush.example.evil.example', 'javascript:alert(1)', 'not a url', '', null, 'http://vaultrush.example']) expect(safeSite(bad as string | null, ok), String(bad)).toBeNull();
+  });
+});
+
+describe('steam username', () => {
+  const id = '76561198000123456';
+  it('keeps a plain name and trims it to 20 characters', () => {
+    expect(usernameFromSteam('Rush Pilot', id)).toBe('Rush Pilot');
+    expect(usernameFromSteam('A'.repeat(40), id)).toBe('A'.repeat(20));
+  });
+  it('removes accents and unsupported characters', () => {
+    expect(usernameFromSteam('Zoë★Gamer', id)).toBe('Zoe_Gamer');
+    expect(usernameFromSteam('  __cool__  ', id)).toBe('cool');
+  });
+  it('falls back to the Steam ID when nothing usable is left', () => {
+    expect(usernameFromSteam('★★★', id)).toBe('Steam123456');
+    expect(usernameFromSteam('', id)).toBe('Steam123456');
+    expect(usernameFromSteam(null, id)).toBe('Steam123456');
+  });
+  it('always satisfies the site username rule', () => {
+    for (const raw of ['x', '日本語', 'a'.repeat(19) + '--', 'ok name!!', '🔥🔥Fire🔥🔥']) expect(usernameFromSteam(raw, id)).toMatch(/^[A-Za-z0-9_ -]{2,20}$/);
+  });
+  it('parses the public profile XML', () => {
+    expect(parsePersonaName('<profile><steamID><![CDATA[Rush Pilot]]></steamID></profile>')).toBe('Rush Pilot');
+    expect(parsePersonaName('<profile><steamID>Plain</steamID></profile>')).toBe('Plain');
+    expect(parsePersonaName('<response><error><![CDATA[The specified profile could not be found.]]></error></response>')).toBeNull();
+  });
+  it('asks Steam for the name and tolerates failures', async () => {
+    const ok = async () => new Response('<profile><steamID><![CDATA[Rush Pilot]]></steamID></profile>');
+    expect(await fetchPersonaName(id, ok as never)).toBe('Rush Pilot');
+    expect(await fetchPersonaName(id, (async () => { throw new Error('down'); }) as never)).toBeNull();
+    expect(await fetchPersonaName('not-an-id', ok as never)).toBeNull();
   });
 });
