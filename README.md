@@ -61,3 +61,7 @@ Files marked **[strict]** are checked with `strict: true` (`tsconfig.strict.json
 ## Going to production
 
 Move every outcome and the server seed to a backend (Node + Postgres + Redis + WebSockets), add real auth, and only add deposits or withdrawals with a gambling licence, KYC/AML and responsible-gambling tools.
+
+## Documentation
+
+How it is built, how accounts and Google/Steam sign-in work, the compliance tooling, deployment steps and the project history are in [docs/](docs/README.md).

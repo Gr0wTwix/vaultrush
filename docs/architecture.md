@@ -1,0 +1,73 @@
+# Architecture
+
+## Stack
+
+TypeScript 7, Vite 8, Vitest 5 with happy-dom. No UI framework: each view is a module that renders HTML strings into `#view` and wires its own events. State lives in `localStorage` (and, optionally, in Supabase).
+
+Two TypeScript configs: `tsconfig.json` is loose and covers the whole app; `tsconfig.strict.json` has `strict: true` and covers the core modules (fairness, responsible gambling, KYC, AML, RNG, accounts, sign-up rules, profile stats). `npm run typecheck` runs both.
+
+## Layout
+
+```
+src/
+  app.ts            shell: sidebar, top bar, router, avatar menu, start-up order
+  state.ts          the player state, debit/credit/grant, the sign-in gate (requireLogin)
+  accounts.ts       browser accounts: PBKDF2 hashes, lockout, per-account storage keys
+  auth.ts           Log in / Register modal, finish-profile step, click guard, session wiring
+  backend.ts        optional Supabase client (lazy-loaded), auth, 2FA, rpc wrappers
+  signup.ts         username, email and password rules, terms version
+  fair.ts           provably fair seeds, HMAC floats, game mappings
+  rg.ts, rgui.ts    responsible-gambling rules and their UI (limits, cool-off, reality check)
+  kyc.ts, aml.ts    sandbox verification tiers and monitoring rules
+  rng.ts, rnglab.ts NIST SP 800-22, FIPS 140-2, SP 800-90B health monitor and the lab UI
+  account*.ts       the account window and its tabs
+  profile-stats.ts  numbers for the account overview
+  views/            one module per page (home, cases, battles, crash, double, ...)
+  css/              app.css plus one file per area; compliance.css holds auth, limits, KYC, overview
+supabase/
+  migrations/0001_core.sql   schema, row-level security, functions
+  functions/steam-login      Steam OpenID sign-in
+  functions/close-login      finishes account deletion
+  functions/_shared          Steam OpenID verification and name/avatar parsing (unit-tested)
+tests/               fairness, SQL (PGlite), RNG, KYC, AML, accounts, sign-up, Steam, avatar, state
+```
+
+## Start-up order
+
+`app.ts` renders the shell, then `initRg()` (age gate for signed-in accounts, play-time ticks), then `initAuth()`.
+
+`initAuth()` decides who is signed in:
+
+- **No backend configured:** signed in means a browser account is active (`vaultrush.active` in `localStorage`).
+- **Backend configured:** signed in means a Supabase session exists; this is checked asynchronously and the page starts signed out until it is known.
+
+It then calls `setAuthed(...)` in `state.ts`.
+
+## State
+
+`state` is one mutable object, loaded from `localStorage` under a per-account key (`vaultrush.state.v1.<id>`). Signed-out visitors use `vaultrush.state.v1`, which is never written to.
+
+`setAuthed(false)` replaces the object's contents with a blank state (no balance, items, seeds or history) and turns `save()` into a no-op. `setAuthed(true)` reloads the real state. Because the object is shared, every view sees the change.
+
+Fairness seeds are separate (`fair.ts`, key `vaultrush.fair.v1.<id>`). The Fairness page hides "Your seeds" while signed out.
+
+## The gates
+
+Two layers stop signed-out visitors from acting. Both live in `state.ts` and `auth.ts`.
+
+1. **State layer (cannot be bypassed from the UI).** `debit()` and `grant()` call `requireLogin()`. If nobody is signed in, the login popup opens and the call returns false (or does nothing). `debitError()` reports "Log in or register to place bets."
+2. **Click guard (explains the action).** `guardActions()` in `auth.ts` listens in the capture phase. For buttons inside `#view` that spend, claim, sell, create or join (and for the promo and chat forms, and the "Create battle" link) it stops the event, opens the popup with a reason, and never runs the page's own handler. The selector list is `ACTIONS` in `auth.ts`; add new action buttons there.
+
+Browsing, filters, tabs and normal links are not guarded.
+
+A bet also passes through `betBlockReason()` in `rg.ts` (age, self-exclusion, cool-off, max bet, loss limits, verification-tier cap). That is the single bet gate for responsible-gambling rules.
+
+## Avatars
+
+`avatar(name, size)` in `ui.ts` draws a letter avatar. For the signed-in player's own name it draws `state.avatar` instead, but only when it is an `https:` URL (Steam's and Google's pictures). Other players always get letters.
+
+## Adding things
+
+- **A new game or action:** take the wager with `debit()` (it applies every gate), pay out with `credit()`, log bonuses with `grant()`. Add its button selector to `ACTIONS` in `auth.ts`.
+- **A new stored setting:** add it to `newGameState()` and `GameState` (`types.ts`). `load()` merges saved data over the defaults, so old saves keep working.
+- **A new page:** add a module under `views/`, import it in `app.ts`, add a route to `ROUTES`. Note the Race page route is `#/leaderboard`.
