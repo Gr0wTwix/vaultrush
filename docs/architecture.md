@@ -15,6 +15,8 @@ src/
   accounts.ts       browser accounts: PBKDF2 hashes, lockout, per-account storage keys
   auth.ts           Log in / Register modal, finish-profile step, click guard, session wiring
   backend.ts        optional Supabase client (lazy-loaded), auth, 2FA, rpc wrappers
+  company.ts        fictional operator details used by the footer and legal pages
+  footer.ts         the site footer (operator, disclaimers, 18+ strip, link columns)
   live.ts           live multiplayer client: lobbies, realtime, chat, shared feed, settle-once helpers (see live-multiplayer.md)
   signup.ts         username, email and password rules, terms version
   fair.ts           provably fair seeds, HMAC floats, game mappings
@@ -28,6 +30,7 @@ src/
 supabase/
   migrations/0001_core.sql   schema, row-level security, functions
   migrations/0002_live.sql   live battles and coinflip lobbies, server-drawn seeds, realtime publication
+  migrations/0003_live_erasure.sql   delete_account() also replaces the name in live games
   functions/steam-login      Steam OpenID sign-in
   functions/close-login      finishes account deletion
   functions/_shared          Steam OpenID verification and name/avatar parsing (unit-tested)

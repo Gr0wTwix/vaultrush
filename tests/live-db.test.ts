@@ -50,6 +50,7 @@ beforeAll(async () => {
   await db.exec(PRELUDE);
   await db.exec(readFileSync(new URL('../supabase/migrations/0001_core.sql', import.meta.url), 'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/0002_live.sql', import.meta.url), 'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/0003_live_erasure.sql', import.meta.url), 'utf8'));
   for (const [id, n] of [[ALICE, 'Alice'], [BOB, 'Bob'], [CARA, 'Cara']] as const) await rpc(id, 'complete_signup', n, TERMS, true);
 }, 60_000);
 afterAll(async () => { await db.close(); });
@@ -227,5 +228,36 @@ describe('coinflip', () => {
   it('is published to realtime', async () => {
     const t = (await sql(`select tablename from pg_publication_tables where pubname = 'supabase_realtime'`)).map(r => r.tablename);
     expect(t).toEqual(expect.arrayContaining(['live_battles', 'live_coinflips']));
+  });
+});
+
+describe('deleting an account (0003)', () => {
+  it('replaces the name in coinflips and battle seats, and leaves other players alone', async () => {
+    const DAN = '55555555-5555-5555-5555-555555555555';
+    await db.exec(`insert into auth.users (id, email) values ('${DAN}', 'd2@example.com')`);
+    await rpc(DAN, 'complete_signup', 'Dan', TERMS, true);
+    const own = await rpc(DAN, 'create_live_coinflip', 'bolt', 2);                 // waiting game created by Dan
+    const taken = await rpc(ALICE, 'create_live_coinflip', 'star', 3);              // Alice's game that Dan joins
+    await rpc(DAN, 'join_live_coinflip', taken.id);
+    const b = await open(DAN, '1v1v1'); await rpc(CARA, 'join_live_battle', b.id);  // Dan's battle with Cara in it
+    await rpc(DAN, 'delete_account');
+    const anon = (await sql(`select display_name from public.profiles where id = $1`, [DAN]))[0].display_name;
+    expect(anon).toMatch(/^deleted-[0-9a-f]{8}$/);
+    const flips = await sql(`select id, creator_name, joiner_name from public.live_coinflips where id in ($1, $2)`, [own.id, taken.id]);
+    expect(flips.find(x => x.id === own.id).creator_name).toBe(anon);
+    expect(flips.find(x => x.id === taken.id)).toMatchObject({ creator_name: 'Alice', joiner_name: anon });
+    const [row] = await sql(`select seats from public.live_battles where id = $1`, [b.id]);
+    expect(row.seats[0]).toMatchObject({ name: anon, uid: DAN });
+    expect(row.seats[1]).toMatchObject({ name: 'Cara' });
+    expect(row.seats[2]).toBeNull();
+    expect(JSON.stringify(await sql(`select * from public.live_coinflips`))).not.toContain('"Dan"');
+    expect(JSON.stringify(await sql(`select seats from public.live_battles`))).not.toContain('"Dan"');
+  });
+  it('still works for a player who has no live games', async () => {
+    const ERIN = '66666666-6666-6666-6666-666666666666';
+    await db.exec(`insert into auth.users (id, email) values ('${ERIN}', 'e@example.com')`);
+    await rpc(ERIN, 'complete_signup', 'Erin', TERMS, true);
+    await rpc(ERIN, 'delete_account');
+    expect((await sql(`select deleted_at from public.profiles where id = $1`, [ERIN]))[0].deleted_at).not.toBeNull();
   });
 });

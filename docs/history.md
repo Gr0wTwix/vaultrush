@@ -22,6 +22,7 @@ A short log of how the project got here, why, and what is still open.
 
 11. **Separate cloud accounts (2026-11-20).** The owner noticed three cloud accounts showed one shared balance: cloud mode stored game state under the shared guest key. State and seeds are now keyed per Supabase user. Old shared data is not migrated. Still browser-local: coins, items and seeds do not sync across devices (only Crash settles in the database).
 12. **Live multiplayer (2026-11-21).** The owner asked for friends to be able to play battles together. Added `0002_live.sql` (lobbies, seats, secret seeds revealed at the start, realtime), a client data layer, live Coinflip and Battles, real chat and a shared bet/drop feed. The server draws the shared result; stakes stay in each browser (play money). See [live-multiplayer.md](live-multiplayer.md). **Needs the SQL run once in Supabase, and a two-person test on the real project.**
+13. **Footer and legal pages (2026-11-21).** The owner asked for the footer and legal pages to follow what three comparable sites publish (Cobalt Lab, Bandit.camp, Clash.gg), with demo information for the firm and the owner. Built a new footer and ten pages in original wording with a fictional operator in `src/company.ts`. While doing it, found that account deletion left names in live games; added `0003_live_erasure.sql`. See [compliance.md](compliance.md). **0003 must be run in Supabase.**
 
 ## Decisions worth remembering
 

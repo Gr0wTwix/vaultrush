@@ -15,6 +15,7 @@ import { openAccount, applyUi } from './account.js';
 import { initRg } from './rgui.js';
 import { openAuth, initAuth, isSignedIn, localSignedIn, logout } from './auth.js';
 import * as legal from './views/legal.js';
+import { renderFooter } from './footer.js';
 import * as responsible from './views/responsible.js';
 import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
@@ -65,8 +66,7 @@ const ROUTES: Route[] = [
   [/^#\/mines$/, mines.render, 'mines'],
   [/^#\/fair$/, fair.render, 'fair'],
   [/^#\/responsible$/, responsible.render, 'fair'],
-  [/^#\/terms$/, legal.renderTerms, 'fair'],
-  [/^#\/privacy$/, legal.renderPrivacy, 'fair'],
+  [/^#\/(terms|privacy|cookies|refunds|aml|rules|ethics|disclaimer|about|contact)$/, legal.renderDoc, 'fair'],
   [/^#\/rng$/, rngLab.render, 'fair'],
   [/^#\/inventory$/, inventory.render, 'inventory'],
 ];
@@ -240,6 +240,7 @@ function route() {
 
 async function boot() {
   await initFair();
+  renderFooter();
   renderSidebar();
   renderTopbar();
   applyUi();

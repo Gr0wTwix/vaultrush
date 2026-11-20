@@ -2,7 +2,7 @@
 // itself (complete_signup in supabase/migrations), so nothing here is a security boundary: it only makes errors friendly.
 import { BOTS } from './data.js';
 
-export const TERMS_VERSION = '2026-11-18';
+export const TERMS_VERSION = '2026-11-21';
 export const USERNAME_RE = /^[A-Za-z0-9_ -]{2,20}$/;
 const RESERVED = ['admin', 'administrator', 'support', 'moderator', 'mod', 'staff', 'vaultrush', 'system', 'root', 'you', 'bot'];
 const COMMON_PASSWORDS = ['password', 'password1', 'password123', '1234567890', '12345678910', 'qwertyuiop', 'qwerty12345', 'iloveyou123', 'letmein123',

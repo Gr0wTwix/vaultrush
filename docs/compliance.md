@@ -53,6 +53,28 @@ Because coins cannot actually be withdrawn, these rules run against a simulated 
 - With a backend, `place_bet()` repeats the same maths in SQL for Crash, and `tests/db.test.ts` checks it against the TypeScript implementation. Without a backend the seed lives in the browser, so it demonstrates the method but is not a trusted third party.
 - The Fairness page also runs a house-edge simulation and a uniformity check against the exact maths.
 
-## Legal pages (`views/legal.ts`)
+## Footer and legal pages (`footer.ts`, `views/legal.ts`, `company.ts`)
 
-Plain-language Terms of Service and Privacy Policy, versioned by `TERMS_VERSION` in `signup.ts`. The accepted version is stored with the account. They state clearly that this is play money and not legal advice; have a lawyer review them before any real service.
+Added 2026-11-21 after reading the legal pages and footers of three comparable operators (Cobalt Lab, Bandit.camp, Clash.gg). What they have in common, and what Vaultrush now has in its own words:
+
+| Pattern seen on the reference sites | Vaultrush |
+|---|---|
+| Footer names the operating company, registration number and registered address | Footer and every policy name **Vaultrush Demo Ltd (fictional)**, reg. no. DEMO000000, a made-up address. All in `src/company.ts` |
+| "Not affiliated with Valve, Steam, Facepunch, Rust…" notice | Same notice in the footer, Terms and Disclaimer (item names are invented) |
+| 18+ strip, "have a gaming problem? reach out", "no purchase necessary" | Footer strip with the 18+ badge, a help link, and "free to play" |
+| Footer columns: games, information, legal, responsible | Four columns, every link tested against the real routes |
+| Terms, Privacy, Cookie policy | Terms of Service, Privacy Policy, Cookie and Storage Policy |
+| Refund / returns policy | Refund Policy (nothing can be bought, so nothing to refund) |
+| AML policy | AML and Compliance Policy, written as the sandbox it is |
+| Code of ethics | Code of Ethics |
+| Rules, disclaimer, about, contact | House Rules, Disclaimer, About, Contact |
+| Editorial policy (a blog/news site thing) | Not needed: Vaultrush has no editorial content |
+
+Differences on purpose: the reference sites describe deposits, withdrawals, KYC documents, payment processors and retention periods for real money. Vaultrush has none of that, so each page says what the demo actually does (play money, browser storage, Supabase, Vercel, Google Fonts) and nothing it does not. Wording is original; nothing was copied from the other sites.
+
+Rules for editing these pages:
+- Company details live only in `src/company.ts` and are placeholders on the reserved `.example` domain. The repository is public: do not put private personal data there. If this ever becomes a real service, replace them with the real operator and have a lawyer review the text.
+- Every sentence must match the app. If a feature changes (what is stored, who can see it, what is deleted), update the page and bump `TERMS_VERSION` in `signup.ts` (now `2026-11-21`).
+- `tests/legal.test.ts` checks that each page renders, every footer link has a route, the company stays fictional, and the key honest statements are present.
+
+Account deletion and live games: `0003_live_erasure.sql` makes `delete_account()` also replace the player's name in live coinflips and battle seats, so the Privacy Policy's claim is true. It must be run once in the Supabase SQL editor after `0002_live.sql`.
