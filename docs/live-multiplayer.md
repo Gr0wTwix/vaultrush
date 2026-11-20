@@ -1,0 +1,59 @@
+# Live multiplayer
+
+Added 2026-11-21. Signed-in cloud players can now play **case battles** and **coinflip** against each other, chat in a shared chat, and see each other's bets and drops. Everything is still play money.
+
+## What is live, and what is not
+
+| Part | Live? | How |
+|---|---|---|
+| Case battles | Yes | Lobbies in `live_battles`; seats, bots and the start are handled by SQL functions; every browser derives the result from the revealed seed |
+| Coinflip | Yes | `live_coinflips`; the database draws the result when someone joins |
+| Chat | Yes | The existing `chat_messages` table plus Supabase Realtime; the online counter uses Realtime presence |
+| Bet and drop feed | Yes | Realtime broadcast between browsers (no table) |
+| Other games (crash, double, plinko, mines, cases, upgrade) | Solo, as before | They have no second player |
+| Daily race leaderboard, coin rain | No | Still local or simulated |
+
+Simulated opponents, lobbies, chat lines and coin rain are shown only when live games are **off** (signed out, no cloud backend, or `0002_live.sql` not applied yet).
+
+## Turning it on
+
+1. Cloud accounts must already work (see [deploy-and-workflow.md](deploy-and-workflow.md)).
+2. In the Supabase SQL editor, run `supabase/migrations/0002_live.sql` once, after `0001_core.sql`. It also adds the two tables to the `supabase_realtime` publication.
+3. Nothing else: the site asks the server `live_ready()` after sign-in. If the call fails (migration missing, offline) it silently keeps the simulated mode.
+
+## Trust model (read this before relying on it)
+
+- **The server decides the shared random result.** Each battle or coinflip gets a secret seed when it is created; only its SHA-256 hash is public. The seed is revealed when the game starts (battle full, coinflip joined), and anyone can recompute the result: `HMAC-SHA256(seed, "<clientSeed>:0:<round>")` for battles (same as `src/fair.ts`), `HMAC-SHA256(seed, "<id>:0:0")` for coinflip. The creator cannot see the seed, and it exists before anyone joins, so nobody can choose it.
+- **The server does not hold stakes.** Coins live in each browser's storage. A browser takes its own stake when it creates or joins, and pays itself the winnings once the result is known. `state.liveSettled` remembers which games were already paid or refunded, so a reload or a duplicate realtime event never pays twice, and `reconcileAll()` (run after sign-in) settles games that finished while the tab was closed.
+- Because of that, a determined player can edit their own balance in the browser, exactly as before. For a real-money design the wallet would have to move to the database, with the stake taken inside `join_*` and the payout inside the same transaction. Nothing here prevents doing that later.
+- Responsible-gambling limits (max bet, loss limits, self-exclusion, cool-off, age) still apply at the moment of staking, because staking goes through `debit()`. The server only checks that the player has a finished profile and is marked 18+.
+- Bots in a battle are "called" by the creator through `call_live_bot()`. Bots play for the house: if a bot wins, the pot is gone.
+
+## Rules enforced by the database
+
+Tested in `tests/live-db.test.ts` (runs the real SQL in PGlite):
+
+- Only signed-in players with a profile can call the live functions; helpers are private; the tables cannot be written directly; the secrets tables and seeds are unreadable until the game starts.
+- Battle: 1 to 20 case ids, a known format and mode (team formats allow only normal, crazy, terminal), at most 3 open battles per player, a seat can be taken once, only the creator may call bots, the creator leaving cancels the battle, a joiner leaving frees the seat, nobody can leave after the start, and a lobby older than 30 minutes cannot be joined.
+- Coinflip: bolt or star, 0.10 to 5,000, at most 5 open games, you cannot join your own game, only the creator can cancel and only while nobody joined, 30-minute expiry.
+
+## Client files
+
+| File | Role |
+|---|---|
+| `src/live.ts` | Data layer: RPC wrappers, realtime watchers, presence and broadcast, settle-once helpers, the reconcile registry |
+| `src/views/coinflip.ts` | `LIVE` branch: lobby from the server, `upsert()` applies each server row, stake and payout handling |
+| `src/views/battles.ts` | `renderLiveBattle()` loads a battle by id, `drawBattle()` is the shared view, `toBattle()`/`resolveLive()` derive the result, `b.onRow()` follows the server |
+| `src/chat.ts` | Swaps the simulated chat for the real one when `live` turns on |
+| `src/feed.ts` | Sends my bets and drops, shows other players' (validated) |
+| `src/auth.ts` | Calls `initLive(userId)` after sign-in and `stopLive()` after sign-out |
+
+`isLive()` is synchronous. Pages are drawn first in simulated mode and redrawn when the `live` event arrives (about a second after sign-in).
+
+## Known limits
+
+- Tested with a fake server in `tests/live-client.test.ts` and `tests/live-battles.test.ts`, and the SQL in PGlite. **Not yet exercised against a real Supabase project with two people**, so Realtime delivery and row-level-security on realtime events are unconfirmed.
+- Chat messages carry the profile name, so Anonymous mode cannot hide it; chatting while Anonymous is on shows an explanation instead of sending.
+- A waiting game is cancelled and refunded when its creator leaves the page. If the tab is closed instead, the next sign-in cancels and refunds it (or pays it, if someone joined meanwhile).
+- The browser that stakes can disappear before the server confirms; in that rare case the stake can be lost or, for a refund, delayed to the next sign-in.
+- Realtime events for other players' bets are trusted for display only (validated, never counted as the viewer's money).

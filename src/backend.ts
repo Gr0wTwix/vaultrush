@@ -23,6 +23,11 @@ export const ERROR_TEXT: Record<string, string> = {
   adult_required: 'Confirm that you are at least 18 years old.', terms_required: 'Accept the Terms of Service first.', name_taken: 'That username is already taken.',
   invalid_name: 'Use 2 to 20 letters, numbers, spaces, _ or -.', account_closed: 'This account has been closed.',
   invalid_amount: 'Enter a valid amount (up to 2 decimals).', invalid_target: 'The cash-out target must be between 1.01 and 1000.', unsupported_game: 'That game is not available on the server yet.',
+  battle_not_found: 'That battle no longer exists.', battle_not_open: 'That battle has already started or was cancelled.', battle_expired: 'That battle has been waiting too long. Create a new one.',
+  already_seated: 'You are already in this battle.', battle_full: 'That battle is full.', seat_taken: 'Someone just took that seat.', invalid_seat: 'That seat is not available.',
+  too_many_open: 'You already have the maximum number of open games. Finish or cancel one first.', already_started: 'The battle has already started.', not_in_battle: 'You are not in that battle.',
+  not_creator: 'Only the creator can do that.', invalid_format: 'Unknown battle format.', invalid_mode: 'That mode is not allowed for this format.', invalid_cases: 'Pick between 1 and 20 cases.',
+  flip_not_found: 'That coinflip no longer exists.', flip_not_open: 'Someone already joined that coinflip, or it was cancelled.', flip_expired: 'That coinflip has been waiting too long.', own_flip: 'You cannot join your own coinflip.', invalid_side: 'Pick bolt or star.',
 };
 /** Turn a Postgres/PostgREST error into plain language. */
 export function explain(error: { message?: string } | null | undefined): string {
@@ -35,7 +40,7 @@ export interface ServerBet { bet_id: number; amount: number; target: number; cra
 export interface SeedRow { id: number; server_hash: string; client_seed: string; nonce: number; status: 'active' | 'next' | 'revealed'; server_seed: string | null; created_at: string }
 export interface RaceRow { display_name: string; wagered: number; bets: number }
 
-async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
+export async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await (await getClient()).rpc(fn, args);
   if (error) throw new Error(explain(error));
   return data as T;

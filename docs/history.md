@@ -21,6 +21,7 @@ A short log of how the project got here, why, and what is still open.
 10. **Production setup:** Supabase project created, schema applied, Google provider enabled, Steam and account-closing functions deployed, environment variables set on Vercel, site deployed, branch pushed and pull request opened.
 
 11. **Separate cloud accounts (2026-11-20).** The owner noticed three cloud accounts showed one shared balance: cloud mode stored game state under the shared guest key. State and seeds are now keyed per Supabase user. Old shared data is not migrated. Still browser-local: coins, items and seeds do not sync across devices (only Crash settles in the database).
+12. **Live multiplayer (2026-11-21).** The owner asked for friends to be able to play battles together. Added `0002_live.sql` (lobbies, seats, secret seeds revealed at the start, realtime), a client data layer, live Coinflip and Battles, real chat and a shared bet/drop feed. The server draws the shared result; stakes stay in each browser (play money). See [live-multiplayer.md](live-multiplayer.md). **Needs the SQL run once in Supabase, and a two-person test on the real project.**
 
 ## Decisions worth remembering
 

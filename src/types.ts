@@ -53,6 +53,7 @@ export interface GameState {
   ui: { chat: boolean; levelPopup: boolean; streamer: boolean; anonymous: boolean; fx: boolean; notify: boolean };
   legal: { termsAt: number; termsVersion: string };
   gameStats: Record<string, GameStat>;
+  liveSettled: string[];                           // live games (battles, coinflip) already paid out or refunded, so none is paid twice
   bestDrop: { id: string; source: string; value: number } | null;
   blocked: string[]; tx: TxEntry[]; betSeq: number;
   rg: RgState; kyc: KycState; aml: AmlState;

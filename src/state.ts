@@ -29,7 +29,7 @@ export const newGameState = (): GameState => ({
   race: { date: '', wagered: 0 }, racePaid: '',
   history: [], excludedUntil: 0,
   ui: { chat: true, levelPopup: true, streamer: false, anonymous: false, fx: !prefersReducedMotion(), notify: true },
-  legal: { termsAt: 0, termsVersion: '' }, gameStats: {}, bestDrop: null,
+  legal: { termsAt: 0, termsVersion: '' }, gameStats: {}, liveSettled: [], bestDrop: null,
   blocked: [], tx: [], betSeq: 0,
   rg: defaultRg(), kyc: defaultKyc(), aml: { alerts: [], payouts: [], seq: 0 },
 });

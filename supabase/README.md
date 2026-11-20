@@ -16,13 +16,14 @@ Optional. Without it the site runs entirely in the browser. With it, a signed-in
 | Row-level security; clients cannot write money, bets, seeds, controls or the ledger | policies and revoked grants |
 | Real leaderboard | view `daily_race` |
 | Realtime chat (database side) | `chat_messages` and the `supabase_realtime` publication |
+| **Live multiplayer** (case battles and coinflip between real players, secret seed revealed at the start) | `migrations/0002_live.sql`: `live_battles`, `live_coinflips`, `create_/join_/leave_live_battle()`, `call_live_bot()`, `create_/join_/cancel_live_coinflip()`; tested in `tests/live-db.test.ts`. See `../docs/live-multiplayer.md` |
 
 Only **Crash** runs on the server so far. Other games, the full limit set (weekly/monthly loss, time limits), KYC and AML on the server, and wiring the chat UI to the realtime table are the next steps.
 
 ## Set it up
 
 1. Create a project at supabase.com (the free tier is enough).
-2. Run the schema: paste `migrations/0001_core.sql` into the SQL editor, or use the CLI (`supabase link`, then `supabase db push`).
+2. Run the schema: paste `migrations/0001_core.sql` into the SQL editor, or use the CLI (`supabase link`, then `supabase db push`). Then run `migrations/0002_live.sql` the same way to switch on live battles and coinflip.
 3. Authentication > Providers: keep **Email** on. Authentication > URL configuration: add your site URL (and `http://localhost:5173`) as a redirect URL.
 4. Project settings > API: copy the **Project URL** and the **anon public** key.
 5. Locally: copy `.env.example` to `.env` and fill in the two values. On Vercel: add them as environment variables.

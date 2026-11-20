@@ -6,6 +6,7 @@ import {
   startSteamLogin, steamEnabled, verifyLogin2fa,
 } from './backend.js';
 import { useFairFor } from './fair.js';
+import { initLive, stopLive } from './live.js';
 import { activeAccount, activeId, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
 import { confirmAge } from './rg.js';
 import { emit, isAuthed, newGameState, onLoginRequired, requireLogin, save, setAuthed, state } from './state.js';
@@ -301,6 +302,7 @@ export async function initAuth(): Promise<void> {
   const first = await currentUser().catch(() => null);
   if (first) await useFairFor(cloudId(first.id));
   setSignedIn(!!first, first?.id ?? '');
+  if (first) void initLive(first.id);
   const ensure = async (): Promise<void> => {
     try {
       // A cloud profile cannot exist without the adult flag (the database refuses it), so a returning player on a new browser is already confirmed.
@@ -326,7 +328,7 @@ export async function initAuth(): Promise<void> {
     state.avatar = pic; save();
     const me = $('.me .avatar'); if (me) me.outerHTML = avatar(state.name, 32);
   };
-  await onAuthChange(async (event, on, uid) => { if (on) await useFairFor(cloudId(uid)); setSignedIn(on, uid); if (on) markKnown(); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure().then(applyPicture); });
+  await onAuthChange(async (event, on, uid) => { if (on) await useFairFor(cloudId(uid)); setSignedIn(on, uid); if (on) { markKnown(); void initLive(uid); } else stopLive(); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure().then(applyPicture); });
 }
 
 // ---- click guard for signed-out visitors ----

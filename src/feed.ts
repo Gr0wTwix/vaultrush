@@ -1,5 +1,6 @@
 // Live drops + live bets. Simulated bots stand in for the WebSocket feed a real backend would push.
-import { CASES, randomBot } from './data.js';
+import { CASES, ITEM, randomBot } from './data.js';
+import { listenFeed, shareBet, shareDrop } from './live.js';
 import { emit, recordBet, save, state } from './state.js';
 import type { Drop, Item, LiveBet } from './types.js';
 
@@ -11,6 +12,7 @@ export const shownName = (user: string): string => (user === state.name && state
 
 export function pushDrop(d: { user: string; item: Item; source: string }): void {
   if (d.user === state.name && (!state.bestDrop || d.item.value > state.bestDrop.value)) { state.bestDrop = { id: d.item.id, source: d.source, value: d.item.value }; save(); }
+  if (d.user === state.name) shareDrop({ user: shownName(d.user), itemId: d.item.id, source: d.source });   // other players see it when live games are on
   d = { ...d, user: shownName(d.user) };
   drops.unshift({ ...d, at: Date.now() });
   drops.length = Math.min(drops.length, 30);
@@ -18,7 +20,7 @@ export function pushDrop(d: { user: string; item: Item; source: string }): void 
 }
 
 export function pushBet(b: Omit<LiveBet, 'at'>): void {
-  if (b.mine) recordBet(b);
+  if (b.mine) { recordBet(b); shareBet({ user: shownName(b.user), game: b.game, amount: b.amount, multi: b.multi, payout: b.payout }); }
   bets.unshift({ ...b, user: shownName(b.user), at: Date.now() });
   bets.length = Math.min(bets.length, 40);
   emit('bet', bets[0]);
@@ -48,6 +50,8 @@ function simBet(): void {
 }
 
 export function startFeed(): void {
+  // Real players' bets and drops (live games only): shown like any other, never re-shared and never counted as mine.
+  listenFeed(b => pushBet({ ...b, mine: false }), d => { const item = ITEM[d.itemId]; if (item) pushDrop({ user: d.user, item, source: d.source }); });
   for (let i = 0; i < 16; i++) simDrop();
   for (let i = 0; i < 14; i++) simBet();
   setInterval(simDrop, 2300);

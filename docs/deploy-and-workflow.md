@@ -29,6 +29,7 @@ Locally they go in `.env` (gitignored). On Vercel they are project environment v
 
 1. Create a project. In the create form, leave "Enable Data API" on and turn **off** "Automatically expose new tables" (the migration sets its own grants and row-level security).
 2. SQL editor: run `supabase/migrations/0001_core.sql`. A "destructive operations" warning is expected because the script revokes default grants.
+   Then run `supabase/migrations/0002_live.sql` (live battles, coinflip and the realtime tables; see [live-multiplayer.md](live-multiplayer.md)). The site works without it and keeps the simulated lobbies.
 3. Authentication, URL configuration: Site URL `http://localhost:5173`; Redirect URLs `http://localhost:5173/**` and the production site with `/**`.
 4. **Google:** create an OAuth client (Web application) in Google Cloud Console with redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`; paste client ID and secret into Authentication, Providers, Google; turn it on.
 5. **Steam (CLI, run in a terminal):**

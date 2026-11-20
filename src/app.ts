@@ -246,6 +246,7 @@ async function boot() {
   initRg();
   void initAuth();
   on('auth', () => route());
+  on('live', () => route());                 // lobbies change from simulated to real the moment the server confirms live games
   initChatDock();
   startFeed();
   renderTicker();

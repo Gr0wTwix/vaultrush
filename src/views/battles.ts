@@ -1,6 +1,7 @@
 import { CASES, CASE, RARITY, randomBot, entryForTicket, ticketOf } from '../data.js';
 import { state, save, debit, credit, round2, debitError, handoff } from '../state.js';
-import { bet, annotate, pickWeighted } from '../fair.js';
+import { bet, annotate, pickWeighted, floatsFor } from '../fair.js';
+import { isLive, liveMe, createLiveBattle, joinLiveBattle, callLiveBot, leaveLiveBattle, getLiveBattle, openLiveBattles, myLiveBattles, liveBattleSeed, watchBattles, refundOnce, settleOnce, isSettled, onReconcile, type LiveBattle } from '../live.js';
 import { pushBet, pushDrop } from '../feed.js';
 import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -84,6 +85,10 @@ async function createBattle(ids, format, mode, preBots = []) {
   const cost = costOf(ids);
   if (!debit(cost)) { toast(debitError(cost), 'error'); return null; }
   sfx.click();
+  if (isLive()) {
+    try { const r = await createLiveBattle(ids, format, mode); return { id: r.id }; }
+    catch (e) { credit(cost); toast(e instanceof Error ? e.message : 'Could not create the battle', 'error'); return null; }
+  }
   const size = FORMATS[format].size;
   const bots = [...preBots];
   while (bots.length < size - 1) bots.push(randomBot([...bots, state.name]));
@@ -104,14 +109,64 @@ async function createBattle(ids, format, mode, preBots = []) {
 }
 
 function settle(b) {
-  if (b.credited) return;
+  if (b.credited || !b.results) return;
+  const mi = b.live ? b.me : 0;                       // my seat: always the first one in a simulated battle
+  if (mi < 0) return;                                 // watching a live battle: nothing to pay
   b.credited = true;
-  const mine = b.winners.includes(0);
+  const mine = b.winners.includes(mi);
   const payout = mine ? round2(b.pot / b.winners.length) : 0;
+  if (b.live && !settleOnce(`b:${b.id}`)) { b.payout = payout; return; }   // already paid (a reload, or another tab)
   if (payout) credit(payout);
   pushBet({ user: state.name, game: 'Battles', amount: b.cost, multi: round2(payout / b.cost), payout, mine: true });
   b.payout = payout;
 }
+
+// ---- live battles: the server seats the players and draws the seed; every browser derives the same result from it ----
+const validBattle = (r: LiveBattle): boolean => !!FORMATS[r.format] && !!MODES[r.mode] && r.seats.length === FORMATS[r.format].size && r.case_ids.length > 0 && r.case_ids.every(id => !!CASE[id]);
+function toBattle(r: LiveBattle): any {
+  const me = liveMe();
+  return {
+    live: true, id: r.id, ids: [...r.case_ids], format: r.format, mode: r.mode, cost: costOf(r.case_ids), hash: r.server_hash, clientSeed: r.client_seed,
+    players: r.seats.map(x => (x ? { name: x.name, bot: x.bot, uid: x.uid } : { name: '', bot: false, uid: null })),
+    joined: r.seats.map(Boolean), me: r.seats.findIndex(x => !!x && x.uid === me), isCreator: r.creator === me,
+    running: r.status === 'running', started: false, cancelled: r.status === 'cancelled', credited: false, viewers: r.seats.filter(Boolean).length,
+  };
+}
+/** Same maths as a simulated battle: one float per player per round plus one for ties and jackpots, all from the revealed seed. */
+async function resolveLive(b: any, seed: string): Promise<void> {
+  const P = b.players.length;
+  const floats = await floatsFor(seed, b.clientSeed, 0, P * b.ids.length + 1);
+  const tickets = b.players.map((_, p) => b.ids.map((_c, r) => ticketOf(floats[r * P + p])));
+  const results = b.players.map((_, p) => b.ids.map((cid, r) => entryForTicket(CASE[cid], tickets[p][r]).item));
+  const extra = floats[floats.length - 1];
+  const outcome = decide(b.mode, b.format, results, extra);
+  Object.assign(b, { seed, tickets, results, ...outcome, pot: round2(outcome.totals.reduce((a, c) => a + c, 0)), jackpotF: extra });
+}
+async function seedWithRetry(id: string): Promise<string | null> {
+  for (let i = 0; i < 6; i++) { const seed = await liveBattleSeed(id).catch(() => null); if (seed) return seed; await sleep(400); }
+  return null;
+}
+
+// After a reload: a battle left waiting is left and refunded, a cancelled one is refunded, a finished one is paid (or marked lost) once.
+onReconcile(async () => {
+  const me = liveMe();
+  for (const r of await myLiveBattles()) {
+    if (!validBattle(r)) continue;
+    const key = `b:${r.id}`, cost = costOf(r.case_ids);
+    if (isSettled(key)) continue;
+    if (r.status === 'waiting') {
+      try { await leaveLiveBattle(r.id); if (refundOnce(r.creator === me ? key : `bl:${r.id}:${Date.now()}`, cost)) toast(`A battle you left open was closed: ${fmt(cost)} refunded`); } catch { /* it just started: the next sign-in settles it */ }
+    } else if (r.status === 'cancelled') {
+      if (refundOnce(key, cost)) toast(`A battle was cancelled: ${fmt(cost)} refunded`);
+    } else {
+      const seed = await liveBattleSeed(r.id); if (!seed) continue;
+      const b = toBattle(r); await resolveLive(b, seed);
+      if (b.me < 0 || !settleOnce(key)) continue;
+      const payout = b.winners.includes(b.me) ? round2(b.pot / b.winners.length) : 0;
+      if (payout) { credit(payout); toast(`Battle won while you were away: +${fmt(payout)}`, 'win'); }
+    }
+  }
+});
 
 // "Edit" on a finished battle pre-fills the creator with the same cases, format and mode.
 let draft = null;
@@ -126,7 +181,7 @@ export function renderCreate(el) {
   el.innerHTML = `
     <div class="page-head bt2-head">
       <div class="bt2-back-row"><a class="bt2-back" href="#/battles" aria-label="Back to battles" title="Back to battles">←</a>
-        <div><h1>${icon('battles')} Create battle</h1><p class="muted">Pick a mode, the players and the cases. Empty seats are filled by bots, and bots play for the house: if a bot wins, the pot is gone.</p></div></div>
+        <div><h1>${icon('battles')} Create battle</h1><p class="muted">Pick a mode, the players and the cases. ${isLive() ? 'Friends can join from the Battles page or from the link you share. You can also call bots into empty seats.' : 'Empty seats are filled by bots.'} Bots play for the house: if a bot wins, the pot is gone.</p></div></div>
     </div>
 
     <section class="bt2-build">
@@ -286,10 +341,14 @@ export function renderCreate(el) {
 /** Landing page of Case battles: only the open battles, with a button that opens the creator. */
 export function renderList(el) {
   let filter = 'all', sort = 'new';
+  const LIVE = isLive();
+  const liveLobbies: any[] = [];
+  const lobs = (): any[] => (LIVE ? liveLobbies : lobbies);
+  let stopWatch: (() => void) | null = null, alive = true;
   el.innerHTML = `
     <div class="page-head bt2-head bt2-listhead">
       <div><h1>${icon('battles')} Case battles</h1>
-        <p class="muted"><b class="bt2-live" id="stOpen">0</b> active battles · <span id="stPot"></span> in the pot. Join one below or start your own.</p></div>
+        <p class="muted"><b class="bt2-live" id="stOpen">0</b> active battles · <span id="stPot"></span> in the pot. Join one below or start your own.${LIVE ? ' <b class="cf-livetag">Live: real players</b>' : ''}</p></div>
       <div class="bt2-headr">
         <label class="bt2-sort"><span class="muted small">Sort</span><select id="lobSort"><option value="new">Newest</option><option value="cost">Highest cost</option><option value="cheap">Lowest cost</option></select></label>
         <a class="btn btn-primary btn-lg" href="#/battles/create" id="goCreate" data-needs-auth="battle">${icon('battles')} Create battle</a>
@@ -309,28 +368,51 @@ export function renderList(el) {
       <div class="bt2-lt"><span class="tag ${l.mode}">${MODES[l.mode].label}</span><b>${f.label}</b><small>${l.ids.length} round${l.ids.length === 1 ? '' : 's'}</small></div>
       <div class="bt2-ls">${l.bots.map(b => avatar(b, 30)).join('')}${Array.from({ length: open }, () => '<span class="seat-empty">+</span>').join('')}</div>
       <div class="bt2-lcost"><b>${money(cost)}</b><small>Battle cost</small></div>
-      <button class="btn btn-primary" data-id="${l.uid}" data-needs-auth="battle">Join battle</button></div>`;
+      <button class="btn btn-primary" data-id="${l.uid}" data-needs-auth="battle">${l.mine ? 'Open battle' : 'Join battle'}</button></div>`;
   };
   const drawLobbies = () => {
-    let shown = lobbies.filter(l => filter === 'all' || (filter === 'solo' ? !FORMATS[l.format].teams : filter === 'team' ? FORMATS[l.format].teams : costOf(l.ids) < 5));
+    let shown = lobs().filter(l => filter === 'all' || (filter === 'solo' ? !FORMATS[l.format].teams : filter === 'team' ? FORMATS[l.format].teams : costOf(l.ids) < 5));
     if (sort === 'cost') shown = [...shown].sort((a, b) => costOf(b.ids) - costOf(a.ids));
     if (sort === 'cheap') shown = [...shown].sort((a, b) => costOf(a.ids) - costOf(b.ids));
-    $('#lobbies', el).innerHTML = shown.map(lobRow).join('') || '<div class="ac-empty muted">No battles match this filter right now. <a href="#/battles/create" data-needs-auth="battle">Create one</a></div>';
-    $('#stOpen', el).textContent = lobbies.length;
-    $('#stPot', el).innerHTML = money(round2(lobbies.reduce((sum, l) => sum + costOf(l.ids) * FORMATS[l.format].size, 0)));
+    $('#lobbies', el).innerHTML = shown.map(lobRow).join('') || `<div class="ac-empty muted">No battles match this filter right now. <a href="#/battles/create" data-needs-auth="battle">Create one</a>${LIVE ? ' and send the link to a friend.' : ''}</div>`;
+    $('#stOpen', el).textContent = lobs().length;
+    $('#stPot', el).innerHTML = money(round2(lobs().reduce((sum, l) => sum + costOf(l.ids) * FORMATS[l.format].size, 0)));
     $$('#lobbies [data-id]', el).forEach(btn => btn.onclick = async () => {
-      const l = lobbies.find(x => String(x.uid) === btn.dataset.id);
+      const l = lobs().find(x => String(x.uid) === btn.dataset.id);
       if (!l) return toast('That battle just filled up', 'error');
+      if (LIVE) {
+        if (l.mine) { location.hash = `#/battle/${l.uid}`; return; }
+        const cost = costOf(l.ids);
+        if (!debit(cost)) return toast(debitError(cost), 'error');
+        try { await joinLiveBattle(l.uid); location.hash = `#/battle/${l.uid}`; }
+        catch (e) { credit(cost); toast(e instanceof Error ? e.message : 'Could not join', 'error'); void loadLive(); }
+        return;
+      }
       const b = await createBattle(l.ids, l.format, l.mode, l.bots);
-      if (b) { lobbies.splice(lobbies.indexOf(l), 1); location.hash = `#/battle/${b.id}`; }
+      if (b) { lobs().splice(lobs().indexOf(l), 1); location.hash = `#/battle/${b.id}`; }
     });
   };
   $$('#lobTabs .tab', el).forEach(t => t.onclick = () => { $$('#lobTabs .tab', el).forEach(x => x.classList.toggle('active', x === t)); filter = t.dataset.f; drawLobbies(); });
   $('#lobSort', el).onchange = e => { sort = e.target.value; drawLobbies(); };
   drawLobbies();
-  // Lobbies come and go while you browse.
-  const timer = setInterval(() => { lobbies.pop(); lobbies.unshift(makeLobby()); drawLobbies(); }, 7000);
-  return () => clearInterval(timer);
+  // Real lobbies come from the server and change as players join; simulated ones come and go on a timer.
+  const asLobby = (r: LiveBattle) => ({ uid: r.id, ids: r.case_ids, format: r.format, mode: r.mode, bots: r.seats.filter(Boolean).map(x => (x as { name: string }).name), mine: r.player_ids.includes(liveMe()) });
+  async function loadLive() {
+    try { const rows = await openLiveBattles(); liveLobbies.length = 0; rows.filter(validBattle).forEach(r => liveLobbies.push(asLobby(r))); drawLobbies(); }
+    catch { toast('Could not load the live battles', 'error'); }
+  }
+  if (LIVE) {
+    void loadLive();
+    void watchBattles((_ev, r) => {
+      if (!alive || !validBattle(r)) return;
+      const i = liveLobbies.findIndex(x => x.uid === r.id);
+      if (i >= 0) liveLobbies.splice(i, 1);
+      if (r.status === 'waiting') liveLobbies.unshift(asLobby(r));
+      drawLobbies();
+    }).then(stop => { if (alive) stopWatch = stop; else stop(); }).catch(() => {});
+  }
+  const timer = LIVE ? 0 : setInterval(() => { lobbies.pop(); lobbies.unshift(makeLobby()); drawLobbies(); }, 7000);
+  return () => { alive = false; clearInterval(timer); stopWatch?.(); };
 }
 
 const PCOLORS = ['#c6ff3d', '#33d6ff', '#ff4fc8', '#ffc53d', '#8f6bff', '#ff6a3d'];
@@ -340,10 +422,46 @@ const jackpotWeights = (mode, totals) => {
   return w.map(x => x / s);
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const notFound = (el, msg) => { el.innerHTML = `<div class="panel empty"><h2>Battle not found</h2><p class="muted">${msg}</p><a class="btn btn-primary" href="#/battles">Back to battles</a></div>`; };
+
 export function renderBattle(el, id) {
+  if (UUID.test(id)) return renderLiveBattle(el, id);
   const b = battles.get(id);
-  if (!b) { el.innerHTML = `<div class="panel empty"><h2>Battle not found</h2><p class="muted">Battles only live in this browser tab.</p><a class="btn btn-primary" href="#/battles">Back to battles</a></div>`; return; }
+  if (!b) { notFound(el, 'Battles only live in this browser tab.'); return; }
+  return drawBattle(el, b);
+}
+
+/** A battle held by the server: load it, show it, and keep it in step with what the other players do. */
+function renderLiveBattle(el, id) {
+  if (!isLive()) { notFound(el, 'Log in to open a live battle. If you are logged in, give it a second to connect.'); return; }
+  let alive = true, stopWatch: (() => void) | null = null, inner: (() => void) | undefined;
+  el.innerHTML = '<div class="panel empty"><h2>Loading battle…</h2></div>';
+  void (async () => {
+    const row = await getLiveBattle(id).catch(() => null);
+    if (!alive) return;
+    if (!row || !validBattle(row)) return notFound(el, 'It may have been removed, or it uses cases this site does not know.');
+    if (row.status === 'cancelled') return notFound(el, 'That battle was cancelled.');
+    const b = toBattle(row);
+    if (b.running) {
+      const seed = await seedWithRetry(id);
+      if (!alive) return;
+      if (!seed) return notFound(el, 'The result is not available yet. Try again in a moment.');
+      await resolveLive(b, seed);
+    }
+    inner = drawBattle(el, b);
+    const stop = await watchBattles((_ev, r) => { if (r.id === id) void b.onRow?.(r); }).catch(() => null);
+    if (!alive) { stop?.(); return; }
+    stopWatch = stop;
+    const fresh = await getLiveBattle(id).catch(() => null);               // anything that happened before the subscription was ready
+    if (fresh && alive) void b.onRow?.(fresh);
+  })();
+  return () => { alive = false; stopWatch?.(); inner?.(); };
+}
+
+function drawBattle(el, b) {
   let alive = true, run = 0;
+  const mi = (): number => (b.live ? b.me : 0);             // my seat (always the first in a simulated battle; -1 when only watching)
   const P = b.players.length;
   const teams = FORMATS[b.format].teams;
   const teamOf = p => (teams ? teams.findIndex(t => t.includes(p)) : -1);
@@ -352,7 +470,10 @@ export function renderBattle(el, id) {
   const hasSep = i => i > 0 && (!teams || teamOf(i) !== teamOf(i - 1));
   const seatHtml = i => (b.joined[i]
     ? `<div class="seat-wait ready">${icon('fair')}<b>Ready</b><span>to battle</span></div>`
-    : `<div class="seat-wait"><span class="spinner"></span><b>Waiting</b><button class="btn btn-sm btn-primary call-bot" data-needs-auth="battle" data-seat="${i}">Call bot</button></div>`);
+    : `<div class="seat-wait"><span class="spinner"></span><b>Waiting</b>${seatButton(i)}</div>`);
+  const seatButton = i => (!b.live || b.isCreator
+    ? `<button class="btn btn-sm btn-primary call-bot" data-needs-auth="battle" data-seat="${i}">Call bot</button>`
+    : b.me < 0 ? `<button class="btn btn-sm btn-primary join-seat" data-needs-auth="battle" data-seat="${i}">Join ${fmt(b.cost)}</button>` : '');
 
   const R = b.ids.length;
   const pad2 = n => String(n).padStart(2, '0');
@@ -368,7 +489,7 @@ export function renderBattle(el, id) {
     <div class="bt-top">
       <a class="back" href="#/battles">← Back to battles</a>
       <div class="bt-title"><h1>${FORMATS[b.format].label} ${MODES[b.mode].label}</h1><span class="tag ${b.mode}">${MODES[b.mode].label}</span></div>
-      <div class="bt-tools"><span class="viewers" title="Watching this battle">${icon('user')} ${b.viewers}</span><a class="btn btn-ghost btn-sm" href="#/fair">${icon('fair')} Fairness</a><button class="btn btn-ghost btn-sm" id="shareB">Share</button></div>
+      <div class="bt-tools"><span class="viewers" title="Watching this battle">${icon('user')} ${b.viewers}</span><a class="btn btn-ghost btn-sm" href="#/fair" title="${b.live ? 'Server hash ' + b.hash : 'Fairness'}">${icon('fair')} Fairness</a><button class="btn btn-ghost btn-sm" id="shareB">Share</button></div>
     </div>
     <div class="bt-sub">
       <div class="bt-total"><span class="muted small">Total</span><span id="pot">${money(0)}</span><span class="muted small">· cost ${fmt(b.cost)}</span></div>
@@ -399,29 +520,91 @@ export function renderBattle(el, id) {
       <div class="contents">${c.entries.map(e => itemCard(e.item, { extra: `<div class="chance">${(e.chance * 100).toFixed(e.chance < 0.01 ? 3 : 2)}%</div>` })).join('')}</div>`, { wide: true });
   });
 
-  // ---- lobby: empty seats wait until you call a bot ----
+  // ---- lobby: empty seats wait for players (live) or until you call a bot (simulated) ----
   let onFull = null;
-  const callBot = i => {
-    if (b.joined[i] || b.started) return;
-    b.joined[i] = true;
-    const p = b.players[i];
+  const redrawSeat = (i, joinedNow) => {
     $(`#reel${i}`, el).innerHTML = seatHtml(i);
     $(`#pbar${i}`, el).innerHTML = pbarInner(i);
-    $(`#pbar${i}`, el).classList.add('just-joined');
+    if (joinedNow) $(`#pbar${i}`, el).classList.add('just-joined');
+  };
+  const callBot = i => {
+    if (b.joined[i] || b.started) return;
+    if (b.live) return callLiveSeat(i);
+    b.joined[i] = true;
+    redrawSeat(i, true);
     sfx.click();
     if (b.joined.every(Boolean)) onFull?.();
   };
-  el.addEventListener('click', e => { const btn = e.target.closest('.call-bot'); if (btn) callBot(+btn.dataset.seat); });
+  const botName = () => randomBot(b.players.map(p => p.name));
+  async function callLiveSeat(i) {
+    try { const r = await callLiveBot(b.id, i, botName()); await b.onRow(r); sfx.click(); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Could not call a bot', 'error'); }
+  }
+  async function joinLiveSeat(i) {
+    if (b.me >= 0 || b.started) return;
+    if (!debit(b.cost)) return toast(debitError(b.cost), 'error');
+    try { const r = await joinLiveBattle(b.id, i); await b.onRow(r); sfx.click(); }
+    catch (e) { credit(b.cost); toast(e instanceof Error ? e.message : 'Could not join', 'error'); }
+  }
+  el.addEventListener('click', e => {
+    const bot = e.target.closest('.call-bot'); if (bot) callBot(+bot.dataset.seat);
+    const join = e.target.closest('.join-seat'); if (join) void joinLiveSeat(+join.dataset.seat);
+  });
   $('#callAll', el).onclick = async () => {
-    for (let i = 1; i < P; i++) { if (!b.joined[i]) { callBot(i); await sleep(180); } }
+    for (let i = 1; i < P; i++) { if (!b.joined[i]) { callBot(i); await sleep(b.live ? 350 : 180); } }
   };
   const cancelBattle = silent => {
     if (b.started || b.cancelled) return;
+    if (b.live) {
+      if (b.me < 0) { if (!silent) location.hash = '#/battles'; return; }
+      const creator = b.isCreator;
+      leaveLiveBattle(b.id).then(() => {
+        refundOnce(creator ? `b:${b.id}` : `bl:${b.id}:${Date.now()}`, b.cost);
+        if (!silent) { toast(creator ? `Battle cancelled: ${fmt(b.cost)} refunded` : `You left the battle: ${fmt(b.cost)} refunded`); location.hash = '#/battles'; }
+      }).catch(e => { if (!silent) toast(e instanceof Error ? e.message : 'Could not leave', 'error'); });
+      return;
+    }
     b.cancelled = true; b.credited = true;
     credit(b.cost);
     if (!silent) { toast(`Battle cancelled: ${fmt(b.cost)} refunded`); location.hash = '#/battles'; }
   };
   $('#cancelB', el).onclick = () => cancelBattle(false);
+
+  // Live: the buttons depend on who I am in this battle.
+  const refreshCtl = () => {
+    if (!b.live) return;
+    const ctl = $('#lobbyCtl', el); if (!ctl) return;
+    $('#callAll', el).hidden = !b.isCreator;
+    $('#cancelB', el).hidden = b.me < 0;
+    $('#cancelB', el).textContent = b.isCreator ? 'Cancel battle' : 'Leave battle';
+    ctl.hidden = b.me < 0;
+  };
+  refreshCtl();
+  /** One row from the server (my own call's answer or a realtime event). Idempotent. */
+  b.onRow = async (r: LiveBattle) => {
+    if (!alive || b.started) return;
+    if (r.status === 'cancelled') {
+      if (b.cancelled) return;
+      b.cancelled = true;
+      if (b.me >= 0 && refundOnce(`b:${b.id}`, b.cost)) toast(`The creator cancelled this battle: ${fmt(b.cost)} refunded`);
+      location.hash = '#/battles';
+      return;
+    }
+    const before = b.joined.slice();
+    r.seats.forEach((x, i) => { b.joined[i] = !!x; b.players[i] = x ? { name: x.name, bot: x.bot, uid: x.uid } : { name: '', bot: false, uid: null }; });
+    b.me = r.seats.findIndex(x => !!x && x.uid === liveMe());
+    b.viewers = r.seats.filter(Boolean).length;
+    $('.viewers', el).innerHTML = `${icon('user')} ${b.viewers}`;
+    b.players.forEach((_, i) => redrawSeat(i, !before[i] && b.joined[i]));
+    refreshCtl();
+    if (r.status === 'running' && !b.running) {
+      b.running = true;
+      const seed = await seedWithRetry(b.id);
+      if (!seed) { toast('Could not load the battle result. Reload the page.', 'error'); return; }
+      await resolveLive(b, seed);
+      if (alive) onFull?.();
+    }
+  };
 
   const setChip = (p, text) => { const c = $(`#chip${p}`, el); c.hidden = !text; c.textContent = text || ''; };
   const updateChips = (running, points) => {
@@ -514,7 +697,7 @@ export function renderBattle(el, id) {
       b.players.forEach((_, p) => $(`#slot${p}_${r}`, el).classList.add('active'));
       $('#bStatus', el).textContent = `${replay ? 'Replay · ' : ''}Round ${r + 1} of ${b.ids.length}`;
       const dur = Math.round(reelMs() * 0.6);
-      await Promise.all(b.players.map((_, p) => spinReel($(`#reel${p}`, el), c.entries, b.results[p][r], { axis: 'y', duration: dur, total: 40, winIndex: 34, sound: p === 0 })));
+      await Promise.all(b.players.map((_, p) => spinReel($(`#reel${p}`, el), c.entries, b.results[p][r], { axis: 'y', duration: dur, total: 40, winIndex: 34, sound: p === mi() })));
       if (!live()) return;
       const top = Math.max(...b.players.map((_, p) => b.results[p][r].value));
       b.players.forEach((_, p) => {
@@ -549,7 +732,7 @@ export function renderBattle(el, id) {
 
     if (!replay) {
       settle(b);
-      b.results[0].forEach(it => pushDrop({ user: state.name, item: it, source: 'Battle' }));
+      if (mi() >= 0) b.results[mi()].forEach(it => pushDrop({ user: state.name, item: it, source: 'Battle' }));
     }
     const share = round2(b.pot / b.winners.length);
     b.players.forEach((_, p) => {
@@ -558,7 +741,7 @@ export function renderBattle(el, id) {
       $(`#twLbl${p}`, el).textContent = 'Winnings';
       $(`#tot${p}`, el).innerHTML = money(w ? share : 0);
     });
-    const won = b.winners.includes(0);
+    const won = mi() >= 0 && b.winners.includes(mi());
     $('#bStatus', el).innerHTML = b.mode === 'group' ? `Pot split: ${money(share)} each`
       : won ? `You won ${money(share)}!`
       : teams ? `Team ${teamOf(b.winners[0]) + 1} won the pot`
@@ -576,14 +759,18 @@ export function renderBattle(el, id) {
     $('#editB', el).onclick = () => { draft = { ids: [...b.ids], format: b.format, mode: b.mode }; location.hash = '#/battles/create'; };
     if (canUpgrade) $('#upWin', el).onclick = () => { handoff.upgradeCoins = share; location.hash = '#/upgrade'; };
     $('#rematch', el).onclick = async () => {
-      const nb = await createBattle(b.ids, b.format, b.mode, b.players.filter(p => p.bot).map(p => p.name));
+      const nb = await createBattle(b.ids, b.format, b.mode, b.live ? [] : b.players.filter(p => p.bot).map(p => p.name));
       if (nb) location.hash = `#/battle/${nb.id}`;
     };
   };
   play(false);
 
   // Leaving a lobby that hasn't started cancels it and refunds you; a started battle is settled.
-  return () => { alive = false; if (!b.started) cancelBattle(true); else settle(b); };
+  return () => {
+    alive = false;
+    if (b.live ? b.running : b.started) settle(b);        // a battle that is already decided is paid out even if I leave early
+    else cancelBattle(true);
+  };
 }
 
 /** Confetti that bursts from a specific element (the winner's column). */

@@ -6,6 +6,7 @@ Vaultrush is an original **play-money** skin-game demo. Coins cannot be bought, 
 |---|---|
 | [architecture.md](architecture.md) | Folder layout, how state and views work, the single gates for bets and claims |
 | [accounts-and-auth.md](accounts-and-auth.md) | Browser accounts, Supabase cloud accounts, Google and Steam sign-in, the signed-out rules |
+| [live-multiplayer.md](live-multiplayer.md) | Real battles, coinflip, chat and feed between players: what is live, the trust model, how to turn it on |
 | [compliance.md](compliance.md) | Responsible-gambling tools, sandbox KYC and AML, the RNG lab, provably fair maths |
 | [deploy-and-workflow.md](deploy-and-workflow.md) | Commands, tests, environment variables, Supabase setup, Vercel and GitHub steps, mistakes to avoid |
 | [history.md](history.md) | What was built in which order, why decisions were made, and what is still open |

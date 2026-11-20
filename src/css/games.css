@@ -733,3 +733,5 @@ img.item-art { object-fit: contain; display: block; margin: 0 auto; filter: drop
 .pf-rtp td, .pf-rtp th { white-space: normal; vertical-align: top; }
 .pf-rtp td:first-child { min-width: 200px; max-width: 320px; }
 .pf-rtp td:nth-child(3) { min-width: 130px; }
+
+.cf-livetag { color: var(--accent); font-weight: 700; }
