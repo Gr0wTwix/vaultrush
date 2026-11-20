@@ -297,7 +297,8 @@ export async function initAuth(): Promise<void> {
   setSignedIn(!!(await currentUser().catch(() => null)));
   const ensure = async (): Promise<void> => {
     try {
-      if (await hasProfile()) return;
+      // A cloud profile cannot exist without the adult flag (the database refuses it), so a returning player on a new browser is already confirmed.
+      if (await hasProfile()) { confirmAge(state.rg); save(); return; }
       const u = await currentUser(); const meta = (u as { user_metadata?: Record<string, unknown> } | null)?.user_metadata ?? {};
       if (typeof meta['display_name'] === 'string' && meta['adult'] === true && typeof meta['terms_version'] === 'string') {
         try { await completeSignup(meta['display_name'], meta['terms_version'], true); state.name = meta['display_name']; confirmAge(state.rg); save(); toast('Account ready', 'win', true); return; } catch { /* name taken etc: ask */ }
