@@ -19,6 +19,7 @@ import { renderFooter } from './footer.js';
 import * as responsible from './views/responsible.js';
 import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
+import { initSite, gameOff, pausedPanel, GAME_OF_NAV } from './site.js';
 import * as home from './views/home.js';
 import * as cases from './views/cases.js';
 import * as battles from './views/battles.js';
@@ -229,6 +230,8 @@ function route() {
     const m = hash.match(re);
     if (m) {
       $$('.nav-link').forEach(a => a.classList.toggle('active', a.dataset.nav === nav));
+      const game = GAME_OF_NAV[nav];
+      if (game && gameOff(game)) { view.innerHTML = pausedPanel(game); window.scrollTo(0, 0); return; }       // switched off in the admin site
       cleanup = fn(view, ...m.slice(1)) || null;
       window.scrollTo(0, 0);
       document.body.classList.remove('chat-open');
@@ -246,6 +249,7 @@ async function boot() {
   applyUi();
   initRg();
   void initAuth();
+  await Promise.race([initSite(), new Promise(r => setTimeout(r, 1500))]);      // maintenance, notice, paused games: known before the first page is drawn
   on('auth', () => route());
   on('live', () => route());                 // lobbies change from simulated to real the moment the server confirms live games
   initChatDock();

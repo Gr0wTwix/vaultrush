@@ -19,6 +19,7 @@ src/
   company.ts        fictional operator details used by the footer and legal pages
   footer.ts         the site footer (operator, disclaimers, 18+ strip, link columns)
   rounds.ts         shared Crash and Double rounds (clock, bets, pay-once)
+  site.ts           what the admin site switched: notice bar, maintenance and country screens, paused games, sign-ups (see admin-site.md)
   live.ts           live multiplayer client: lobbies, realtime, chat, shared feed, settle-once helpers (see live-multiplayer.md)
   signup.ts         username, email and password rules, terms version
   fair.ts           provably fair seeds, HMAC floats, game mappings
@@ -33,9 +34,10 @@ supabase/
   migrations/0001_core.sql   schema, row-level security, functions
   migrations/0002_live.sql   live battles and coinflip lobbies, server-drawn seeds, realtime publication
   migrations/0003_live_erasure.sql   delete_account() also replaces the name in live games
-  migrations/0006_admin.sql   admin roles, permissions, three-step sign-in, append-only audit log, read-only explorer
-  migrations/0005_rounds.sql   shared Crash and Double rounds: game_rounds, round_bets, advance_round(), server-timed cash-outs
   migrations/0004_claims_bots_caps.sql   free_claims (welcome once, daily every 24 h), coinflip house bot, bet cap 1000/2500/5000
+  migrations/0005_rounds.sql   shared Crash and Double rounds: game_rounds, round_bets, advance_round(), server-timed cash-outs
+  migrations/0006_admin.sql   admin roles, permissions, three-step sign-in, append-only audit log, read-only explorer
+  migrations/0007_site_controls.sql   maintenance, notice, game switches, sign-ups, country restrictions (one row, guarded entry points)
   functions/steam-login      Steam OpenID sign-in
   functions/close-login      finishes account deletion
   functions/_shared          Steam OpenID verification and name/avatar parsing (unit-tested)

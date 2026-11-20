@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Admin, AdminApi, AuditRow, Matrix, QueryResult, Status } from '../src/admin/api.js';
+import type { Admin, AdminApi, AuditRow, Controls, Matrix, QueryResult, Status } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
 const ROLES = [
@@ -17,10 +17,12 @@ const MATRIX: Matrix = {
   ],
   grants: [{ role: 'admin', permission: 'players.view' }, { role: 'admin', permission: 'chat.delete' }, { role: 'moderator', permission: 'players.view' }],
 };
-const OWNER_PERMS = ['audit.read', 'chat.delete', 'explorer.query', 'players.view', 'players.view_email', 'roles.manage'];
+const OWNER_PERMS = ['audit.read', 'chat.delete', 'dashboard.view', 'explorer.query', 'players.view', 'players.view_email', 'roles.manage', 'site.countries', 'site.games', 'site.maintenance', 'site.notice', 'site.signups'];
+const CONTROLS: Controls = { maintenance_on: false, maintenance_message: '', notice_on: false, notice_text: '', notice_kind: 'info', signups_open: true, games_off: [], blocked_countries: [],
+  games: ['cases', 'battles', 'upgrade', 'crash', 'double', 'plinko', 'mines', 'coinflip'], updated_at: '2026-11-21T09:00:00Z', updated_by: null };
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
-interface Fake { api: AdminApi; calls: Record<string, any[][]>; state: { user: { id: string } | null; status: Status; perms: string[]; factors: { id: string; status: string }[]; unlockResult: any; admins: Admin[]; audit: AuditRow[]; queryResult: QueryResult } }
+interface Fake { api: AdminApi; calls: Record<string, any[][]>; state: { user: { id: string } | null; status: Status; perms: string[]; factors: { id: string; status: string }[]; unlockResult: any; admins: Admin[]; audit: AuditRow[]; queryResult: QueryResult; controls: Controls } }
 function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}): Fake {
   const calls: Fake['calls'] = {};
   const state: Fake['state'] = {
@@ -35,6 +37,7 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
       { id: 11, at: '2026-11-21T12:00:00Z', actor: 'me', actor_name: 'Mirage', actor_role: 'owner', action: 'admin.unlock', target_type: 'admin', target_id: 'me', before: null, after: null, reason: null, meta: {} },
     ],
     queryResult: { columns: ['display_name', 'id'], rows: [{ display_name: 'Kai', id: 'k' }, { display_name: 'Mirage', id: 'm' }], truncated: false },
+    controls: { ...CONTROLS },
     ...over,
   };
   const rec = <T,>(name: string, fn: (...a: any[]) => T) => (...a: any[]): T => { (calls[name] ||= []).push(a); return fn(...a); };
@@ -51,7 +54,14 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     touch: rec('touch', async () => new Date(Date.now() + 30 * 60_000).toISOString()),
     myPermissions: async () => state.perms, listAdmins: async () => state.admins, findPlayer: rec('findPlayer', async () => [{ id: 'p1', name: 'Nova', created_at: '2026-11-18T10:00:00Z', role: null }]),
     setRole: rec('setRole', async () => undefined), matrix: async () => MATRIX, setPermission: rec('setPermission', async () => undefined),
-    audit: rec('audit', async () => state.audit), query: rec('query', async () => state.queryResult), ...apiOver,
+    audit: rec('audit', async () => state.audit), query: rec('query', async () => state.queryResult),
+    controls: rec('controls', async () => ({ ...state.controls })),
+    setMaintenance: rec('setMaintenance', async (on: boolean, message: string) => (state.controls = { ...state.controls, maintenance_on: on, maintenance_message: message, updated_by: 'Mirage' })),
+    setNotice: rec('setNotice', async (on: boolean, text: string, kind: 'info' | 'warn') => (state.controls = { ...state.controls, notice_on: on, notice_text: text, notice_kind: kind })),
+    setGame: rec('setGame', async (game: string, off: boolean) => (state.controls = { ...state.controls, games_off: off ? [...state.controls.games_off, game] : state.controls.games_off.filter(g => g !== game) })),
+    setSignups: rec('setSignups', async (open: boolean) => (state.controls = { ...state.controls, signups_open: open })),
+    setCountries: rec('setCountries', async (codes: string[]) => (state.controls = { ...state.controls, blocked_countries: [...new Set(codes)].sort() })),
+    ...apiOver,
   };
   return { api, calls, state };
 }
@@ -158,7 +168,7 @@ describe('the panel', () => {
   it('shows the owner every page, with the role and a session timer', async () => {
     await start(fake());
     await wait(() => expect(root.querySelector('nav')).not.toBeNull());
-    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Staff and roles', 'Permissions', 'Audit log', 'Data explorer']);
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Site controls', 'Staff and roles', 'Permissions', 'Audit log', 'Data explorer']);
     expect(q('#roleTag').textContent).toBe('Owner');
     expect(q('#timer').textContent).toMatch(/^\d+:\d\d$/);
     expect(root.textContent).toContain('Everything you do here is written to the audit log');
@@ -167,7 +177,7 @@ describe('the panel', () => {
   it('shows a moderator only what its permissions allow', async () => {
     await start(fake({ status: unlocked({ role: 'moderator', label: 'Moderator', rank: 60 }), perms: ['dashboard.view', 'players.view', 'chat.delete'] }));
     await wait(() => expect(root.querySelector('nav')).not.toBeNull());
-    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview']);
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Site controls']);       // the dashboard permission lets a moderator look at the switches, not change them
     await goto('explorer', '#page');                                                  // typing the address does not open a hidden page's data
     expect(q('#page h1').textContent).toBe('Data explorer');
   });
@@ -339,5 +349,99 @@ describe('data explorer', () => {
     expect(root.querySelector('#out img')).toBeNull();
     expect(q('#out td').textContent).toContain('<img');
     expect(q('#info').textContent).toMatch(/more rows exist/);
+  });
+});
+
+describe('site controls', () => {
+  const open = async (f: Fake): Promise<void> => { await start(f); await goto('site', '#mOn, #mOff'); };
+  const btn = (text: string): HTMLButtonElement => [...root.querySelectorAll('button')].find(b => b.textContent?.trim() === text) as HTMLButtonElement;
+
+  it('is in the menu for anyone who can see the dashboard, with the current state of every switch', async () => {
+    const f = fake({ controls: { ...CONTROLS, games_off: ['mines'], blocked_countries: ['GB', 'US'], signups_open: false, updated_by: 'Mirage' } }); await start(f);
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toContain('Site controls');
+    await goto('site', '#cList');
+    expect(root.textContent).toContain('Last change by Mirage');
+    expect(q<HTMLInputElement>('#cList').value).toBe('GB, US');
+    expect(root.querySelector('tr[data-g="mines"] .pill')?.textContent).toBe('paused');
+    expect(root.querySelector('tr[data-g="crash"] .pill')?.textContent).toBe('on');
+    expect(root.querySelector('tr[data-g="crash"]')?.textContent).toContain('database');
+    expect(root.querySelector('tr[data-g="plinko"]')?.textContent).toContain('browser');
+    expect(q('#sBtn').textContent).toBe('Open sign-ups');
+  });
+
+  it('turns maintenance on with the message and a reason, then offers to turn it off', async () => {
+    const f = fake(); await open(f);
+    q<HTMLTextAreaElement>('#mMsg').value = 'Back at noon';
+    q('#mOn').click();
+    await answerReason('database work');
+    await wait(() => expect(f.calls['setMaintenance']).toEqual([[true, 'Back at noon', 'database work']]));
+    await wait(() => expect(q('#mOff')).not.toBeNull());
+    expect(root.querySelector('h2 .pill')?.textContent).toBe('ON');
+    q('#mOff').click(); await answerReason('done');
+    await wait(() => expect(f.calls['setMaintenance']?.[1]).toEqual([false, 'Back at noon', 'done']));
+    await wait(() => expect(q('#mOn')).not.toBeNull());
+  });
+
+  it('does nothing when the reason is cancelled', async () => {
+    const f = fake(); await open(f);
+    q('#mOn').click(); await cancelReason();
+    expect(f.calls['setMaintenance']).toBeUndefined();
+    expect(q('#mOn')).not.toBeNull();
+  });
+
+  it('shows and hides a notice with its style', async () => {
+    const f = fake(); await open(f);
+    q<HTMLInputElement>('#nTxt').value = 'Race ends tonight'; q<HTMLSelectElement>('#nKind').value = 'warn';
+    q('#nShow').click(); await answerReason('heads up');
+    await wait(() => expect(f.calls['setNotice']).toEqual([[true, 'Race ends tonight', 'warn', 'heads up']]));
+    await wait(() => expect(q('#nHide')).not.toBeNull());
+    q('#nHide').click(); await answerReason('over');
+    await wait(() => expect(f.calls['setNotice']?.[1]).toEqual([false, 'Race ends tonight', 'warn', 'over']));
+  });
+
+  it('pauses and resumes a game from its row', async () => {
+    const f = fake(); await open(f);
+    (root.querySelector('tr[data-g="crash"] [data-game]') as HTMLElement).click(); await answerReason('bug');
+    await wait(() => expect(f.calls['setGame']).toEqual([['crash', true, 'bug']]));
+    await wait(() => expect(root.querySelector('tr[data-g="crash"] .pill')?.textContent).toBe('paused'));
+    (root.querySelector('tr[data-g="crash"] [data-game]') as HTMLElement).click(); await answerReason('fixed');
+    await wait(() => expect(f.calls['setGame']?.[1]).toEqual(['crash', false, 'fixed']));
+    await wait(() => expect(root.querySelector('tr[data-g="crash"] .pill')?.textContent).toBe('on'));
+  });
+
+  it('closes and opens sign-ups', async () => {
+    const f = fake(); await open(f);
+    q('#sBtn').click(); await answerReason('invite only');
+    await wait(() => expect(f.calls['setSignups']).toEqual([[false, 'invite only']]));
+    await wait(() => expect(q('#sBtn').textContent).toBe('Open sign-ups'));
+  });
+
+  it('saves the country list as upper-case two-letter codes', async () => {
+    const f = fake(); await open(f);
+    q<HTMLInputElement>('#cList').value = 'us, gb ; de'; q('#cSave').click();
+    await answerReason('licence');
+    await wait(() => expect(f.calls['setCountries']).toEqual([[['US', 'GB', 'DE'], 'licence']]));
+    await wait(() => expect(q<HTMLInputElement>('#cList').value).toBe('DE, GB, US'));
+  });
+
+  it('shows the database refusal in plain words and keeps the page as it was', async () => {
+    const f = fake({}, { setCountries: async () => { throw new Error('invalid_country'); } }); await open(f);
+    q<HTMLInputElement>('#cList').value = 'USA'; q('#cSave').click(); await answerReason('licence');
+    await wait(() => expect(document.querySelector('.toast.error')?.textContent).toMatch(/two-letter/));
+    expect(q<HTMLInputElement>('#cList').value).toBe('USA');
+  });
+
+  it('lets a read-only member look, but every control is switched off', async () => {
+    const f = fake({ perms: ['dashboard.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }), controls: { ...CONTROLS, maintenance_on: true, notice_on: true, notice_text: 'Hi' } }); await start(f);
+    await goto('site', '#mMsg');
+    expect(q<HTMLTextAreaElement>('#mMsg').disabled).toBe(true);
+    for (const id of ['#nTxt', '#nKind', '#nShow', '#sBtn', '#cList', '#cSave']) expect((q(id) as HTMLInputElement).disabled, id).toBe(true);
+    expect([...root.querySelectorAll('[data-game]')].every(b => (b as HTMLButtonElement).disabled)).toBe(true);
+    expect(btn('Turn maintenance off').disabled).toBe(true); expect(btn('Hide notice').disabled).toBe(true);
+  });
+
+  it('does not show the page to someone without the dashboard permission', async () => {
+    const f = fake({ perms: ['audit.read'] }); await start(f);
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).not.toContain('Site controls');
   });
 });

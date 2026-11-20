@@ -18,6 +18,10 @@ export interface AuditRow { id: number; at: string; actor: string | null; actor_
 export interface QueryResult { columns: string[]; rows: Record<string, unknown>[]; truncated: boolean; error?: string }
 export interface UnlockResult { ok: boolean; reason?: 'wrong_password' | 'locked' | 'no_password'; remaining?: number; until?: string; expires_at?: string }
 export interface Factor { id: string; status: string }
+export interface Controls {
+  maintenance_on: boolean; maintenance_message: string; notice_on: boolean; notice_text: string; notice_kind: 'info' | 'warn'; signups_open: boolean;
+  games_off: string[]; blocked_countries: string[]; games: string[]; updated_at: string; updated_by: string | null;
+}
 
 export interface AdminApi {
   configured(): boolean;
@@ -44,6 +48,12 @@ export interface AdminApi {
   setPermission(role: string, permission: string, allowed: boolean, reason: string): Promise<void>;
   audit(f: { action?: string; actor?: string; before?: number; limit?: number }): Promise<AuditRow[]>;
   query(sql: string, limit?: number): Promise<QueryResult>;
+  controls(): Promise<Controls>;
+  setMaintenance(on: boolean, message: string, reason: string): Promise<Controls>;
+  setNotice(on: boolean, text: string, kind: 'info' | 'warn', reason: string): Promise<Controls>;
+  setGame(game: string, off: boolean, reason: string): Promise<Controls>;
+  setSignups(open: boolean, reason: string): Promise<Controls>;
+  setCountries(codes: string[], reason: string): Promise<Controls>;
 }
 
 export const realApi: AdminApi = {
@@ -79,6 +89,12 @@ export const realApi: AdminApi = {
     return (data as AuditRow[]) ?? [];
   },
   query: (sql, limit = 200) => call<QueryResult>('admin_query', { p_sql: sql, p_limit: limit }),
+  controls: () => call<Controls>('admin_get_controls'),
+  setMaintenance: (on, message, reason) => call<Controls>('admin_set_maintenance', { p_on: on, p_message: message, p_reason: reason }),
+  setNotice: (on, text, kind, reason) => call<Controls>('admin_set_notice', { p_on: on, p_text: text, p_kind: kind, p_reason: reason }),
+  setGame: (game, off, reason) => call<Controls>('admin_set_game', { p_game: game, p_off: off, p_reason: reason }),
+  setSignups: (open, reason) => call<Controls>('admin_set_signups', { p_open: open, p_reason: reason }),
+  setCountries: (codes, reason) => call<Controls>('admin_set_countries', { p_codes: codes, p_reason: reason }),
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -97,6 +113,8 @@ export const ADMIN_ERRORS: Record<string, string> = {
   read_only_only: 'Only SELECT, WITH, TABLE and VALUES queries are allowed.',
   one_statement_only: 'One statement at a time (no semicolons inside).',
   invalid_query: 'Write a query first.',
+  invalid_value: 'That value is not allowed.', text_too_long: 'That text is too long.', text_required: 'Write the text to show first.',
+  unknown_game: 'Unknown game.', invalid_country: 'Use two-letter country codes such as US or GB (at most 250).',
 };
 export const errorText = (e: unknown): string => {
   const m = e instanceof Error ? e.message : String(e);

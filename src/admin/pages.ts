@@ -1,5 +1,5 @@
 // The pages of the admin panel that exist so far (step A of the plan). The other modules are listed on the "Coming next" page.
-import type { AdminApi, AuditRow, Status } from './api.js';
+import type { AdminApi, AuditRow, Controls, Status } from './api.js';
 import { errorText } from './api.js';
 import { $, $$, esc, reasonDialog, when } from './dom.js';
 
@@ -7,9 +7,9 @@ export interface PageCtx { api: AdminApi; status: Status; perms: string[]; toast
 export interface Page { title: string; perm?: string; render(el: HTMLElement, c: PageCtx): Promise<void> }
 
 /** The whole plan, in order (docs/admin-panel-proposal-2026-11-21.md). */
-export const ROADMAP: { step: string; title: string; items: string; state: 'done' | 'next' | 'later' }[] = [
+export const ROADMAP: { step: string; title: string; items: string; state: 'done' | 'partial' | 'next' | 'later' }[] = [
   { step: 'A', title: 'Admin site, roles, permissions, audit log, explorer', items: 'This site: three-step sign-in, staff roles, editable permissions, audit log, read-only data explorer', state: 'done' },
-  { step: 'B', title: 'Control and visibility', items: 'Dashboard, players, account actions, chat moderation (English room), live rooms, round control, maintenance, site notice, game switches, country restrictions', state: 'next' },
+  { step: 'B', title: 'Control and visibility', items: 'Built: site controls (maintenance, notice, game switches, sign-ups, country restrictions). Still to build: dashboard, players, account actions, chat moderation (English room), live rooms, round control', state: 'partial' },
   { step: 'C', title: 'Catalogue in the database', items: 'Cases, items and odds you can add, edit and delete here', state: 'later' },
   { step: 'D', title: 'Full server wallet', items: 'All coins in the database, every game rewritten around it, everyone starts at 0, owner wallet adjustments, bets and ledger viewer', state: 'later' },
   { step: 'E', title: 'Rewards and operations', items: 'Promo codes, free crates, races, rain, giveaways, game configuration, bots, in-app announcements', state: 'later' },
@@ -29,8 +29,63 @@ export const PAGES: Record<string, Page> = {
         <div class="card"><span class="muted small">Permissions you hold</span><b>${c.perms.length}</b><span class="muted small">${s.role === 'owner' ? 'all of them, including future ones' : 'set by a higher rank'}</span></div>
         <div class="card"><span class="muted small">Security</span><b>3 of 3 steps</b><span class="muted small">Steam, authenticator, admin password</span></div>
         <div class="card"><span class="muted small">Session</span><b>${esc(when(s.expires_at))}</b><span class="muted small">locks after 30 idle minutes</span></div></div>
-        <h2>Plan</h2><table class="grid"><thead><tr><th>Step</th><th>What</th><th>Status</th></tr></thead><tbody>${ROADMAP.map(r => `<tr><td>${esc(r.step)}</td><td><b>${esc(r.title)}</b><br><span class="muted small">${esc(r.items)}</span></td><td><span class="pill ${r.state}">${r.state === 'done' ? 'built' : r.state === 'next' ? 'next' : 'later'}</span></td></tr>`).join('')}</tbody></table>
+        <h2>Plan</h2><table class="grid"><thead><tr><th>Step</th><th>What</th><th>Status</th></tr></thead><tbody>${ROADMAP.map(r => `<tr><td>${esc(r.step)}</td><td><b>${esc(r.title)}</b><br><span class="muted small">${esc(r.items)}</span></td><td><span class="pill ${r.state}">${r.state === 'done' ? 'built' : r.state === 'partial' ? 'in progress' : r.state === 'next' ? 'next' : 'later'}</span></td></tr>`).join('')}</tbody></table>
         <p class="muted small">Everything you do here is written to the audit log with your name, the time and a reason. The log cannot be edited or deleted.</p>`;
+    },
+  },
+
+  site: {
+    title: 'Site controls', perm: 'dashboard.view',
+    async render(el, c) {
+      const NAMES: Record<string, string> = { cases: 'Cases', battles: 'Battles', upgrade: 'Upgrade', crash: 'Crash', double: 'Double', plinko: 'Plinko', mines: 'Mines', coinflip: 'Coinflip' };
+      const SERVER: string[] = ['battles', 'coinflip', 'crash', 'double'];                   // enforced by the database; the rest run in the browser until the full wallet (step D)
+      const can = (p: string): boolean => c.perms.includes(p);
+      const draw = (k: Controls): void => {
+        const act = async (title: string, detail: string, label: string, run: (reason: string) => Promise<Controls>): Promise<void> => {
+          const reason = await reasonDialog(title, detail, label); if (!reason) return;
+          try { k = await run(reason); c.toast('Saved', 'ok'); draw(k); } catch (e) { c.toast(errorText(e), 'error'); }
+        };
+        const lock = (p: string): string => (can(p) ? '' : 'disabled title="You do not hold this permission"');
+        el.innerHTML = `<p class="muted">These switches change the live game site for <b>everyone, at once</b>. Every change asks for a reason and is written to the audit log. Staff are never blocked by maintenance or country rules, so you can always get back in. ${k.updated_by ? `Last change by <b>${esc(k.updated_by)}</b>, ${esc(when(k.updated_at))}.` : ''}</p>
+          <section class="block"><h2>Maintenance <span class="pill ${k.maintenance_on ? 'warn' : 'done'}">${k.maintenance_on ? 'ON' : 'off'}</span></h2>
+            <p class="muted small">Turning it on gives players on the site one minute of warning, then covers the page with your message. New games, bets and sign-ups are refused by the database too. Leaving a game and cashing out stay open.</p>
+            <label for="mMsg">Message shown to players (optional, up to 200 characters)</label><textarea id="mMsg" rows="2" maxlength="200" ${lock('site.maintenance')}>${esc(k.maintenance_message)}</textarea>
+            <div class="row">${k.maintenance_on ? `<button class="btn" id="mOff" ${lock('site.maintenance')}>Turn maintenance off</button><button class="btn ghost" id="mMsgSave" ${lock('site.maintenance')}>Update message</button>` : `<button class="btn danger" id="mOn" ${lock('site.maintenance')}>Turn maintenance on</button>`}</div></section>
+          <section class="block"><h2>Site notice <span class="pill ${k.notice_on ? 'warn' : 'done'}">${k.notice_on ? 'showing' : 'hidden'}</span></h2>
+            <p class="muted small">A bar under the top menu, visible to everyone. Does not stop anyone from playing.</p>
+            <label for="nTxt">Text (up to 300 characters)</label><input id="nTxt" maxlength="300" value="${esc(k.notice_text)}" ${lock('site.notice')}>
+            <div class="row"><label for="nKind">Style</label><select id="nKind" ${lock('site.notice')}><option value="info" ${k.notice_kind === 'info' ? 'selected' : ''}>Information</option><option value="warn" ${k.notice_kind === 'warn' ? 'selected' : ''}>Warning</option></select>
+              <button class="btn" id="nShow" ${lock('site.notice')}>${k.notice_on ? 'Update notice' : 'Show notice'}</button>${k.notice_on ? `<button class="btn ghost" id="nHide" ${lock('site.notice')}>Hide notice</button>` : ''}</div></section>
+          <section class="block"><h2>Games</h2>
+            <p class="muted small">A paused game shows a "paused" page and refuses new bets. Players can always cancel or cash out what they already have. Games marked <b>browser</b> run on the player's own device until the full server wallet exists (step D): pausing them hides the page, but a determined player could still reach them.</p>
+            <div class="tablewrap"><table class="grid"><thead><tr><th>Game</th><th>Enforced by</th><th>State</th><th></th></tr></thead><tbody>${k.games.map(g => {
+              const off = k.games_off.includes(g);
+              return `<tr data-g="${esc(g)}"><td>${esc(NAMES[g] ?? g)}</td><td>${SERVER.includes(g) ? 'database' : 'browser'}</td><td><span class="pill ${off ? 'warn' : 'done'}">${off ? 'paused' : 'on'}</span></td><td><button class="btn ${off ? '' : 'ghost'}" data-game ${lock('site.games')}>${off ? 'Resume' : 'Pause'}</button></td></tr>`;
+            }).join('')}</tbody></table></div></section>
+          <section class="block"><h2>Sign-ups <span class="pill ${k.signups_open ? 'done' : 'warn'}">${k.signups_open ? 'open' : 'closed'}</span></h2>
+            <p class="muted small">Closed means no new accounts. Existing players can still log in and play.</p>
+            <div class="row"><button class="btn ${k.signups_open ? 'danger' : ''}" id="sBtn" ${lock('site.signups')}>${k.signups_open ? 'Close sign-ups' : 'Open sign-ups'}</button></div></section>
+          <section class="block"><h2>Country restrictions <span class="pill ${k.blocked_countries.length ? 'warn' : 'done'}">${k.blocked_countries.length ? k.blocked_countries.length + ' blocked' : 'none'}</span></h2>
+            <p class="muted small">Players connecting from a listed country see a "not available" page and cannot start games, claim crates or sign up. The country is taken from the visitor's connection at the moment of the request and compared with this list. <b>Nothing about the visitor's address or country is stored.</b> If the country cannot be determined, the visitor is let in. Staff are never blocked.</p>
+            <label for="cList">Two-letter country codes, separated by commas (for example US, GB, DE)</label><input id="cList" value="${esc(k.blocked_countries.join(', '))}" ${lock('site.countries')} autocomplete="off">
+            <div class="row"><button class="btn" id="cSave" ${lock('site.countries')}>Save the list</button></div></section>`;
+        const val = (id: string): string => ($<HTMLInputElement>('#' + id, el)).value;
+        $('#mOn', el)?.addEventListener('click', () => void act('Turn maintenance on?', 'Players get a one-minute warning, then the site closes for them. Staff can still get in.', 'Turn on', r => c.api.setMaintenance(true, val('mMsg'), r)));
+        $('#mOff', el)?.addEventListener('click', () => void act('Turn maintenance off?', 'The site opens again for everyone.', 'Turn off', r => c.api.setMaintenance(false, val('mMsg'), r)));
+        $('#mMsgSave', el)?.addEventListener('click', () => void act('Update the maintenance message?', 'Players see the new text on their next check (within 30 seconds).', 'Update', r => c.api.setMaintenance(true, val('mMsg'), r)));
+        $('#nShow', el)?.addEventListener('click', () => void act(k.notice_on ? 'Update the notice?' : 'Show the notice?', 'Everyone sees it within 30 seconds.', k.notice_on ? 'Update' : 'Show', r => c.api.setNotice(true, val('nTxt'), ($<HTMLSelectElement>('#nKind', el)).value as 'info' | 'warn', r)));
+        $('#nHide', el)?.addEventListener('click', () => void act('Hide the notice?', 'The bar disappears for everyone.', 'Hide', r => c.api.setNotice(false, k.notice_text, k.notice_kind, r)));
+        $$('tr[data-g]', el).forEach(tr => $('[data-game]', tr)?.addEventListener('click', () => {
+          const g = tr.dataset['g'] as string, off = !k.games_off.includes(g);
+          void act(`${off ? 'Pause' : 'Resume'} ${NAMES[g] ?? g}?`, off ? 'New bets and games are refused. Cancelling and cashing out stay open.' : 'The game opens again for everyone.', off ? 'Pause' : 'Resume', r => c.api.setGame(g, off, r));
+        }));
+        $('#sBtn', el)?.addEventListener('click', () => void act(k.signups_open ? 'Close sign-ups?' : 'Open sign-ups?', k.signups_open ? 'Nobody new can register. Existing players are not affected.' : 'Anyone can register again.', k.signups_open ? 'Close' : 'Open', r => c.api.setSignups(!k.signups_open, r)));
+        $('#cSave', el)?.addEventListener('click', () => {
+          const codes = val('cList').split(/[\s,;]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
+          void act('Save the country list?', codes.length ? `Blocked: ${[...new Set(codes)].sort().join(', ')}. Visitors from there lose access within moments.` : 'No country will be blocked.', 'Save', r => c.api.setCountries(codes, r));
+        });
+      };
+      draw(await c.api.controls());
     },
   },
 

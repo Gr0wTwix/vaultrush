@@ -1,4 +1,4 @@
-# The admin site (step A built 2026-11-21)
+# The admin site (step A and the site controls of step B built 2026-11-21)
 
 A **separate website** for running Vaultrush. It lives in this repository and uses the same database, but it is its own page, its own build and (when deployed) its own address. The plan, the decisions and the open questions are in [admin-panel-proposal-2026-11-21.md](admin-panel-proposal-2026-11-21.md). This page describes what exists now.
 
@@ -11,7 +11,29 @@ A **separate website** for running Vaultrush. It lives in this repository and us
 | Permissions | 62 permissions covering every planned module. Each is a switch per role. A higher rank can switch permissions for a **lower** rank, only for ones it holds itself. The Owner holds everything, including permissions added later, and cannot be restricted. |
 | Audit log | Append-only. Every admin action writes one row (who, role, what, on whom, before and after, reason, time) inside the same transaction. No update, delete or insert is granted to anyone, the Owner included. |
 | Data explorer | A read-only query tool for the Owner. Every attempt is logged first, including refused and failing ones. |
-| Pages | Overview, Staff and roles, Permissions, Audit log, Data explorer. |
+| Site controls (step B1) | Maintenance mode, site notice, per-game switches, sign-ups open or closed, country restrictions. Details below. |
+| Pages | Overview, Site controls, Staff and roles, Permissions, Audit log, Data explorer. |
+
+## Site controls (step B1)
+
+One settings row in the database, changed from the **Site controls** page and obeyed by the game site. Every change needs a reason and is written to the audit log with before and after. Looking at the page needs `dashboard.view`; changing needs the matching switch: `site.maintenance`, `site.notice`, `site.games`, `site.signups`, `site.countries` (the Owner and the Admin role hold them by default; Moderator and Read-only can look, not change).
+
+| Control | What players experience |
+|---|---|
+| Maintenance | A page that is already open gets a warning bar for **one minute**, then a full-screen message (yours, up to 200 characters). A page loaded during maintenance shows the message at once. New live games, bets, free-crate claims and sign-ups are refused by the database. |
+| Notice | A bar under the top menu (information or warning, up to 300 characters). Does not stop play. |
+| Game switch | The game's page shows "paused", and the live games (Battles, Coinflip, Crash, Double) refuse new games and bets in the database. |
+| Sign-ups | A new profile is refused ("sign-ups are closed"); players who already have an account log in and play as usual; the sign-up form says so. |
+| Countries | Players whose connection comes from a listed country see "not available in your country" and are refused new games, crates and sign-up. |
+
+Rules that hold for all of them:
+
+- **Leaving is never blocked.** Cancelling a coinflip or battle, leaving a lobby and cashing out in Crash stay open, so pausing a game cannot trap anyone's stake. Open Crash and Double bets keep running while maintenance is on (turn maintenance on between rounds if that matters).
+- **Staff are never locked out.** Anyone with an admin role is not held back by maintenance, paused games or country rules, so the Owner can always switch things back.
+- **Country is not stored.** It is read from the connection's country header (Supabase sits behind Cloudflare), compared with the list at the moment of the request and thrown away. No IP address is saved either. If the header is missing or unknown the visitor is let in. The Privacy page states this. Collecting an IP address or a device marker for risk checks is a different thing (step F) and will update the Privacy and Cookie pages first.
+- **Honest limit.** Cases, Upgrade, Plinko and Mines still run in the player's browser (their coins are kept there until the full wallet, step D). Pausing them hides the page but cannot technically stop someone determined. The Site controls page labels each game "database" or "browser" so this is visible.
+- The game site asks for the status when it opens, every 30 seconds, when the tab comes back and after sign-in. A failed check keeps what it knew: a hiccup never closes or opens the site.
+- How the guard is added: `0007_site_controls.sql` edits the stored text of the existing entry points to call `site_guard()` (and `site_guard_signup()` for sign-up) and fails loudly if it cannot find where. A later migration that rewrites one of these functions must keep the guard line; `tests/site-db.test.ts` calls every guarded entry point with its switch off, so a lost guard fails the tests.
 
 ## How the sign-in works
 
@@ -30,7 +52,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 ## One-time setup (you do this)
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql` (0004 and 0005 are from the earlier work and are still waiting).
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql` (done), then `0007_site_controls.sql` (new).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -54,13 +76,17 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 | File | Role |
 |---|---|
 | `supabase/migrations/0006_admin.sql` | Tables, permissions, sign-in chain, audit log, role and permission functions, e-mail reveal, explorer |
+| `supabase/migrations/0007_site_controls.sql` | The settings row, the guards, the status function the game site reads, the five admin switch functions |
+| `src/site.ts` | Game-site side: notice bar, maintenance and country screens, paused-game panel, status polling |
 | `admin/index.html`, `admin/main.ts`, `vite.admin.config.ts` | The separate site's page and build |
 | `src/admin/app.ts` | The sign-in state machine and the panel shell |
 | `src/admin/pages.ts` | Overview, Staff and roles, Permissions, Audit log, Data explorer |
 | `src/admin/api.ts` | The one interface to the outside world (real calls here, a fake in tests) |
 | `tests/admin-db.test.ts` | 26 database tests (sign-in chain, lockout, hierarchy, switches, audit immutability, explorer) |
-| `tests/admin-app.test.ts` | 26 screen tests against a fake API |
+| `tests/admin-app.test.ts` | 36 screen tests against a fake API (including the Site controls page) |
+| `tests/site-db.test.ts` | 27 database tests: who may change what, every guarded entry point, staff exempt, leaving never blocked, sign-ups, countries, no country or IP stored |
+| `tests/site-client.test.ts` | 18 tests of the game page's behaviour (banner, grace minute, overlay, paused games, polling, failed checks) |
 
 ## Not built yet
 
-Everything else in the plan: dashboard, players, account actions, chat moderation, live rooms, round control, maintenance and country restrictions (step B); the catalogue editor (C); the full server wallet (D); rewards and operations (E); compliance, fairness, economy, risk signals and analytics (F); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
+Everything else in the plan: dashboard, players, account actions, chat moderation, live rooms, round control (the rest of step B); the catalogue editor (C); the full server wallet (D); rewards and operations (E); compliance, fairness, economy, risk signals and analytics (F); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.

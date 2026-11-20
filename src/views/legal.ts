@@ -102,6 +102,7 @@ export const DOCS: Record<string, Doc> = {
       ]],
       ['4. Technical data', [
         'Like any website, the hosting provider (Vercel) and the database provider (Supabase) process request data such as your IP address, browser type and time of request, to deliver the service and keep it secure. We do not use advertising or analytics tools.',
+        'If a country is switched off for the service, the database compares the country your connection appears to come from (a header added by the network provider) with that list at the moment you make a request, so it can refuse the request. We do not save that country or your IP address ourselves.',
       ]],
       ['5. How we use it', [
         ['To run your account, show your balance and history, and let you play, chat and join live games.',

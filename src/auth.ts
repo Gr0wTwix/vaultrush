@@ -10,6 +10,7 @@ import { initLive, stopLive } from './live.js';
 import { activeAccount, activeId, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
 import { confirmAge } from './rg.js';
 import { emit, isAuthed, newGameState, onLoginRequired, requireLogin, save, setAuthed, state } from './state.js';
+import { signupsOpen } from './site.js';
 import { TERMS_VERSION, passwordStrength, validateEmail, validatePassword, validateRegistration, validateUsername, type Errors } from './signup.js';
 import { $, $$, avatar, esc, h, icon, modal, toast } from './ui.js';
 import { sfx } from './sfx.js';
@@ -133,7 +134,7 @@ export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
 
   const tabBtn = (t: Tab, label: string): string => `<button role="tab" id="auTab-${t}" data-t="${t}" aria-selected="${tab === t}" aria-controls="auPanel" tabindex="${tab === t ? 0 : -1}" class="${tab === t ? 'on' : ''}">${label}</button>`;
   const draw = (focus: 'field' | 'tab' | 'none' = 'field'): void => {
-    m.el.innerHTML = `<button class="modal-x" aria-label="Close">×</button>${side()}<section class="au-main"><p class="au-playmoney">Play money only. Coins have no cash value.</p>${opts.reason ? `<div class="au-reason" role="status">${esc(opts.reason)}</div>` : ''}
+    m.el.innerHTML = `<button class="modal-x" aria-label="Close">×</button>${side()}<section class="au-main"><p class="au-playmoney">Play money only. Coins have no cash value.</p>${opts.reason ? `<div class="au-reason" role="status">${esc(opts.reason)}</div>` : ''}${tab === 'register' && !signupsOpen() ? '<div class="au-reason" role="status">Sign-ups are closed for now. Existing players can still log in.</div>' : ''}
       ${sent ? '' : `<div class="au-tabs" role="tablist" aria-label="Log in or register">${tabBtn('login', 'Log in')}${tabBtn('register', 'Register')}</div>`}
       <div class="au-panel ${tab === 'register' ? 'reg' : ''}" id="auPanel" role="${sent ? 'group' : 'tabpanel'}" ${sent ? '' : `aria-labelledby="auTab-${tab}"`}>${sent ? sentPanel() : tab === 'login' ? loginForm() : registerForm()}</div></section>`;
     $('.modal-x', m.el).onclick = m.close;

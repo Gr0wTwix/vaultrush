@@ -33,9 +33,10 @@ Locally they go in `.env` (gitignored). On Vercel they are project environment v
 2. SQL editor: run `supabase/migrations/0001_core.sql`. A "destructive operations" warning is expected because the script revokes default grants.
    Then run `supabase/migrations/0002_live.sql` (live battles, coinflip and the realtime tables; see [live-multiplayer.md](live-multiplayer.md)). The site works without it and keeps the simulated lobbies.
    Then run `supabase/migrations/0003_live_erasure.sql` (account deletion also removes the name from live games; the Privacy Policy relies on it).
-   Then run `supabase/migrations/0006_admin.sql` after 0005, and make yourself the Owner with the one statement at the end of that file (see [admin-site.md](admin-site.md)).
-   Then run `supabase/migrations/0005_rounds.sql` after 0004 (shared Crash and Double rounds). Without it those two games stay solo with simulated players.
-   0004 is `supabase/migrations/0004_claims_bots_caps.sql` (once-per-account free crates enforced by the server, the coinflip house bot, and the unverified bet cap of 1,000). The site keeps working without it: free crates then use the browser-only rule and the server-side Crash demo keeps the old cap of 50.
+   Then run `supabase/migrations/0004_claims_bots_caps.sql` (once-per-account free crates enforced by the server, the coinflip house bot, and the unverified bet cap of 1,000). The site keeps working without it: free crates then use the browser-only rule and the server-side Crash demo keeps the old cap of 50.
+   Then run `supabase/migrations/0005_rounds.sql` (shared Crash and Double rounds). Without it those two games stay solo with simulated players.
+   Then run `supabase/migrations/0006_admin.sql`, and make yourself the Owner with the one statement at the end of that file (see [admin-site.md](admin-site.md)).
+   Then run `supabase/migrations/0007_site_controls.sql` (maintenance, notice, game switches, sign-ups and country restrictions that the admin site flips; the game site checks them). Without it nothing breaks: the game site simply finds no controls.
 3. Authentication, URL configuration: Site URL `http://localhost:5173`; Redirect URLs `http://localhost:5173/**` and the production site with `/**`.
 4. **Google:** create an OAuth client (Web application) in Google Cloud Console with redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`; paste client ID and secret into Authentication, Providers, Google; turn it on.
 5. **Steam (CLI, run in a terminal):**
