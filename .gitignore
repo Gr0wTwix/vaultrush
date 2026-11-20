@@ -21,3 +21,4 @@ source-art/
 .env.*
 !.env.example
 supabase/.temp/
+dist-admin/

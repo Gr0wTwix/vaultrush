@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.strict.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:admin": "vite --config vite.admin.config.ts",
+    "build:admin": "tsc --noEmit && vite build --config vite.admin.config.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.16",
