@@ -139,8 +139,8 @@ export async function confirm2fa(factorId: string, code: string): Promise<void> 
 export const remove2fa = async (factorId: string): Promise<void> => { const { error } = await (await getClient()).auth.mfa.unenroll({ factorId }); if (error) throw new Error(explain(error)); };
 
 /** Fires on sign-in and sign-out (including the return from Google/Steam/email links). */
-export async function onAuthChange(cb: (event: string, signedIn: boolean) => void): Promise<void> {
-  (await getClient()).auth.onAuthStateChange((event, session) => cb(event, !!session));
+export async function onAuthChange(cb: (event: string, signedIn: boolean, userId: string) => void): Promise<void> {
+  (await getClient()).auth.onAuthStateChange((event, session) => cb(event, !!session, session?.user?.id ?? ''));
 }
 export const hasProfile = async (): Promise<boolean> => {
   const { data } = await (await getClient()).from('profiles').select('id').maybeSingle();

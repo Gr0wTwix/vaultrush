@@ -4,7 +4,9 @@ import { betBlockReason, defaultRg, recordSettled, recordStake } from './rg.js';
 import { defaultKyc } from './kyc.js';
 import { activeId, stateKeyFor } from './accounts.js';
 
-const KEY = stateKeyFor(activeId());       // guests use the original key; each signed-in account has its own
+let KEY = stateKeyFor(activeId());         // guests use the original key; each signed-in account (browser or cloud) has its own
+/** Storage key of the account whose state is loaded now (used by backup import). */
+export const stateKey = (): string => KEY;
 export const START_BALANCE = 100;
 export const FREE_COINS = 25;
 export const FREE_COINS_EVERY_MS = 10 * 60 * 1000;
@@ -77,9 +79,10 @@ let authed = true;
 let loginHook: (reason: string) => void = () => {};
 export const LOGIN_REASON = 'Log in or create a free account to place bets.';
 /** Signed out = a blank, throw-away state (no balance, items, seeds or history) that is never written to storage. Signing in loads the real one. */
-export function setAuthed(on: boolean): void {
-  if (on === authed) return;
-  authed = on;
+export function setAuthed(on: boolean, id: string = activeId()): void {
+  const next = stateKeyFor(id);
+  if (on === authed && (!on || next === KEY)) return;   // signing in as someone else must reload that person's state
+  authed = on; if (on) KEY = next;
   Object.assign(state, on ? load() : { ...newGameState(), balance: 0 });
   emit('state', state);
 }

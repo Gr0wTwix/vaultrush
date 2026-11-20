@@ -127,3 +127,28 @@ describe('reset', () => {
     expect(state.history).toEqual([]);
   });
 });
+
+describe('separate accounts on one browser', () => {
+  it('each account keeps its own coins, and signing out shows a blank state', async () => {
+    const { state, setAuthed, save } = await import('../src/state.js');
+    localStorage.clear();
+    setAuthed(true, 'c-alice'); expect(state.balance).toBe(100);
+    state.balance = 7; save();
+    setAuthed(false); expect(state.balance).toBe(0);
+    setAuthed(true, 'c-bob'); expect(state.balance).toBe(100);   // not Alice's 7
+    state.balance = 55; save();
+    setAuthed(true, 'c-alice'); expect(state.balance).toBe(7);   // switching straight to another person reloads that person
+    setAuthed(true, 'c-bob'); expect(state.balance).toBe(55);
+    setAuthed(true, '');                                          // restore the shared default for other tests
+  });
+
+  it('each account has its own provably fair seeds', async () => {
+    const { useFairFor, getFair } = await import('../src/fair.js');
+    localStorage.clear();
+    const a = (await useFairFor('c-alice')).serverSeed;
+    const b = (await useFairFor('c-bob')).serverSeed;
+    expect(a).not.toBe(b);
+    expect((await useFairFor('c-alice')).serverSeed).toBe(a);
+    expect(getFair().serverSeed).toBe(a);
+  });
+});

@@ -20,6 +20,8 @@ A short log of how the project got here, why, and what is still open.
 9. **UX review.** The Vantage reviewer audited the interface from source; every finding was fixed the same day (see [ux-review-2026-11-18.md](ux-review-2026-11-18.md)): opt-in click guard, accessible dialogs and forms, guest cards, phone navigation sheet, carousel pause, motion and contrast fixes, clearer limits and break wording.
 10. **Production setup:** Supabase project created, schema applied, Google provider enabled, Steam and account-closing functions deployed, environment variables set on Vercel, site deployed, branch pushed and pull request opened.
 
+11. **Separate cloud accounts (2026-11-20).** The owner noticed three cloud accounts showed one shared balance: cloud mode stored game state under the shared guest key. State and seeds are now keyed per Supabase user. Old shared data is not migrated. Still browser-local: coins, items and seeds do not sync across devices (only Crash settles in the database).
+
 ## Decisions worth remembering
 
 - **Play money only, and honest about it.** Simulated parts are labelled as simulated. No real-money paths.

@@ -5,7 +5,8 @@ import {
   backendEnabled, completeSignup, currentUser, finishSteamLogin, hasProfile, onAuthChange, resendSignup, resetPassword, signInOAuth, signInPassword, signOut, signUp,
   startSteamLogin, steamEnabled, verifyLogin2fa,
 } from './backend.js';
-import { activeAccount, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
+import { useFairFor } from './fair.js';
+import { activeAccount, activeId, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
 import { confirmAge } from './rg.js';
 import { emit, isAuthed, newGameState, onLoginRequired, requireLogin, save, setAuthed, state } from './state.js';
 import { TERMS_VERSION, passwordStrength, validateEmail, validatePassword, validateRegistration, validateUsername, type Errors } from './signup.js';
@@ -13,6 +14,8 @@ import { $, $$, avatar, esc, h, icon, modal, toast } from './ui.js';
 import { sfx } from './sfx.js';
 
 type Tab = 'login' | 'register';
+/** Storage id of a cloud account. Local accounts use their own ids, so the two never collide. */
+const cloudId = (userId: string): string => (userId ? `c-${userId}` : '');
 const KNOWN_KEY = 'vaultrush.known';      // set once this browser has had an account, so first-time visitors land on Register
 const FLASH_KEY = 'vaultrush.flash';      // a message to show after the page reloads (sessionStorage)
 
@@ -283,9 +286,10 @@ export async function initAuth(): Promise<void> {
   // Signed-out visitors can browse, but the balance and account widgets are hidden and any wager or claim opens this popup (see requireLogin in state.ts).
   onLoginRequired(reason => { if (!open) openAuth({ reason }); });
   guardActions();
-  const setSignedIn = (on: boolean): void => {
-    const changed = on !== signedIn;
-    signedIn = on; btn.hidden = on; setAuthed(on); document.body.classList.toggle('logged-out', !on);
+  let who = '';                                          // the cloud user whose state is loaded; every account keeps its own coins, items and seeds
+  const setSignedIn = (on: boolean, userId: string = ''): void => {
+    const changed = on !== signedIn || (on && userId !== who);
+    signedIn = on; who = on ? userId : ''; btn.hidden = on; setAuthed(on, backendEnabled() ? cloudId(userId) : activeId()); document.body.classList.toggle('logged-out', !on);
     if (on) open?.close();
     if (changed) emit('auth', on);                        // pages that look different when signed in redraw themselves
   };
@@ -294,7 +298,9 @@ export async function initAuth(): Promise<void> {
   setSignedIn(false); btn.hidden = true;
 
   try { const e = await finishSteamLogin(); if (e) toast(e, 'error'); } catch { /* the toast above covers the usual failures */ }
-  setSignedIn(!!(await currentUser().catch(() => null)));
+  const first = await currentUser().catch(() => null);
+  if (first) await useFairFor(cloudId(first.id));
+  setSignedIn(!!first, first?.id ?? '');
   const ensure = async (): Promise<void> => {
     try {
       // A cloud profile cannot exist without the adult flag (the database refuses it), so a returning player on a new browser is already confirmed.
@@ -314,7 +320,7 @@ export async function initAuth(): Promise<void> {
     state.avatar = pic; save();
     const me = $('.me .avatar'); if (me) me.outerHTML = avatar(state.name, 32);
   };
-  await onAuthChange((event, on) => { setSignedIn(on); if (on) markKnown(); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure().then(applyPicture); });
+  await onAuthChange(async (event, on, uid) => { if (on) await useFairFor(cloudId(uid)); setSignedIn(on, uid); if (on) markKnown(); if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure().then(applyPicture); });
 }
 
 // ---- click guard for signed-out visitors ----

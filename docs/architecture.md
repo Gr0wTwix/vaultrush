@@ -49,6 +49,8 @@ It then calls `setAuthed(...)` in `state.ts`.
 
 `setAuthed(false)` replaces the object's contents with a blank state (no balance, items, seeds or history) and turns `save()` into a no-op. `setAuthed(true)` reloads the real state. Because the object is shared, every view sees the change.
 
+**One key per account.** Browser accounts use their local id; cloud accounts use `c-<Supabase user id>`, so `vaultrush.state.v1.c-<uuid>`. `setAuthed(on, id)` switches the key and reloads that person's state, and `useFairFor(id)` does the same for seeds. Before 2026-11-20 cloud accounts all used the shared guest key, so every account on one browser showed the same balance; that old shared data is no longer read, and each cloud account starts with 100 coins. Game state (everything except Crash) is still kept in the browser, so an account does not follow the player to another browser or device.
+
 Fairness seeds are separate (`fair.ts`, key `vaultrush.fair.v1.<id>`). The Fairness page hides "Your seeds" while signed out.
 
 ## The gates

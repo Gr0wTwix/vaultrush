@@ -5,7 +5,18 @@ import { rngHealth } from './rng.js';
 import { activeId, fairKeyFor } from './accounts.js';
 import type { BetEntry, BetParams, DoubleColor, DoubleLane, FairState, Risk, SeedPair } from './types.js';
 
-const KEY = fairKeyFor(activeId());
+let KEY = fairKeyFor(activeId());
+/** Storage key of the seeds in use now (used by backup import). */
+export const fairKey = (): string => KEY;
+/** Cloud accounts: switch to this account's own seeds (a different person on the same browser must not share them). */
+let switching: { key: string; done: Promise<FairState> } | null = null;
+export function useFairFor(id: string): Promise<FairState> {
+  const k = fairKeyFor(id);
+  if (switching?.key === k) return switching.done;     // two sign-in events for the same person share one switch
+  if (!switching && k === KEY && fair) return Promise.resolve(fair);
+  KEY = k; switching = { key: k, done: initFair() };
+  return switching.done;
+}
 const enc = new TextEncoder();
 const toHex = (buf: ArrayBuffer): string => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 export const randHex = (n: number): string => toHex(crypto.getRandomValues(new Uint8Array(n)).buffer);

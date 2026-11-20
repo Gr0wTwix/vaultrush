@@ -1,6 +1,6 @@
 // Account window: one modal with a left menu (Account, Security, Affiliates, Options, Game History, Transactions, Self Exclusion).
-import { state, save, level, levelFromXp, xpForLevel, isExcluded, resetAccount, START_BALANCE } from './state.js';
-import { getFair, setClientSeed, rotate, randHex } from './fair.js';
+import { state, stateKey, save, level, levelFromXp, xpForLevel, isExcluded, resetAccount, START_BALANCE } from './state.js';
+import { getFair, fairKey, setClientSeed, rotate, randHex } from './fair.js';
 import { BOTS } from './data.js';
 import { $, $$, esc, fmt, money, icon, avatar, toast, modal } from './ui.js';
 import { backendEnabled } from './backend.js';
@@ -9,7 +9,6 @@ import { renderResponsible } from './account-rg.js';
 import { renderVerification } from './account-kyc.js';
 import { renderCloud, renderSecurityCloud } from './account-cloud.js';
 import { renderOverview } from './account-overview.js';
-import { activeId, fairKeyFor, stateKeyFor } from './accounts.js';
 
 const TABS = [
   ['account', 'Account', 'user'], ['security', 'Security', 'lock'], ['affiliates', 'Affiliates', 'users'], ['options', 'Options', 'gear'],
@@ -96,8 +95,8 @@ export function openAccount(tab = 'account') {
           const data = JSON.parse(await f.text());
           if (data.app !== 'vaultrush' || typeof data.state?.balance !== 'number') throw new Error('bad file');
           if (!confirm('Replace your current progress with this backup?')) return;
-          localStorage.setItem(stateKeyFor(activeId()), JSON.stringify(data.state));
-          if (data.fair) localStorage.setItem(fairKeyFor(activeId()), JSON.stringify(data.fair));
+          localStorage.setItem(stateKey(), JSON.stringify(data.state));
+          if (data.fair) localStorage.setItem(fairKey(), JSON.stringify(data.fair));
           location.reload();
         } catch { toast('That is not a Vaultrush backup', 'error'); }
       };
