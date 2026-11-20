@@ -183,7 +183,7 @@ a.drop:hover, .drop:hover { transform: translateY(-3px); box-shadow: 0 12px 24px
 .float-case.f1 { left: 32%; top: 0; width: 190px; }
 .float-case.f2 { right: 2%; top: 22%; animation-delay: -2.5s; }
 .float-case.f3 { left: 40%; top: 55%; width: 120px; animation-delay: -3.6s; }
-@keyframes float { 50% { transform: translateY(-14px) rotate(-2deg); } }
+@keyframes float { 0%, 100% { transform: translate3d(0, 0, 0) rotate(0); } 50% { transform: translate3d(0, -14px, 0) rotate(-2deg); } }
 .case-art { width: 100%; height: auto; display: block; filter: drop-shadow(0 12px 18px rgba(0,0,0,.45)); }
 .case-art.xl { width: 220px; }
 .game-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
