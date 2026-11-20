@@ -490,7 +490,8 @@ table.bets { width: 100%; border-collapse: collapse; font-size: 13px; }
   .pill-demo { font-size: 11.5px; padding: 7px 13px; }
 }
 
-.avatar.has-img { overflow: hidden; background: var(--panel2); } .avatar.has-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The picture covers the initial (which stays underneath as the fallback). Without absolute positioning the two became separate grid rows. */
+.avatar.has-img { position: relative; overflow: hidden; background: var(--panel2); } .avatar.has-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* ---------- phones: four main pages plus a More sheet ---------- */
 .nav-more, .nav-sheet, .pill-mobile { display: none; }
