@@ -2,7 +2,7 @@
 // With a Supabase project connected these are cloud accounts. Without one, they are local accounts kept in this browser
 // (see accounts.ts): a hashed password, a username, and a separate set of progress for each account.
 import {
-  backendEnabled, completeSignup, currentUser, finishSteamLogin, hasProfile, onAuthChange, resendSignup, resetPassword, signInOAuth, signInPassword, signOut, signUp,
+  backendEnabled, completeSignup, currentUser, finishSteamLogin, onAuthChange, profileName, resendSignup, resetPassword, signInOAuth, signInPassword, signOut, signUp,
   startSteamLogin, steamEnabled, verifyLogin2fa,
 } from './backend.js';
 import { useFairFor } from './fair.js';
@@ -304,7 +304,13 @@ export async function initAuth(): Promise<void> {
   const ensure = async (): Promise<void> => {
     try {
       // A cloud profile cannot exist without the adult flag (the database refuses it), so a returning player on a new browser is already confirmed.
-      if (await hasProfile()) { confirmAge(state.rg); save(); return; }
+      const known = await profileName();
+      if (known !== null) {                                   // returning player: the account's own name, and 18+ was confirmed at sign-up
+        confirmAge(state.rg); const renamed = !!known && known !== state.name; if (known) state.name = known; save();
+        const me = $('.me .avatar'); if (me) me.outerHTML = avatar(state.name, 32);
+        if (renamed) emit('auth', true);                       // pages drawn a moment ago still say "You"
+        return;
+      }
       const u = await currentUser(); const meta = (u as { user_metadata?: Record<string, unknown> } | null)?.user_metadata ?? {};
       if (typeof meta['display_name'] === 'string' && meta['adult'] === true && typeof meta['terms_version'] === 'string') {
         try { await completeSignup(meta['display_name'], meta['terms_version'], true); state.name = meta['display_name']; confirmAge(state.rg); save(); toast('Account ready', 'win', true); return; } catch { /* name taken etc: ask */ }

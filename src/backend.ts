@@ -142,10 +142,12 @@ export const remove2fa = async (factorId: string): Promise<void> => { const { er
 export async function onAuthChange(cb: (event: string, signedIn: boolean, userId: string) => void): Promise<void> {
   (await getClient()).auth.onAuthStateChange((event, session) => cb(event, !!session, session?.user?.id ?? ''));
 }
-export const hasProfile = async (): Promise<boolean> => {
-  const { data } = await (await getClient()).from('profiles').select('id').maybeSingle();
-  return !!data;
+/** The signed-in player's profile name, or null when no profile exists yet. */
+export const profileName = async (): Promise<string | null> => {
+  const { data } = await (await getClient()).from('profiles').select('display_name').maybeSingle();
+  return (data as { display_name?: string } | null)?.display_name ?? null;
 };
+export const hasProfile = async (): Promise<boolean> => (await profileName()) !== null;
 /** Same bet the local Crash game would make, but drawn and settled by the database. `idem` makes a retry safe. */
 export const serverBet = (amount: number, target: number, idem: string = crypto.randomUUID()) =>
   call<ServerBet>('place_bet', { p_game: 'crash', p_amount: amount, p_params: { target }, p_idem: idem });
