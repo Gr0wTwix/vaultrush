@@ -4,16 +4,21 @@ import { bet, crashPoint, annotate } from '../fair.js';
 import { pushBet } from '../feed.js';
 import { $, $$, esc, fmt, money, icon, avatar, toast, amountField, wireAmount } from '../ui.js';
 import { sfx } from '../sfx.js';
+import { roundsOn, liveMe } from '../live.js';
+import { advanceRound, serverNow, crashBet, crashCancel, crashCashout, roundBets, recentResults, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
 
 const GROWTH = 0.00012;                 // multiplier = e^(GROWTH * ms)
 const WAIT_MS = 7000, AFTER_MS = 3500;
 const history = [];
+const seenRounds = new Set<number>();            // shared rounds already added to the history strip
 
 export function render(el) {
   let alive = true, raf = 0, timer = 0;   // timers use window.setTimeout so the handle is a number
   let phase = 'waiting', phaseStart = performance.now(), cp = 1, players = [];
   // myBet: { amount, riding, locked, auto, done, cashouts: [mult] } — partial cashouts lock part of the bet.
   let myBet = null, queued = null, part = 1;
+  const LIVE = roundsOn();                // one shared round run by the server, with everyone's bets, instead of a solo round with simulated players
+  let round: Round | null = null, rbets: RoundBet[] = [], stops: (() => void)[] = [], busy = false, tick = 0;
 
   el.innerHTML = `
     <div class="page-head"><h1>${icon('crash')} Crash</h1></div>
@@ -61,7 +66,7 @@ export function render(el) {
         status = b.done ? (b.locked ? `<span class="pos">${parts}</span>` : '<span class="neg">busted</span>')
           : phase === 'crashed' ? `<span class="neg">busted${b.locked ? ` · kept ${fmt(b.locked)}` : ''}</span>`
           : `<span class="muted">${parts || 'playing'}${b.riding < b.amount && !b.done ? ` · ${fmt(b.riding)} riding` : ''}</span>`;
-      } else status = p.cashed ? `<span class="pos">${fmt(p.cashed)}× · +${fmt(round2(p.amount * p.cashed))}</span>` : phase === 'crashed' ? '<span class="neg">busted</span>' : '<span class="muted">playing</span>';
+      } else status = p.cashed ? `<span class="pos">${fmt(p.cashed)}× · +${fmt(p.payout ?? round2(p.amount * p.cashed))}</span>` : phase === 'crashed' ? '<span class="neg">busted</span>' : '<span class="muted">playing</span>';
       return `<div class="prow ${p.me ? 'mine' : ''}">${avatar(p.name, 24)}<span class="pname">${esc(p.name)}</span>${money(p.amount)}<span class="pstat">${status}</span></div>`;
     }).join('');
   };
@@ -103,6 +108,7 @@ export function render(el) {
   };
 
   act.onclick = () => {
+    if (LIVE) return liveAction();
     if (phase === 'running' && live()) return cashOut(multAt(elapsed()), part);
     if (phase === 'waiting' && myBet) { credit(myBet.amount); myBet = null; drawPlayers(); return updateButton(); }
     if (queued) { queued = null; return updateButton(); }
@@ -198,7 +204,8 @@ export function render(el) {
     if (!alive) return;
     if (phase === 'running') {
       const m = multAt(elapsed());
-      if (m >= cp) crashNow();
+      if (LIVE) { if (live()) act.innerHTML = `Cash out ${part < 1 ? `${part * 100}% ` : ''}${money(round2(myBet.riding * part * m))}`; }   // the crash point is unknown until the server ends the round
+      else if (m >= cp) crashNow();
       else {
         let changed = false;
         players.forEach(p => { if (!p.cashed && m >= p.target) { p.cashed = p.target; changed = true; } });
@@ -211,12 +218,116 @@ export function render(el) {
     raf = requestAnimationFrame(loop);
   };
 
+  // ---- shared rounds: the server runs the round, everyone bets into it ---------------------------------------------------
+  const myRow = (): RoundBet | undefined => rbets.find(b => b.user_id === liveMe());
+  const upsertBet = (b: RoundBet): void => { const i = rbets.findIndex(x => x.id === b.id); if (i >= 0) rbets[i] = b; else rbets.push(b); };
+  /** Rebuild what the page shows from the server's bet rows, and pay whatever the server has settled for me. */
+  const applyBets = (): void => {
+    const row = myRow();
+    myBet = row ? { amount: row.amount, riding: row.riding, locked: row.locked, auto: row.auto_cashout, done: row.done, cashouts: row.cashouts } : null;
+    players = rbets.filter(b => b.user_id !== liveMe()).map(b => ({ name: b.display_name, amount: b.amount, cashed: b.cashouts.length ? b.cashouts[b.cashouts.length - 1] : null, payout: b.locked > 0 ? b.locked : null }));
+    if (row) payBet(row);
+    drawPlayers(); updateButton();
+  };
+  const schedule = (ms: number): void => { clearTimeout(tick); if (alive) tick = window.setTimeout(() => void refresh(), Math.max(30, ms)); };
+  const refresh = async (): Promise<void> => {
+    if (!alive) return;
+    try { applyRound(await advanceRound('crash')); } catch { schedule(2000); }
+  };
+  const applyRound = (r: Round): void => {
+    if (!alive || (round && r.id < round.id)) return;
+    const isNew = !round || round.id !== r.id, prev = round?.status;
+    round = r;
+    if (isNew) {
+      rbets = []; myBet = null; players = [];
+      void roundBets(r.id).then(rows => { if (round?.id === r.id) { rows.forEach(upsertBet); applyBets(); } }).catch(() => {});
+    }
+    const now = serverNow();
+    if (r.status === 'betting') {
+      phase = 'waiting';
+      phaseStart = performance.now() - (WAIT_MS - Math.max(0, Date.parse(r.betting_ends_at) - now));
+      if (isNew && queued) { const q = queued; queued = null; void placeLive(q.amount, q.auto); }
+      schedule(Date.parse(r.betting_ends_at) - now + 40);
+    } else if (r.status === 'running') {
+      phase = 'running';
+      phaseStart = performance.now() - (now - Date.parse(r.betting_ends_at));
+      schedule(live() ? 250 : 1000);                                   // bettors check fast; the first to see the crash ends it for everyone
+    } else {
+      if (phase !== 'crashed' || isNew) {
+        cp = r.result?.point ?? 1; phase = 'crashed'; phaseStart = performance.now();
+        if (!seenRounds.has(r.id)) { seenRounds.add(r.id); history.unshift(cp); drawHistory(); }
+        if (prev === 'running') sfx.boom();
+        void roundBets(r.id).then(rows => {                             // what the server settled: auto cash-outs, partial cash-outs kept, busts
+          if (round?.id !== r.id) return;
+          rows.forEach(upsertBet); applyBets();
+          const row = myRow(); if (row) recordFinished(row, 'Crash');
+        }).catch(() => {});
+      }
+      schedule(Date.parse(r.finished_at ?? r.betting_ends_at) + 3500 - now + 40);
+    }
+    updateButton(); drawPlayers();
+  };
+  async function placeLive(amount: number, autoV: number | null): Promise<void> {
+    if (!round || round.status !== 'betting') return toast('Betting is closed for this round', 'error');
+    if (!debit(amount)) return toast(debitError(amount), 'error');
+    try { upsertBet(normBet(await crashBet(round.id, amount, autoV))); applyBets(); sfx.click(); }
+    catch (e) { credit(amount); toast(e instanceof Error ? e.message : 'Could not place the bet', 'error'); }
+  }
+  /** Cash out a share at the multiplier of the SERVER's clock; the server answers with what it paid. */
+  async function cashOutLive(frac: number): Promise<void> {
+    if (!live() || busy || !round) return;
+    busy = true;
+    try {
+      const before = myRow()?.amount ?? 0;
+      const res = await crashCashout(round.id, frac);
+      upsertBet(normBet(res.bet)); applyBets();
+      sfx.win();
+      toast(`Cashed out ${res.take < before || res.bet.cashouts.length > 1 ? `${fmt(res.take)} ` : ''}at ${fmt(res.mult)}×: +${fmt(res.got)}`, 'win');
+      if (res.done) { const row = myRow(); if (row) recordFinished(row, 'Crash'); }
+    } catch (e) { toast(e instanceof Error ? e.message : 'Could not cash out', 'error'); void refresh(); }
+    finally { busy = false; }
+  }
+  const liveAction = (): void => {
+    if (phase === 'running' && live()) { void cashOutLive(part); return; }
+    if (phase === 'waiting' && myBet && round) {
+      crashCancel(round.id).then(a => { credit(Number(a)); rbets = rbets.filter(b => b.user_id !== liveMe()); applyBets(); })
+        .catch(e => toast(e instanceof Error ? e.message : 'Could not cancel', 'error'));
+      return;
+    }
+    if (queued) { queued = null; return updateButton(); }
+    const amount = round2(+amt.value);
+    if (!(amount >= 0.1)) return void toast('Minimum bet is 0.10', 'error');
+    const autoV = +auto.value >= 1.01 ? +auto.value : null;
+    if (phase === 'waiting') void placeLive(amount, autoV); else { queued = { amount, auto: autoV }; updateButton(); }
+  };
+  const startLive = (): void => {
+    void recentResults('crash', 14).then(rs => { if (alive && !history.length) { history.push(...rs); drawHistory(); } }).catch(() => {});
+    void watchRounds((_ev, r) => { if (r.game === 'crash') applyRound(r); }).then(stop => { if (alive) stops.push(stop); else stop(); }).catch(() => {});
+    void watchRoundBets((ev, b) => {
+      if (!round || b.round_id !== round.id && ev !== 'DELETE') return;
+      if (ev === 'DELETE') rbets = rbets.filter(x => x.id !== b.id); else upsertBet(b);
+      applyBets();
+    }).then(stop => { if (alive) stops.push(stop); else stop(); }).catch(() => {});
+    void refresh();
+  };
+
   drawHistory();
-  startWaiting();
+  if (LIVE) startLive(); else startWaiting();
   loop();
 
   return () => {
-    alive = false; cancelAnimationFrame(raf); clearTimeout(timer); ro.disconnect();
+    alive = false; cancelAnimationFrame(raf); clearTimeout(timer); clearTimeout(tick); ro.disconnect();
+    if (LIVE) {
+      stops.forEach(stop => stop());
+      // Leaving: a bet that has not started is taken back; a running one is cashed out in full; if that fails the round is followed until it ends.
+      if (round && myBet && !myBet.done) {
+        const id = round.id;
+        if (phase === 'waiting') crashCancel(id).then(a => credit(Number(a))).catch(() => settleLater('crash', id));
+        else if (phase === 'running') crashCashout(id, 1).then(res => { payBet(normBet(res.bet)); recordFinished(normBet(res.bet), 'Crash'); }).catch(() => settleLater('crash', id));
+        else settleLater('crash', id);
+      }
+      return;
+    }
     // Leaving: refund a bet that hasn't started; a live bet is cashed out in full at the current multiplier.
     if (live()) {
       if (phase === 'waiting') credit(myBet.amount);

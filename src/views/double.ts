@@ -6,12 +6,15 @@ import type { DoubleLane } from '../types.js';
 import { pushBet } from '../feed.js';
 import { $, $$, fmt, money, icon, toast, avatar, esc, confetti, coin } from '../ui.js';
 import { sfx } from '../sfx.js';
+import { roundsOn, liveMe } from '../live.js';
+import { advanceRound, serverNow, doubleBet, roundBets, recentResults, roundSeed, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
 
 const BET_MS = 12000, ROLL_MS = 5200, SHOW_MS = 2600;
 const LANES = [['purple', 'Purple', '1'], ['bait', 'Bait', '2'], ['green', 'Green', '3'], ['gray', 'Gray', '4']];
 const TILE_W = 100, GAP = 10, STEP = TILE_W + GAP;
 const TRASH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
 const history = [];           // last rolls (shared across visits)
+const seenRounds = new Set<number>();   // shared rounds already added to the history
 let pool = 180.5;             // Triple Green pool
 export const getPool = () => pool;
 // Other players keep betting while you are elsewhere, so the pool creeps up in the background.
@@ -41,6 +44,8 @@ interface DoubleBet { user: string; amount: number; mine: boolean; result?: 'won
 export function render(el) {
   let alive = true, timer = 0, raf = 0, phase = 'betting', phaseStart = performance.now();
   let bets: Record<string, DoubleBet[]> = {}, myBets: Record<string, number> = {}, lastBet = null, landIndex = 2 * DOUBLE_TILES, pendingN = null;
+  const LIVE = roundsOn();               // one shared round run by the server, with everyone's bets, instead of a solo round with simulated players
+  let round: Round | null = null, rbets: RoundBet[] = [], stops: (() => void)[] = [], rtimer = 0, rolledId = 0, settledId = 0;
 
   const glyph = c => `<svg viewBox="0 0 24 24" aria-hidden="true">${GLYPH[c]}</svg>`;
   const LANE_GLYPH = { purple: glyph('purple'), gray: glyph('gray'), green: glyph('green'), bait: glyph('bait') };
@@ -84,10 +89,10 @@ export function render(el) {
   });
   $('#dSound', el).onclick = () => { state.muted = !state.muted; save(); $('#dSound', el).innerHTML = icon(state.muted ? 'mute' : 'sound'); };
 
-  const setStrip = (index, animate) => {
+  const setStrip = (index, animate, dur = ROLL_MS - 400) => {
     const view = reel.clientWidth;
     const x = view / 2 - (index * STEP + TILE_W / 2);
-    strip.style.transition = animate ? `transform ${ROLL_MS - 400}ms cubic-bezier(.12,.68,.1,1)` : 'none';
+    strip.style.transition = animate ? `transform ${dur}ms cubic-bezier(.12,.68,.1,1)` : 'none';
     strip.style.transform = `translate3d(${animate ? x + (Math.random() - 0.5) * TILE_W * 0.7 : x}px,0,0)`;
     return x;
   };
@@ -117,6 +122,7 @@ export function render(el) {
   };
 
   const place = (lane, amount, user = state.name, mine = true) => {
+    if (LIVE) { if (mine) void placeLive(lane, amount); return; }          // other players' bets arrive from the server
     if (phase !== 'betting') return mine && toast('Betting is closed for this round', 'error');
     if (mine) {
       if ((lane === 'purple' && myBets.gray) || (lane === 'gray' && myBets.purple)) return toast("You can't back both Purple and Gray", 'error');
@@ -238,11 +244,122 @@ export function render(el) {
     raf = requestAnimationFrame(tick);
   };
 
+  // ---- shared rounds: the server runs the round, everyone bets into it ---------------------------------------------------
+  const upsertBet = (b: RoundBet): void => { const i = rbets.findIndex(x => x.id === b.id); if (i >= 0) rbets[i] = b; else rbets.push(b); };
+  /** Rebuild the lanes from the server's bet rows. */
+  const applyBets = (): void => {
+    bets = {}; myBets = {};
+    const n = round?.result?.n;
+    for (const b of rbets) {
+      (bets[b.lane] ||= []).push({ user: b.display_name, amount: b.amount, mine: b.user_id === liveMe(), result: b.done && n != null ? (b.locked > 0 ? 'won' : 'lost') : undefined });
+      if (b.user_id === liveMe()) myBets[b.lane] = b.amount;
+    }
+    drawLanes();
+  };
+  const schedule = (ms: number): void => { clearTimeout(rtimer); if (alive) rtimer = window.setTimeout(() => void refresh(), Math.max(30, ms)); };
+  const refresh = async (): Promise<void> => {
+    if (!alive) return;
+    try { applyRound(await advanceRound('double')); } catch { schedule(2000); }
+  };
+  async function placeLive(lane: string, amount: number): Promise<void> {
+    if (!round || round.status !== 'betting' || phase !== 'betting') return void toast('Betting is closed for this round', 'error');
+    if ((lane === 'purple' && myBets.gray) || (lane === 'gray' && myBets.purple)) return void toast("You can't back both Purple and Gray", 'error');
+    if (!(amount >= 0.1)) return void toast('Minimum bet is 0.10', 'error');
+    if (!debit(amount)) return void toast(debitError(amount), 'error');
+    try { upsertBet(normBet(await doubleBet(round.id, lane, amount))); lastBet = { lane, amount }; sfx.click(); applyBets(); }
+    catch (e) { credit(amount); toast(e instanceof Error ? e.message : 'Could not place the bet', 'error'); }
+  }
+  /** The reel rolls to the server's tile. A player who arrives mid-roll sees the rest of the roll; later than that, just the result. */
+  const startRoll = (n: number, since: number): void => {
+    rolledId = round!.id; pendingN = n; phase = 'rolling'; phaseStart = performance.now() - since;
+    setStrip(2 * DOUBLE_TILES + (history[0] ?? 0), false);
+    void strip.offsetWidth;
+    landIndex = 10 * DOUBLE_TILES + n;
+    setStrip(landIndex, true, Math.max(900, ROLL_MS - 400 - since));
+    sfx.click(); drawLanes();
+  };
+  /** Show the result and pay this browser what the server settled for its bets. */
+  const showResult = (n: number): void => {
+    const rid = round!.id;
+    settledId = rid; pendingN = null;
+    landIndex = 10 * DOUBLE_TILES + n;
+    setStrip(landIndex, false);
+    strip.children[landIndex]?.classList.add('landed');
+    reel.classList.add('settled');
+    phase = 'result'; phaseStart = performance.now();
+    if (!seenRounds.has(rid)) { seenRounds.add(rid); history.unshift(n); history.length = Math.min(history.length, 100); }
+    LANES.forEach(([k]) => { $(`.lane-${k}`, el).classList.add(doubleWins(k as DoubleLane, n) ? 'won' : 'lost'); });
+    drawLanes(); drawTop();
+    void roundBets(rid).then(rows => {
+      if (round?.id !== rid) return;
+      rows.forEach(upsertBet); applyBets();
+      let won = 0, staked = 0;
+      for (const b of rbets) if (b.user_id === liveMe()) { staked += b.amount; won += b.locked; payBet(b); recordFinished(b, 'Double'); }
+      const greens = bets.green || [], myGreen = myBets.green || 0;
+      if (n === 0) {                                                       // Triple Green (the pool itself is still a local simulation)
+        greenStreak.push({ mine: myGreen, total: greens.reduce((a, b) => a + b.amount, 0) });
+        if (greenStreak.length >= 3) {
+          const mine = greenStreak.reduce((a, g) => a + g.mine, 0), total = greenStreak.reduce((a, g) => a + g.total, 0);
+          const share = total ? round2((pool * mine) / total) : 0;
+          if (share > 0) { credit(share); toast(`Triple Green! Pool share +${fmt(share)}`, 'win'); confetti('#3dffa0'); } else toast(`Triple Green! ${fmt(pool)} paid to green players`);
+          pool = 150; greenStreak = [];
+        }
+      } else greenStreak = [];
+      if (won > staked && staked) { sfx.win(); toast(`+${fmt(won)}`, 'win'); } else if (staked) sfx.lose();
+      drawTop();
+    }).catch(() => {});
+    void roundSeed(rid).then(seed => { if (seed && round?.id === rid) $('#ghash', el).textContent = `${round.server_hash} · seed ${seed}`; }).catch(() => {});
+  };
+  const applyRound = (r: Round): void => {
+    if (!alive || (round && r.id < round.id)) return;
+    const isNew = !round || round.id !== r.id;
+    round = r;
+    const now = serverNow(), endsAt = Date.parse(r.betting_ends_at);
+    if (isNew) {
+      rbets = []; bets = {}; myBets = {}; pendingN = null;
+      $$('.lane', el).forEach(l => l.classList.remove('won', 'lost'));
+      reel.classList.remove('settled'); strip.querySelector('.landed')?.classList.remove('landed');
+      $('#ghash', el).textContent = `${r.server_hash} · round #${r.id}`;
+      void roundBets(r.id).then(rows => { if (round?.id === r.id) { rows.forEach(upsertBet); applyBets(); } }).catch(() => {});
+    }
+    if (r.status === 'betting') {
+      phase = 'betting'; phaseStart = performance.now() - (BET_MS - Math.max(0, endsAt - now));
+      applyBets(); schedule(endsAt - now + 40);
+      return;
+    }
+    const n = r.result?.n as number, since = now - endsAt;
+    if (settledId === r.id) { schedule(Date.parse(r.finished_at ?? r.betting_ends_at) + SHOW_MS - now + 40); return; }
+    if (r.status === 'running' && since < ROLL_MS) {
+      if (rolledId !== r.id) startRoll(n, Math.max(0, since));
+      schedule(ROLL_MS - since + 60);                                       // when the roll ends, ask the server to settle
+    } else if (r.status === 'finished') {
+      if (rolledId !== r.id) { rolledId = r.id; }
+      showResult(n);
+      schedule(Date.parse(r.finished_at ?? r.betting_ends_at) + SHOW_MS - now + 40);
+    } else schedule(120);                                                   // the roll time has passed; the server is about to finish the round
+  };
+  const startLive = (): void => {
+    void recentResults('double', 100).then(rs => { if (alive && !history.length) { history.push(...rs); drawTop(); } }).catch(() => {});
+    void watchRounds((_ev, r) => { if (r.game === 'double') applyRound(r); }).then(stop => { if (alive) stops.push(stop); else stop(); }).catch(() => {});
+    void watchRoundBets((ev, b) => {
+      if (!round || (b.round_id !== round.id && ev !== 'DELETE')) return;
+      if (ev === 'DELETE') rbets = rbets.filter(x => x.id !== b.id); else upsertBet(b);
+      applyBets();
+    }).then(stop => { if (alive) stops.push(stop); else stop(); }).catch(() => {});
+    void refresh();
+  };
+
   requestAnimationFrame(() => { setStrip(2 * DOUBLE_TILES + (history[0] ?? 0), false); });
-  drawTop(); startBetting(); tick();
+  drawTop(); if (LIVE) startLive(); else startBetting(); tick();
 
   return () => {
-    alive = false; clearTimeout(timer); cancelAnimationFrame(raf); document.removeEventListener('keydown', onKey);
+    alive = false; clearTimeout(timer); clearTimeout(rtimer); cancelAnimationFrame(raf); document.removeEventListener('keydown', onKey);
+    if (LIVE) {
+      stops.forEach(stop => stop());
+      // Leaving: bets stay in the round (like on any shared table). The round is followed in the background and paid when it ends.
+      if (round && settledId !== round.id && rbets.some(b => b.user_id === liveMe())) settleLater('double', round.id);
+      return;
+    }
     // Leaving before the roll refunds this round's bets; a rolling round is settled with its known result.
     if (phase === 'betting' || (phase === 'rolling' && pendingN === null)) { const back = Object.values(myBets).reduce((s, v) => s + v, 0); if (back) credit(round2(back)); }
     else if (phase === 'rolling' && pendingN !== null) { history.unshift(pendingN); payMine(pendingN); }

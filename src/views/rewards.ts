@@ -3,6 +3,7 @@ import { CASE, ITEM, RARITY, entryForTicket, ticketOf } from '../data.js';
 import { state, save, grant, credit, logTx, addItems, removeItems, round2, level, xpForLevel, todayKey, DAY, isAuthed } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop } from '../feed.js';
+import { takeFreeClaim } from '../live.js';
 import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, SPEEDS, reelMs, guestCard } from '../ui.js';
 import { sfx } from '../sfx.js';
 
@@ -32,7 +33,7 @@ export async function openFreeCase(c, label) {
 }
 
 export function render(el) {
-  let alive = true;
+  let alive = true, busy = false;                 // busy stops a double click from opening a crate twice while the server is asked
   const draw = () => {
     const lvl = level(), xp = state.xp, cur = xpForLevel(lvl), next = xpForLevel(lvl + 1);
     const rb = state.rakeback, now = Date.now();
@@ -64,7 +65,7 @@ export function render(el) {
 
       <h2 class="section-title">Free cases</h2>
       <section class="reward-grid">
-        <div class="panel rcase" style="--hue:${CASE.welcome.hue}">${caseArt(CASE.welcome)}<b>Welcome Crate</b><span class="muted small">${state.welcomeLeft} of 3 left</span><button class="btn btn-primary block" id="welcome" data-needs-auth="claim" ${state.welcomeLeft > 0 ? '' : 'disabled'}>Open free</button></div>
+        <div class="panel rcase" style="--hue:${CASE.welcome.hue}">${caseArt(CASE.welcome)}<b>Welcome Crate</b><span class="muted small">${state.welcomeLeft > 0 ? 'One free open per account' : 'Already opened'}</span><button class="btn btn-primary block" id="welcome" data-needs-auth="claim" ${state.welcomeLeft > 0 ? '' : 'disabled'}>Open free</button></div>
         <div class="panel rcase" style="--hue:${CASE.daily.hue}">${caseArt(CASE.daily)}<b>Daily Crate</b><span class="muted small">Once every 24 hours</span><button class="btn btn-primary block" id="dailyCase" data-needs-auth="claim" ${dailyCaseReady ? '' : 'disabled'}>${dailyCaseReady ? 'Open free' : `In ${left(DAY - (now - state.lastDailyCase))}`}</button></div>
         ${LEVEL_CASES.map(([req, id]) => {
           const used = state.keysUsed.includes(req), unlocked = lvl >= req;
@@ -96,15 +97,32 @@ export function render(el) {
       if (k === 'weekly') state.rakeback.lastWeekly = Date.now();
       grant(amount, `Rakeback (${k})`); sfx.win(); toast(`Rakeback +${fmt(amount)}`, 'win'); draw();
     });
+    /** The server (cloud accounts) or this browser (browser-only accounts) decides whether the crate may be opened. */
+    const allowed = async (kind: 'welcome' | 'daily_case'): Promise<boolean> => {
+      const r = await takeFreeClaim(kind);
+      if (r === 'error') { toast('Could not check your claim. Try again in a moment.', 'error'); return false; }
+      if (r === 'taken') { toast(kind === 'welcome' ? 'You already opened your welcome crate.' : 'You already opened today\'s crate on this account.', 'error'); if (alive) draw(); return false; }
+      return true;
+    };
     $('#welcome', el).onclick = async () => {
-      if (state.welcomeLeft <= 0) return;
-      state.welcomeLeft--; save();
-      await openFreeCase(CASE.welcome, 'Welcome gift'); if (alive) draw();
+      if (busy || state.welcomeLeft <= 0) return;
+      busy = true;
+      try {
+        if (!(await allowed('welcome'))) return;
+        state.welcomeLeft = 0; save();
+        await openFreeCase(CASE.welcome, 'Welcome gift');
+      } finally { busy = false; }
+      if (alive) draw();
     };
     $('#dailyCase', el).onclick = async () => {
-      if (Date.now() - state.lastDailyCase < DAY) return;
-      state.lastDailyCase = Date.now(); save();
-      await openFreeCase(CASE.daily, 'Daily case'); if (alive) draw();
+      if (busy || Date.now() - state.lastDailyCase < DAY) return;
+      busy = true;
+      try {
+        if (!(await allowed('daily_case'))) return;
+        state.lastDailyCase = Date.now(); save();
+        await openFreeCase(CASE.daily, 'Daily case');
+      } finally { busy = false; }
+      if (alive) draw();
     };
     $$('[data-lvl]', el).forEach(b => b.onclick = async () => {
       const req = +b.dataset.lvl;

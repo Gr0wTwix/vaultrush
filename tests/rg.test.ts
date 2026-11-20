@@ -83,11 +83,14 @@ describe('the bet gate enforces limits', () => {
     setLimit(s.rg, 'maxBet', 10, T0);
     expect(betBlockReason(s, 10, T0)).toBeNull();
     expect(betBlockReason(s, 11, T0)).toMatch(/maximum bet/);
-    const t = player();                                     // tier 0 cap is 50 coins
-    expect(betBlockReason(t, 50, T0)).toBeNull();
-    expect(betBlockReason(t, 51, T0)).toMatch(/verification/);
+    const t = player();                                     // tier 0 cap is 1000 coins
+    expect(betBlockReason(t, 1000, T0)).toBeNull();
+    expect(betBlockReason(t, 1001, T0)).toMatch(/verification/);
     t.kyc.tier = 1;
-    expect(betBlockReason(t, 51, T0)).toBeNull();
+    expect(betBlockReason(t, 1001, T0)).toBeNull();
+    expect(betBlockReason(t, 2501, T0)).toMatch(/verification/);
+    t.kyc.tier = 2;
+    expect(betBlockReason(t, 2501, T0)).toBeNull();
   });
   it('enforces the daily wager limit using stakes placed today', () => {
     const s = player();

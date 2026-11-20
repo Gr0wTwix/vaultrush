@@ -51,6 +51,7 @@ beforeAll(async () => {
   await db.exec(readFileSync(new URL('../supabase/migrations/0001_core.sql', import.meta.url), 'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/0002_live.sql', import.meta.url), 'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/0003_live_erasure.sql', import.meta.url), 'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/0004_claims_bots_caps.sql', import.meta.url), 'utf8'));
   for (const [id, n] of [[ALICE, 'Alice'], [BOB, 'Bob'], [CARA, 'Cara']] as const) await rpc(id, 'complete_signup', n, TERMS, true);
 }, 60_000);
 afterAll(async () => { await db.close(); });
@@ -259,5 +260,73 @@ describe('deleting an account (0003)', () => {
     await rpc(ERIN, 'complete_signup', 'Erin', TERMS, true);
     await rpc(ERIN, 'delete_account');
     expect((await sql(`select deleted_at from public.profiles where id = $1`, [ERIN]))[0].deleted_at).not.toBeNull();
+  });
+});
+
+describe('free claims (0004)', () => {
+  const claim = (uid: string, kind: string) => rpc(uid, 'claim_free', kind);
+  it('lets the welcome crate be taken once per account, whatever browser asks', async () => {
+    expect((await rpc(ALICE, 'claim_status')).welcome).toBeNull();
+    const first = await claim(ALICE, 'welcome');
+    expect(first).toMatchObject({ claimed: true, next: null });
+    const again = await claim(ALICE, 'welcome');
+    expect(again.claimed).toBe(false);
+    expect(again.last).toBe((await rpc(ALICE, 'claim_status')).welcome);
+    expect((await claim(BOB, 'welcome')).claimed).toBe(true);                       // another player is unaffected
+  });
+  it('lets the daily crate be taken once every 24 hours', async () => {
+    const first = await claim(CARA, 'daily_case');
+    expect(first.claimed).toBe(true);
+    expect(Date.parse(first.next) - Date.parse(first.last)).toBe(24 * 3600_000);
+    const blocked = await claim(CARA, 'daily_case');
+    expect(blocked).toMatchObject({ claimed: false });
+    expect(blocked.next).toBe(first.next);
+    await sql(`update public.free_claims set claimed_at = now() - interval '25 hours' where user_id = $1 and kind = 'daily_case'`, [CARA]);
+    expect((await claim(CARA, 'daily_case')).claimed).toBe(true);                    // a day later it is available again
+    expect((await claim(CARA, 'daily_case')).claimed).toBe(false);
+  });
+  it('treats simultaneous requests as one claim', async () => {
+    const ERIN2 = '77777777-7777-7777-7777-777777777777';
+    await db.exec(`insert into auth.users (id, email) values ('${ERIN2}', 'e2@example.com')`);
+    await rpc(ERIN2, 'complete_signup', 'Erin Two', TERMS, true);
+    const both = await Promise.all([claim(ERIN2, 'daily_case'), claim(ERIN2, 'daily_case')]);
+    expect(both.filter(r => r.claimed)).toHaveLength(1);
+  });
+  it('rejects unknown kinds, anonymous callers and direct writes', async () => {
+    await fails(claim(ALICE, 'jackpot'), 'invalid_claim');
+    await fails(rpc(null, 'claim_free', 'welcome'), 'permission denied');
+    await fails(rpc(null, 'claim_status'), 'permission denied');
+    await fails(q(ALICE, `insert into public.free_claims (user_id, kind) values ('${ALICE}', 'daily_case')`), 'permission denied');
+    await fails(q(ALICE, `update public.free_claims set claimed_at = now() - interval '9 days'`), 'permission denied');
+    expect((await q(ALICE, `select kind from public.free_claims`)).every((r: any) => ['welcome', 'daily_case'].includes(r.kind))).toBe(true);
+    const others = await q(ALICE, `select user_id from public.free_claims where user_id <> $1`, [ALICE]);
+    expect(others).toEqual([]);                                                       // you can only read your own claims
+  });
+});
+
+describe('coinflip bot (0004)', () => {
+  it('lets the creator call a bot: the server draws the result, and a bot win pays nobody', async () => {
+    let creatorWins = 0, botWins = 0;
+    for (let i = 0; i < 14; i++) {
+      const f = await rpc(ALICE, 'create_live_coinflip', i % 2 ? 'bolt' : 'star', 2);
+      const done = await rpc(ALICE, 'call_live_coinflip_bot', f.id, 'frostbyte');
+      expect(done).toMatchObject({ status: 'done', joiner: null, joiner_name: 'frostbyte', joiner_bot: true });
+      const [{ server_seed }] = await q(CARA, `select server_seed from public.live_coinflip_seeds where flip_id = $1`, [f.id]);
+      const fl = (await floatsFor(server_seed, String(f.id), 0, 1))[0] as number;
+      expect(done.result).toBe(fl < 0.5 ? 'bolt' : 'star');
+      if (done.result === f.side) { expect(done.winner).toBe(ALICE); creatorWins++; } else { expect(done.winner).toBeNull(); botWins++; }
+    }
+    expect(creatorWins + botWins).toBe(14);
+  });
+  it('refuses anyone but the creator, a bad name, and a game that is not waiting', async () => {
+    const f = await rpc(ALICE, 'create_live_coinflip', 'bolt', 1);
+    await fails(rpc(BOB, 'call_live_coinflip_bot', f.id, 'frostbyte'), 'not_creator');
+    await fails(rpc(ALICE, 'call_live_coinflip_bot', f.id, 'bad name!'), 'invalid_name');
+    await fails(rpc(ALICE, 'call_live_coinflip_bot', 987654, 'frostbyte'), 'flip_not_found');
+    await rpc(ALICE, 'call_live_coinflip_bot', f.id, 'frostbyte');
+    await fails(rpc(ALICE, 'call_live_coinflip_bot', f.id, 'Vexx'), 'flip_not_open');
+    await fails(rpc(BOB, 'join_live_coinflip', f.id), 'flip_not_open');
+    await fails(rpc(ALICE, 'cancel_live_coinflip', f.id), 'flip_not_open');
+    await fails(rpc(null, 'call_live_coinflip_bot', f.id, 'frostbyte'), 'permission denied');
   });
 });

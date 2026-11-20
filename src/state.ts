@@ -24,12 +24,12 @@ export const newGameState = (): GameState => ({
   stats: { wagered: 0, won: 0, bets: 0 },
   xp: 0, keysUsed: [],                      // level-case tiers already opened
   rakeback: { instant: 0, daily: 0, weekly: 0, lastDaily: 0, lastWeekly: 0 },
-  lastDailyCase: 0, welcomeLeft: 3, promos: [], favs: [],
+  lastDailyCase: 0, welcomeLeft: 1, promos: [], favs: [],
   calendar: { streak: 0, last: '' },
   race: { date: '', wagered: 0 }, racePaid: '',
   history: [], excludedUntil: 0,
   ui: { chat: true, levelPopup: true, streamer: false, anonymous: false, fx: !prefersReducedMotion(), notify: true },
-  legal: { termsAt: 0, termsVersion: '' }, gameStats: {}, liveSettled: [], bestDrop: null,
+  legal: { termsAt: 0, termsVersion: '' }, gameStats: {}, liveSettled: [], liveCredit: {}, bestDrop: null,
   blocked: [], tx: [], betSeq: 0,
   rg: defaultRg(), kyc: defaultKyc(), aml: { alerts: [], payouts: [], seq: 0 },
 });
@@ -41,7 +41,8 @@ function load(): GameState {
     if (!raw) return defaults();
     const saved = JSON.parse(raw) as Partial<GameState>;
     const d = defaults();
-    return { ...d, ...saved, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui }, legal: { ...d.legal, ...saved.legal }, gameStats: { ...saved.gameStats },
+    const welcomeLeft = Math.min(1, typeof saved.welcomeLeft === 'number' ? saved.welcomeLeft : 1);   // one welcome crate per account (older saves had three)
+    return { ...d, ...saved, welcomeLeft, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui }, legal: { ...d.legal, ...saved.legal }, gameStats: { ...saved.gameStats },
       rg: { ...d.rg, ...saved.rg, limits: { ...d.rg.limits, ...saved.rg?.limits } }, kyc: { ...d.kyc, ...saved.kyc }, aml: { ...d.aml, ...saved.aml } };
   } catch { return defaults(); }
 }

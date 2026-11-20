@@ -23,7 +23,7 @@ Only **Crash** runs on the server so far. Other games, the full limit set (weekl
 ## Set it up
 
 1. Create a project at supabase.com (the free tier is enough).
-2. Run the schema: paste `migrations/0001_core.sql` into the SQL editor, or use the CLI (`supabase link`, then `supabase db push`). Then run `migrations/0002_live.sql` the same way to switch on live battles and coinflip, and `migrations/0003_live_erasure.sql` so deleting an account also removes the name from live games.
+2. Run the schema: paste `migrations/0001_core.sql` into the SQL editor, or use the CLI (`supabase link`, then `supabase db push`). Then run `migrations/0002_live.sql` the same way to switch on live battles and coinflip, `migrations/0003_live_erasure.sql` so deleting an account also removes the name from live games, and `migrations/0004_claims_bots_caps.sql` for once-per-account free crates, the coinflip bot and the 1,000-coin unverified bet cap, and `migrations/0005_rounds.sql` for shared Crash and Double rounds with everyone's bets visible, and `migrations/0006_admin.sql` for the admin site (roles, permissions, audit log; see `../docs/admin-site.md`).
 3. Authentication > Providers: keep **Email** on. Authentication > URL configuration: add your site URL (and `http://localhost:5173`) as a redirect URL.
 4. Project settings > API: copy the **Project URL** and the **anon public** key.
 5. Locally: copy `.env.example` to `.env` and fill in the two values. On Vercel: add them as environment variables.

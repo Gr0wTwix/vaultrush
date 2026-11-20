@@ -7,10 +7,11 @@ Added 2026-11-21. Signed-in cloud players can now play **case battles** and **co
 | Part | Live? | How |
 |---|---|---|
 | Case battles | Yes | Lobbies in `live_battles`; seats, bots and the start are handled by SQL functions; every browser derives the result from the revealed seed |
-| Coinflip | Yes | `live_coinflips`; the database draws the result when someone joins |
+| Coinflip | Yes | `live_coinflips`; the database draws the result when someone joins, or when the creator calls a house bot |
 | Chat | Yes | The existing `chat_messages` table plus Supabase Realtime; the online counter uses Realtime presence |
 | Bet and drop feed | Yes | Realtime broadcast between browsers (no table) |
-| Other games (crash, double, plinko, mines, cases, upgrade) | Solo, as before | They have no second player |
+| **Crash** and **Double** | Yes (needs `0005_rounds.sql`) | One round per game run by the database clock; every player sees the same round, everyone's bets on the right, the same result |
+| Other games (plinko, mines, cases, upgrade) | Solo, as before | They have no second player |
 | Daily race leaderboard, coin rain | No | Still local or simulated |
 
 Simulated opponents, lobbies, chat lines and coin rain are shown only when live games are **off** (signed out, no cloud backend, or `0002_live.sql` not applied yet).
@@ -20,6 +21,26 @@ Simulated opponents, lobbies, chat lines and coin rain are shown only when live 
 1. Cloud accounts must already work (see [deploy-and-workflow.md](deploy-and-workflow.md)).
 2. In the Supabase SQL editor, run `supabase/migrations/0002_live.sql` once, after `0001_core.sql`. It also adds the two tables to the `supabase_realtime` publication.
 3. Nothing else: the site asks the server `live_ready()` after sign-in. If the call fails (migration missing, offline) it silently keeps the simulated mode.
+
+## Shared Crash and Double rounds (0005)
+
+The database keeps **one current round per game**. Nothing runs in the background: any browser may call `advance_round(game)` and the function does whatever the clock says is due (open the next round, start it, finish and settle it). It is idempotent and serialised per game, so it does not matter who calls it or how often. Browsers call it at the moments they expect a change (when betting ends, when a round should finish) and, during a running Crash round, every 250 ms if they hold a bet and every second otherwise; the first call that sees the crash ends the round and every other browser hears about it through realtime.
+
+| | Crash | Double |
+|---|---|---|
+| Betting | 7 s | 12 s |
+| Round | multiplier `e^(0.00012 x ms)` until the crash point | the reel rolls for 5.2 s to the drawn tile |
+| Pause | 3.5 s | 2.6 s |
+| Secret | the crash point stays hidden until the crash instant (the seed is revealed when the round is finished) | the tile is revealed when betting closes, since nobody can bet any more |
+| Bets | one per player; optional auto cash-out | several lanes per player, but not purple with gray; repeating a lane adds to it |
+| Cash-out | requested by the player, timed by the **server clock** (the multiplier is the server's, not the browser's); partial shares like before (7 at most) | n/a |
+| Auto cash-out | applied by the server at the crash if the target is below the crash point | n/a |
+
+Fairness: the seed hash is public from the round's creation; `float = HMAC-SHA256(seed, "<round id>:0:0") / 2^32`; crash point `min(10000, max(1, floor(97 / (1 - f)) / 100))`; double tile `floor(f x 15)`. `tests/rounds-db.test.ts` recomputes both from the revealed seed.
+
+**Money.** As with battles and coinflip, stakes and payouts are handled by the browser. The server records the bets and computes what each is worth (`round_bets.locked`). A browser pays itself the difference between what the server says and what it has already been paid (`state.liveCredit`, per bet id), so repeated or stale updates never pay twice and a reload catches up (`reconcileAll`). Leaving the Crash page takes back a bet that has not started or cashes out a running one; leaving Double with bets in the round follows the round in the background (`settleLater`) so it is paid when it ends.
+
+**What is still simulated here:** the Triple Green pool in Double (it still creeps up locally) and the history of rounds before you arrived (loaded from the database when available). Without `0005`, or when signed out, Crash and Double fall back to the earlier solo rounds with simulated players.
 
 ## Trust model (read this before relying on it)
 
@@ -36,12 +57,15 @@ Tested in `tests/live-db.test.ts` (runs the real SQL in PGlite):
 - Only signed-in players with a profile can call the live functions; helpers are private; the tables cannot be written directly; the secrets tables and seeds are unreadable until the game starts.
 - Battle: 1 to 20 case ids, a known format and mode (team formats allow only normal, crazy, terminal), at most 3 open battles per player, a seat can be taken once, only the creator may call bots, the creator leaving cancels the battle, a joiner leaving frees the seat, nobody can leave after the start, and a lobby older than 30 minutes cannot be joined.
 - Coinflip: bolt or star, 0.10 to 5,000, at most 5 open games, you cannot join your own game, only the creator can cancel and only while nobody joined, 30-minute expiry.
+- Coinflip bot (`0004`): the creator of a waiting game can call a house bot (`call_live_coinflip_bot`). The server draws the result with the same seed maths; if the bot's side wins, `winner` stays empty and nobody is paid (the house keeps the pot). Only the creator can call it, only while the game is waiting.
 
 ## Client files
 
 | File | Role |
 |---|---|
 | `src/live.ts` | Data layer: RPC wrappers, realtime watchers, presence and broadcast, settle-once helpers, the reconcile registry |
+| `src/rounds.ts` | Shared Crash and Double rounds: server-aligned clock, `advanceRound`, bet and cash-out calls, realtime watchers, `payBet` (pay once), `settleLater` |
+| `src/views/crash.ts`, `src/views/double.ts` | `LIVE` branch: the round, the bets and the result come from the server; the solo version remains as the fallback |
 | `src/views/coinflip.ts` | `LIVE` branch: lobby from the server, `upsert()` applies each server row, stake and payout handling |
 | `src/views/battles.ts` | `renderLiveBattle()` loads a battle by id, `drawBattle()` is the shared view, `toBattle()`/`resolveLive()` derive the result, `b.onRow()` follows the server |
 | `src/chat.ts` | Swaps the simulated chat for the real one when `live` turns on |

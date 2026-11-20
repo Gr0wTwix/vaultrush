@@ -49,7 +49,7 @@ const SEED = 'ab'.repeat(32);
 const BID = '11111111-1111-4111-8111-111111111111';
 const seat = (uid: string | null, name: string, bot = false) => ({ uid, name, bot });
 const battle = (o: any = {}) => ({
-  id: BID, creator: 'friend-uid', case_ids: CASE_IDS, format: '1v1', mode: 'normal', seats: [seat('friend-uid', 'Sadkat'), null], player_ids: ['friend-uid'],
+  id: BID, creator: 'friend-uid', case_ids: CASE_IDS, format: '1v1', mode: 'normal', seats: [seat('friend-uid', 'Nova'), null], player_ids: ['friend-uid'],
   status: 'waiting', server_hash: 'h', client_seed: 'cs', created_at: new Date().toISOString(), started_at: null, ...o,
 });
 /** What every browser must compute from the revealed seed: who wins a 1v1 normal battle, and the pot. */
@@ -88,7 +88,7 @@ describe('live battle page', () => {
   it('shows the lobby, lets me take the open seat, and plays and pays when the last seat fills', async () => {
     srv.s.rows.push(battle()); srv.s.seeds[BID] = SEED;
     await mount();
-    expect(el.textContent).toContain('Sadkat');
+    expect(el.textContent).toContain('Nova');
     expect(el.querySelector('.join-seat')).not.toBeNull();                  // I am only watching: I can take the open seat
     expect(el.querySelector('.call-bot')).toBeNull();                       // and only the creator may call bots
     (el.querySelector('.join-seat') as HTMLElement).click();
@@ -106,7 +106,7 @@ describe('live battle page', () => {
   });
 
   it('when I am the creator in seat 0 I am paid by the seat-0 result', async () => {
-    srv.s.rows.push(battle({ creator: 'me-uid', seats: [seat('me-uid', 'Mirage'), seat('friend-uid', 'Sadkat')], player_ids: ['me-uid', 'friend-uid'], status: 'running' }));
+    srv.s.rows.push(battle({ creator: 'me-uid', seats: [seat('me-uid', 'Mirage'), seat('friend-uid', 'Nova')], player_ids: ['me-uid', 'friend-uid'], status: 'running' }));
     srv.s.seeds[BID] = SEED; state.balance = 100 - COST;                      // my stake was taken when I created it
     await mount();
     await paid();
@@ -116,7 +116,7 @@ describe('live battle page', () => {
   });
 
   it('only watching a running battle never pays or charges anything', async () => {
-    srv.s.rows.push(battle({ seats: [seat('friend-uid', 'Sadkat'), seat('other-uid', 'Vexx')], player_ids: ['friend-uid', 'other-uid'], status: 'running' }));
+    srv.s.rows.push(battle({ seats: [seat('friend-uid', 'Nova'), seat('other-uid', 'Vexx')], player_ids: ['friend-uid', 'other-uid'], status: 'running' }));
     srv.s.seeds[BID] = SEED;
     await mount(); await drawn(); await run();
     expect(state.balance).toBe(100);
@@ -131,7 +131,7 @@ describe('live battle page', () => {
   });
 
   it('a creator cancelling takes the joiner out and refunds them once', async () => {
-    srv.s.rows.push(battle({ format: '1v1v1', seats: [seat('friend-uid', 'Sadkat'), seat('me-uid', 'Mirage'), null], player_ids: ['friend-uid', 'me-uid'] }));
+    srv.s.rows.push(battle({ format: '1v1v1', seats: [seat('friend-uid', 'Nova'), seat('me-uid', 'Mirage'), null], player_ids: ['friend-uid', 'me-uid'] }));
     state.balance = 100 - COST;
     await mount(); await drawn();
     srv.s.rows[0].status = 'cancelled'; srv.emit(srv.s.rows[0]);
@@ -142,7 +142,7 @@ describe('live battle page', () => {
   });
 
   it('leaving a battle that has not started refunds the stake', async () => {
-    srv.s.rows.push(battle({ format: '1v1v1', seats: [seat('friend-uid', 'Sadkat'), seat('me-uid', 'Mirage'), null], player_ids: ['friend-uid', 'me-uid'] }));
+    srv.s.rows.push(battle({ format: '1v1v1', seats: [seat('friend-uid', 'Nova'), seat('me-uid', 'Mirage'), null], player_ids: ['friend-uid', 'me-uid'] }));
     state.balance = 100 - COST;
     await mount(); await drawn();
     leave?.(); leave = undefined;
@@ -152,7 +152,7 @@ describe('live battle page', () => {
   });
 
   it('leaving after the battle is decided still pays the winner', async () => {
-    srv.s.rows.push(battle({ creator: 'me-uid', seats: [seat('me-uid', 'Mirage'), seat('friend-uid', 'Sadkat')], player_ids: ['me-uid', 'friend-uid'], status: 'running' }));
+    srv.s.rows.push(battle({ creator: 'me-uid', seats: [seat('me-uid', 'Mirage'), seat('friend-uid', 'Nova')], player_ids: ['me-uid', 'friend-uid'], status: 'running' }));
     srv.s.seeds[BID] = SEED; state.balance = 100 - COST;
     await mount(); await drawn();
     leave?.(); leave = undefined;                                           // closes the page before the reels finish
@@ -170,7 +170,7 @@ describe('live battle page', () => {
 
 describe('catching up after a reload', () => {
   it('pays a battle that finished while the page was closed, once', async () => {
-    srv.s.rows.push(battle({ creator: 'me-uid', seats: [seat('me-uid', 'Mirage'), seat('friend-uid', 'Sadkat')], player_ids: ['me-uid', 'friend-uid'], status: 'running' }));
+    srv.s.rows.push(battle({ creator: 'me-uid', seats: [seat('me-uid', 'Mirage'), seat('friend-uid', 'Nova')], player_ids: ['me-uid', 'friend-uid'], status: 'running' }));
     srv.s.seeds[BID] = SEED; state.balance = 100 - COST;
     await reconcileAll(); await reconcileAll();
     const e = await expected(SEED, 'cs');
@@ -179,7 +179,7 @@ describe('catching up after a reload', () => {
   });
 
   it('refunds a cancelled battle and closes one that was left waiting', async () => {
-    srv.s.rows.push(battle({ id: '22222222-2222-4222-8222-222222222222', status: 'cancelled', seats: [seat('friend-uid', 'Sadkat'), seat('me-uid', 'Mirage')], player_ids: ['friend-uid', 'me-uid'] }));
+    srv.s.rows.push(battle({ id: '22222222-2222-4222-8222-222222222222', status: 'cancelled', seats: [seat('friend-uid', 'Nova'), seat('me-uid', 'Mirage')], player_ids: ['friend-uid', 'me-uid'] }));
     srv.s.rows.push(battle({ id: '33333333-3333-4333-8333-333333333333', creator: 'me-uid', seats: [seat('me-uid', 'Mirage'), null], player_ids: ['me-uid'] }));
     state.balance = 100 - 2 * COST;
     await reconcileAll();

@@ -6,7 +6,7 @@ import { bet, annotate, HOUSE } from '../fair.js';
 import { pushBet } from '../feed.js';
 import { $, $$, esc, fmt, money, icon, toast, avatar, coin, modal, confetti, sleep } from '../ui.js';
 import { sfx } from '../sfx.js';
-import { isLive, liveMe, createLiveFlip, joinLiveFlip, cancelLiveFlip, openLiveFlips, myLiveFlips, watchFlips, liveFlipSeed, refundOnce, settleOnce, isSettled, onReconcile, type LiveFlip } from '../live.js';
+import { isLive, liveMe, callLiveFlipBot, createLiveFlip, joinLiveFlip, cancelLiveFlip, openLiveFlips, myLiveFlips, watchFlips, liveFlipSeed, refundOnce, settleOnce, isSettled, onReconcile, type LiveFlip } from '../live.js';
 
 const SIDES = {
   bolt: { label: 'Bolt', svg: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>' },
@@ -153,7 +153,7 @@ export function render(el) {
     const { g, m } = view;
     // Build only the current state (the "done" view needs a result that doesn't exist earlier).
     const centers = {
-      waiting: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Waiting for an opponent</span>${g.mine && !g.live ? '<button class="btn btn-primary" id="callBot">Call bot</button>' : ''}${g.mine && g.live ? '<button class="btn btn-ghost" id="cancelFlip">Cancel game</button>' : ''}</div>`,
+      waiting: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Waiting for an opponent</span>${g.mine ? '<button class="btn btn-primary" id="callBot">Call bot</button>' : ''}${g.mine && g.live ? '<button class="btn btn-ghost" id="cancelFlip">Cancel game</button>' : ''}</div>`,
       countdown: () => `<div class="cf-center"><div class="cf-ring"><b class="cf-count" id="cfCount">3</b></div><span class="muted">Game starting</span></div>`,
       flipping: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Flipping…</span></div>`,
       done: () => `<div class="cf-center"><div class="cf-ring win">${avatar(g.winner, 120)}${sideChip(g.result, 34)}</div><b class="cf-winner">${iWon(g) ? 'You win!' : `${esc(g.winner)} wins`}</b>${money(round2(g.amount * PAYOUT))}
@@ -166,7 +166,7 @@ export function render(el) {
       ${g.hash ? `<div class="game-hash"><code>${g.hash}</code><span>${g.live ? 'Server hash, committed before anyone joined' : `Provably fair · nonce ${g.nonce}`}</span></div>` : ''}
       ${g.live && g.seed ? `<div class="game-hash"><code>${g.seed}</code><span>Server seed, revealed: result = HMAC-SHA256(seed, "${g.id}:0:0")</span></div>` : ''}`;
     m.el.querySelector('.modal-x').onclick = m.close;
-    $('#callBot', m.el)?.addEventListener('click', () => botJoins(g));
+    $('#callBot', m.el)?.addEventListener('click', () => (g.live ? callBotLive(g) : botJoins(g)));
     $('#cancelFlip', m.el)?.addEventListener('click', () => { m.close(); cancelLive(g); });
     $('#dd', m.el)?.addEventListener('click', () => {
       if (!canDouble(g)) return;
@@ -276,7 +276,7 @@ export function render(el) {
   // ---- live games: the server holds the lobby and draws the result ---------------------------------------------
   const fromRow = (r: LiveFlip): CfGame => ({
     id: r.id, live: true, creator: { name: r.creator_name, side: r.side }, joiner: r.joiner_name ? { name: r.joiner_name } : null, amount: Number(r.amount),
-    status: 'waiting', result: r.result, winnerId: r.winner, winner: r.winner ? (r.winner === r.creator ? r.creator_name : (r.joiner_name as string)) : null,
+    status: 'waiting', result: r.result, winnerId: r.winner, winner: r.winner ? (r.winner === r.creator ? r.creator_name : (r.joiner_name as string)) : (r.status === 'done' ? (r.joiner_name as string) : null),   // no winner id on a finished game = the bot won
     mine: r.creator === liveMe() ? 'creator' : r.joiner === liveMe() ? 'joiner' : false, at: Date.parse(r.created_at) || Date.now(), hash: r.server_hash,
   });
   /** Apply one row from the server (list load, realtime event or the answer to my own call). Idempotent. */
@@ -316,6 +316,11 @@ export function render(el) {
       credit(g.amount); toast(e instanceof Error ? e.message : 'Could not join the game', 'error');
       void openLiveFlips().then(rows => { list.length = 0; rows.forEach(upsert); drawLists(); }).catch(() => {});
     }
+  }
+  /** The creator takes the other seat with a house bot. The server draws the result; if the bot wins, nobody is paid. */
+  async function callBotLive(g) {
+    try { upsert(await callLiveFlipBot(g.id, randomBot([g.creator.name]))); sfx.click(); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Could not call a bot', 'error'); }
   }
   function cancelLive(g) {
     cancelLiveFlip(g.id)

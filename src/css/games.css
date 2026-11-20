@@ -397,7 +397,7 @@ button.mini-case:hover { box-shadow: 0 0 0 2px var(--line2); }
 .bt-status h2 { font-size: 18px; display: flex; gap: 8px; align-items: center; }
 .bt-status .after, .bt-status .lobby-ctl { width: auto; }
 
-.bt-grid { display: grid; grid-template-columns: repeat(var(--P), minmax(0, 1fr)); gap: 14px; }
+.bt-grid { --gap: 14px; display: grid; grid-template-columns: repeat(var(--P), minmax(0, 1fr)); gap: var(--gap); }
 .bt-stage { position: relative; padding: 0 30px; border-radius: 18px; overflow: hidden;
   background: radial-gradient(ellipse at 50% 50%, rgba(143,107,255,.08), transparent 70%), linear-gradient(180deg, #0d1424, #0a0f1a); border: 1px solid var(--line); }
 .bt-stage .vreel { height: 360px; border-radius: 0; background: transparent; border: 0; mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent); }
@@ -426,7 +426,7 @@ button.mini-case:hover { box-shadow: 0 0 0 2px var(--line2); }
 .pb-bot { display: flex; align-items: center; gap: 8px; }
 .pb-bot b { font: 800 15px var(--display); }
 .pb-bot .chance-chip { margin-left: auto; }
-.bt-players .pbar.has-vs::before { content: 'VS'; position: absolute; left: -14px; top: 50%; transform: translate(-50%, -50%); width: 26px; height: 22px; border-radius: 6px; display: grid; place-items: center; font: 800 10px var(--display); color: var(--muted); background: var(--bg2); border: 1px solid var(--line2); z-index: 2; }
+.bt-players .pbar.has-vs::before { content: 'VS'; position: absolute; left: calc(var(--gap) / -2); top: 50%; transform: translate(-50%, -50%); width: 26px; height: 22px; border-radius: 6px; display: grid; place-items: center; font: 800 10px var(--display); color: var(--muted); background: var(--bg2); border: 1px solid var(--line2); z-index: 2; }
 .bt-players .pbar.winner { border-color: var(--accent); box-shadow: 0 0 24px -8px var(--accent); }
 .bt-players .pbar.winner .pb-bot b { color: var(--accent); }
 .bt-players .pbar.loser { opacity: .6; }
@@ -451,10 +451,10 @@ button.mini-case:hover { box-shadow: 0 0 0 2px var(--line2); }
   .bt-tools, .bt-ctl { justify-content: center; }
 }
 @media (max-width: 900px) {
-  .bt-grid { gap: 8px; }
+  .bt-grid { --gap: 8px; }
   .bt-stage { padding: 0 18px; }
   .bt-stage .vreel, .bt-stage .seat-wait { height: 280px; }
-  .bt-players .pbar.has-vs::before { left: -4px; width: 20px; font-size: 8px; }
+  .bt-players .pbar.has-vs::before { width: 20px; font-size: 8px; }
   .slots { grid-template-columns: 1fr; }
   .bt-cases .round-cases { max-width: 200px; }
 }

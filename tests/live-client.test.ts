@@ -3,9 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const srv = vi.hoisted(() => {
-  const s = { rows: [] as any[], next: 1, watchers: new Set<(ev: string, r: any) => void>(), failNext: '' };
+  const s = { rows: [] as any[], next: 1, watchers: new Set<(ev: string, r: any) => void>(), failNext: '', botResult: 'bolt' };
   const emit = (r: any): void => s.watchers.forEach(w => w('UPDATE', { ...r }));
-  const row = (o: any) => ({ id: s.next++, creator: 'friend-uid', creator_name: 'Sadkat', side: 'bolt', amount: 5, joiner: null, joiner_name: null, status: 'waiting', result: null, winner: null, server_hash: 'h', created_at: new Date().toISOString(), finished_at: null, ...o });
+  const row = (o: any) => ({ id: s.next++, creator: 'friend-uid', creator_name: 'Nova', side: 'bolt', amount: 5, joiner: null, joiner_name: null, status: 'waiting', result: null, winner: null, server_hash: 'h', created_at: new Date().toISOString(), finished_at: null, ...o });
   return { s, emit, row };
 });
 
@@ -25,6 +25,11 @@ vi.mock('../src/live.js', async importOriginal => {
       fail();
       const r = srv.s.rows.find(x => x.id === id); if (!r || r.status !== 'waiting') throw new Error('Someone already joined that coinflip, or it was cancelled.');
       Object.assign(r, { joiner: 'me-uid', joiner_name: 'Mirage', status: 'done', result: 'star', winner: r.side === 'star' ? r.creator : 'me-uid' });
+      return { ...r };
+    },
+    callLiveFlipBot: async (id: number, name: string) => {
+      const r = srv.s.rows.find(x => x.id === id); if (!r || r.status !== 'waiting') throw new Error('Someone already joined that coinflip, or it was cancelled.');
+      Object.assign(r, { joiner: null, joiner_name: name, joiner_bot: true, status: 'done', result: srv.s.botResult, winner: r.side === srv.s.botResult ? r.creator : null });
       return { ...r };
     },
     cancelLiveFlip: async (id: number) => {
@@ -49,7 +54,7 @@ const setAmount = (n: number): void => { (el.querySelector('#cfAmt') as HTMLInpu
 beforeEach(() => {
   vi.useFakeTimers();
   document.body.innerHTML = '<div id="toasts"></div>';
-  srv.s.rows.length = 0; srv.s.watchers.clear(); srv.s.next = 100; srv.s.failNext = '';
+  srv.s.rows.length = 0; srv.s.watchers.clear(); srv.s.next = 100; srv.s.failNext = ''; srv.s.botResult = 'bolt';
   resetAccount(); confirmAge(state.rg); state.liveSettled = [];
 });
 afterEach(() => { leave?.(); leave = undefined; document.body.innerHTML = ''; vi.useRealTimers(); });
@@ -59,7 +64,7 @@ describe('live coinflip page', () => {
     srv.s.rows.push(srv.row({ amount: 7 }));
     await mount();
     expect(el.querySelectorAll('#openGames .cf-row')).toHaveLength(1);
-    expect(el.querySelector('#openGames')!.textContent).toContain('Sadkat');
+    expect(el.querySelector('#openGames')!.textContent).toContain('Nova');
     expect(el.textContent).toContain('Live: real players');
   });
 
@@ -73,7 +78,7 @@ describe('live coinflip page', () => {
     await settle(8000);                                   // no bot picks it up: it waits for a real player
     expect(mine.status).toBe('waiting');
     // the friend joins and the server decides: bolt wins, which is my side
-    Object.assign(mine, { joiner: 'friend-uid', joiner_name: 'Sadkat', status: 'done', result: 'bolt', winner: 'me-uid' });
+    Object.assign(mine, { joiner: 'friend-uid', joiner_name: 'Nova', status: 'done', result: 'bolt', winner: 'me-uid' });
     srv.emit(mine);
     await settle();
     expect(state.balance).toBeCloseTo(95 + 5 * PAYOUT, 2);
@@ -88,7 +93,7 @@ describe('live coinflip page', () => {
     setAmount(3); click('.cf-make.star');
     await vi.advanceTimersByTimeAsync(50);
     const mine = srv.s.rows[0];
-    Object.assign(mine, { joiner: 'friend-uid', joiner_name: 'Sadkat', status: 'done', result: 'bolt', winner: 'friend-uid' });
+    Object.assign(mine, { joiner: 'friend-uid', joiner_name: 'Nova', status: 'done', result: 'bolt', winner: 'friend-uid' });
     srv.emit(mine);
     await settle();
     expect(state.balance).toBe(97);
@@ -139,6 +144,41 @@ describe('live coinflip page', () => {
     r.status = 'cancelled'; srv.emit(r);
     await vi.advanceTimersByTimeAsync(50);
     expect(el.querySelectorAll('#openGames .cf-row')).toHaveLength(0);
+  });
+});
+
+describe('calling a bot into a live game', () => {
+  const callBot = async (): Promise<void> => { (document.querySelector('#callBot') as HTMLElement).click(); await vi.advanceTimersByTimeAsync(50); };
+  it('a waiting game of mine shows Call bot; when my side wins I am paid', async () => {
+    await mount();
+    setAmount(5); click('.cf-make.bolt');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(document.querySelector('#callBot')).not.toBeNull();
+    srv.s.botResult = 'bolt';                                      // the server's roll lands on my side
+    await callBot();
+    await settle();
+    expect(srv.s.rows[0]).toMatchObject({ joiner_bot: true, status: 'done', winner: 'me-uid' });
+    expect(state.balance).toBeCloseTo(95 + 5 * PAYOUT, 2);
+    expect(state.liveSettled).toContain(`f:${srv.s.rows[0].id}`);
+  });
+  it('when the bot wins nobody is paid, and the game is still settled once', async () => {
+    await mount();
+    setAmount(5); click('.cf-make.bolt');
+    await vi.advanceTimersByTimeAsync(50);
+    srv.s.botResult = 'star';
+    await callBot();
+    await settle();
+    expect(srv.s.rows[0].winner).toBeNull();
+    expect(state.balance).toBe(95);
+    expect(state.liveSettled).toContain(`f:${srv.s.rows[0].id}`);
+    srv.emit(srv.s.rows[0]); await settle(1000);
+    expect(state.balance).toBe(95);
+  });
+  it('other players cannot call a bot into my game (no button on their side)', async () => {
+    srv.s.rows.push(srv.row({ amount: 3 }));
+    await mount();
+    expect(document.querySelector('#callBot')).toBeNull();
+    expect(el.querySelector('[data-join]')).not.toBeNull();
   });
 });
 

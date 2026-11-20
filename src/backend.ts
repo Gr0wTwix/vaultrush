@@ -27,7 +27,8 @@ export const ERROR_TEXT: Record<string, string> = {
   already_seated: 'You are already in this battle.', battle_full: 'That battle is full.', seat_taken: 'Someone just took that seat.', invalid_seat: 'That seat is not available.',
   too_many_open: 'You already have the maximum number of open games. Finish or cancel one first.', already_started: 'The battle has already started.', not_in_battle: 'You are not in that battle.',
   not_creator: 'Only the creator can do that.', invalid_format: 'Unknown battle format.', invalid_mode: 'That mode is not allowed for this format.', invalid_cases: 'Pick between 1 and 20 cases.',
-  flip_not_found: 'That coinflip no longer exists.', flip_not_open: 'Someone already joined that coinflip, or it was cancelled.', flip_expired: 'That coinflip has been waiting too long.', own_flip: 'You cannot join your own coinflip.', invalid_side: 'Pick bolt or star.',
+  flip_not_found: 'That coinflip no longer exists.', flip_not_open: 'Someone already joined that coinflip, or it was cancelled.', flip_expired: 'That coinflip has been waiting too long.', own_flip: 'You cannot join your own coinflip.', invalid_side: 'Pick bolt or star.', invalid_claim: 'That reward cannot be claimed.', betting_closed: 'Betting is closed for this round.', already_bet: 'You already have a bet in this round.', no_bet: 'You have no bet in this round.',
+  not_started: 'The round has not started yet.', too_late: 'Too late: the round is over.', round_over: 'That round is over.', invalid_game: 'Unknown game.', invalid_lane: 'Pick a lane.', both_sides: "You can't back both Purple and Gray.",
 };
 /** Turn a Postgres/PostgREST error into plain language. */
 export function explain(error: { message?: string } | null | undefined): string {

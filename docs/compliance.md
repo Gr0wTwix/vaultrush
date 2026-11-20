@@ -15,8 +15,8 @@ Everything here is a **demonstration** for a play-money site. No gambling licenc
 
 | Tier | How to reach it | Bet cap |
 |---|---|---|
-| 0 | New account | 50 |
-| 1 | Verify email and date of birth | 250 |
+| 0 | New account | 1,000 |
+| 1 | Verify email and date of birth | 2,500 |
 | 2 | Full identity check (simulated document step plus mock sanctions and PEP screening) | 5,000 |
 
 The date of birth is collected only here, when a player chooses to verify. It is not asked at sign-up. Screening is a local mock list; a match puts the account on a compliance hold.

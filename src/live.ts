@@ -13,7 +13,7 @@ export interface LiveBattle {
   status: 'waiting' | 'running' | 'cancelled'; server_hash: string; client_seed: string; created_at: string; started_at: string | null;
 }
 export interface LiveFlip {
-  id: number; creator: string; creator_name: string; side: 'bolt' | 'star'; amount: number; joiner: string | null; joiner_name: string | null;
+  id: number; creator: string; creator_name: string; side: 'bolt' | 'star'; amount: number; joiner: string | null; joiner_name: string | null; joiner_bot?: boolean;
   status: 'waiting' | 'done' | 'cancelled'; result: 'bolt' | 'star' | null; winner: string | null; server_hash: string; created_at: string; finished_at: string | null;
 }
 
@@ -23,6 +23,9 @@ let live = false;
 export const liveMe = (): string => me;
 /** True when this browser should use real lobbies instead of the simulated ones. */
 export const isLive = (): boolean => live;
+let roundsAvailable = false;                            // migration 0005 (shared Crash and Double rounds) is applied
+/** True when Crash and Double should use the server's shared rounds. */
+export const roundsOn = (): boolean => live && roundsAvailable;
 
 /** Called by the sign-in code. Probes the server once; emits 'live' when the answer changes so pages redraw. */
 let probing: Promise<void> | null = null, probedFor = '';
@@ -33,15 +36,18 @@ export function initLive(userId: string): Promise<void> {
     me = userId;
     let ok = false;
     if (userId && backendEnabled()) { try { ok = (await call<boolean>('live_ready')) === true; } catch { ok = false; } }
-    const changed = ok !== live;
-    live = ok;
+    let rounds = false;
+    if (ok) { try { rounds = (await call<boolean>('rounds_ready')) === true; } catch { rounds = false; } }
+    const changed = ok !== live || rounds !== roundsAvailable;
+    live = ok; roundsAvailable = rounds;
     if (changed) emit('live', ok);
+    void syncClaims().then(() => { if (claimsOn) emit('state', state); });
     if (ok) { void startPresence(); await reconcileAll(); }
   })();
   return probing;
 }
 export function stopLive(): void {
-  me = ''; probing = null; probedFor = '';
+  me = ''; claimsOn = false; roundsAvailable = false; probing = null; probedFor = '';
   if (live) { live = false; emit('live', false); }
   const ch = presence; presence = null;
   if (ch) void getClient().then(c => c.removeChannel(ch)).catch(() => {});
@@ -60,6 +66,37 @@ export function settleOnce(key: string): boolean {
 /** Give a stake back exactly once. */
 export function refundOnce(key: string, amount: number): boolean { if (!settleOnce(key)) return false; credit(amount); return true; }
 
+// ---- free claims: the welcome crate (once per account) and the daily crate (once per 24 h), enforced by the server ------------------
+// The browser alone cannot enforce "once per player": the same account on two browsers, or on localhost and the live site, has two
+// separate storages. With a cloud account the server records each claim; browser-only accounts keep the local rule.
+let claimsOn = false;
+export type ClaimKind = 'welcome' | 'daily_case';
+export const claimsEnabled = (): boolean => claimsOn;
+interface ClaimAnswer { claimed: boolean; last: string | null; next: string | null }
+const applyClaim = (kind: ClaimKind, last: string | null): void => {
+  if (kind === 'welcome') { if (last) state.welcomeLeft = 0; }
+  else if (last) state.lastDailyCase = Math.max(state.lastDailyCase, Date.parse(last) || 0);
+};
+/** After sign-in: learn what this account has already claimed anywhere, and switch server-side claims on if the database supports them. */
+export async function syncClaims(): Promise<void> {
+  if (!backendEnabled() || !me) { claimsOn = false; return; }
+  try {
+    const s = await call<{ welcome: string | null; daily_case: string | null }>('claim_status');
+    claimsOn = true;
+    applyClaim('welcome', s.welcome); applyClaim('daily_case', s.daily_case);
+    save();
+  } catch { claimsOn = false; }                       // migration 0004 not applied (or offline): keep the browser-only rule
+}
+/** Ask permission to open a free crate. 'ok' = go ahead, 'taken' = already opened (local state is updated), 'error' = could not ask. */
+export async function takeFreeClaim(kind: ClaimKind): Promise<'ok' | 'taken' | 'error'> {
+  if (!claimsOn) return 'ok';
+  try {
+    const r = await call<ClaimAnswer>('claim_free', { p_kind: kind });
+    applyClaim(kind, r.last); save();
+    return r.claimed ? 'ok' : 'taken';
+  } catch { return 'error'; }
+}
+
 const reconcilers: (() => Promise<void>)[] = [];
 /** Game modules register how to settle their own unfinished games after a reload or an offline spell. */
 export const onReconcile = (fn: () => Promise<void>): void => { reconcilers.push(fn); };
@@ -67,6 +104,8 @@ export async function reconcileAll(): Promise<void> { for (const fn of reconcile
 
 // ---- realtime helpers ---------------------------------------------------------------------------------------------
 type Change<T> = (event: 'INSERT' | 'UPDATE' | 'DELETE', row: T) => void;
+/** Subscribe to every change of a table (row-level security still decides what this player may see). */
+export const watchTable = <T>(table: string, cb: Change<T>): Promise<() => void> => watch<T>(table, cb);
 async function watch<T>(table: string, cb: Change<T>): Promise<() => void> {
   const c = await getClient();
   const ch = c.channel(`live-${table}-${Math.random().toString(36).slice(2, 8)}`)
@@ -105,6 +144,8 @@ export const watchBattles = (cb: Change<LiveBattle>): Promise<() => void> => wat
 export const createLiveFlip = (side: string, amount: number) => call<LiveFlip>('create_live_coinflip', { p_side: side, p_amount: amount });
 export const joinLiveFlip = (id: number) => call<LiveFlip>('join_live_coinflip', { p_id: id });
 export const cancelLiveFlip = (id: number) => call<LiveFlip>('cancel_live_coinflip', { p_id: id });
+/** The creator fills the other seat with a house bot; if the bot's side wins, nobody is paid. */
+export const callLiveFlipBot = (id: number, name: string) => call<LiveFlip>('call_live_coinflip_bot', { p_id: id, p_name: name });
 export async function openLiveFlips(): Promise<LiveFlip[]> {
   const { data } = await (await getClient()).from('live_coinflips').select('*').eq('status', 'waiting').gt('created_at', SINCE()).order('created_at', { ascending: false }).limit(50);
   return (data as LiveFlip[] | null) ?? [];

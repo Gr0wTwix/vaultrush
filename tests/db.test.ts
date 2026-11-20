@@ -47,7 +47,7 @@ const fails = async (p: Promise<unknown>, code: string) => { await expect(p).rej
 beforeAll(async () => {
   db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(PRELUDE);
-  await db.exec(readFileSync(new URL('../supabase/migrations/0001_core.sql', import.meta.url), 'utf8'));
+  for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps']) await db.exec(readFileSync(new URL(`../supabase/migrations/${m}.sql`, import.meta.url), 'utf8'));
   await signup(ALICE, 'Alice');
   await signup(BOB, 'Bob');
 }, 60_000);
@@ -189,10 +189,14 @@ describe('the gate', () => {
     await sql(`update public.profiles set age_confirmed_at = null where id = $1`, [CAROL]);
     await fails(bet(CAROL, 1, 2), 'age_not_confirmed');
     await sql(`update public.profiles set age_confirmed_at = now() where id = $1`, [CAROL]);
-    await sql(`update public.wallets set balance = 1000 where user_id = $1`, [CAROL]);
-    await fails(bet(CAROL, 51, 2), 'tier_cap_exceeded');
+    await sql(`update public.wallets set balance = 5000 where user_id = $1`, [CAROL]);
+    expect((await bet(CAROL, 1000, 2)).amount).toBe(1000);                       // an unverified player may bet up to 1000
+    await fails(bet(CAROL, 1001, 2), 'tier_cap_exceeded');
     await sql(`update public.account_controls set kyc_tier = 1 where user_id = $1`, [CAROL]);
-    expect((await bet(CAROL, 51, 2)).amount).toBe(51);
+    expect((await bet(CAROL, 1001, 2)).amount).toBe(1001);
+    await fails(bet(CAROL, 2501, 2), 'tier_cap_exceeded');
+    await sql(`update public.account_controls set kyc_tier = 2 where user_id = $1`, [CAROL]);
+    expect((await bet(CAROL, 2501, 2)).amount).toBe(2501);
   });
   it('blocks self-excluded and cooling-off players, and an exclusion can only grow', async () => {
     const until1 = await rpc(BOB, 'self_exclude', 24);

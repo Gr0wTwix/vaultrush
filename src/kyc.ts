@@ -4,7 +4,7 @@
 import type { KycState, KycTier } from './types.js';
 
 /** Highest single bet allowed per verification tier (coins). */
-export const TIER_MAX_BET: Record<KycTier, number> = { 0: 50, 1: 250, 2: 5000 };
+export const TIER_MAX_BET: Record<KycTier, number> = { 0: 1000, 1: 2500, 2: 5000 };
 export const tierMaxBet = (tier: KycTier): number => TIER_MAX_BET[tier];
 export const TIER_NAMES: Record<KycTier, string> = { 0: 'Unverified', 1: 'Basic (email and age)', 2: 'Full (identity checked)' };
 
