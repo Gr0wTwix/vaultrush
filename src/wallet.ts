@@ -58,7 +58,21 @@ export function freezeBalance(spent = 0, ms = 120_000): void {
 }
 export function unfreezeBalance(): void { if (frozen === null) return; frozen = null; clearTimeout(freezeTimer); show(); }
 
-// ---- items --------------------------------------------------------------------------------------------------------------------------------------
+// ---- items ----
+// An item the database has just given me is already in the inventory (a refresh or the Inventory page shows it at once), but the counter in the top bar
+// leaves it out until the animation that reveals it has ended: holdItems() when the answer arrives, releaseItems() when the reel has stopped.
+const heldItems = new Map<string, ReturnType<typeof setTimeout>>();
+export function holdItems(uids: string[], ms = 120_000): void {
+  if (!isServerWallet()) return;
+  for (const u of uids) { clearTimeout(heldItems.get(u)); heldItems.set(u, setTimeout(() => releaseItems([u]), ms)); }
+}
+export function releaseItems(uids: string[]): void {
+  let any = false;
+  for (const u of uids) if (heldItems.has(u)) { clearTimeout(heldItems.get(u)); heldItems.delete(u); any = true; }
+  if (any) emit('state', state);
+}
+/** How many items the top bar shows: everything in the inventory except items whose reveal animation has not ended yet. */
+export const visibleInventoryCount = (): number => (heldItems.size ? state.inv.reduce((n, e) => n + (heldItems.has(e.uid) ? 0 : 1), 0) : state.inv.length);
 export function addInventory(entries: InvEntry[]): void { state.inv = [...entries, ...state.inv]; save(); }
 export function dropInventory(uids: string[]): void { const s = new Set(uids); state.inv = state.inv.filter(e => !s.has(e.uid)); save(); }
 
@@ -133,7 +147,7 @@ export function stopWallet(): void {
   started = ''; stops.forEach(s => s()); stops = []; clearInterval(poll); clearTimeout(refreshTimer); wantFull = false;
   if (visibility) document.removeEventListener('visibilitychange', visibility); visibility = null;
   offCredit?.(); offCredit = null; offBalance?.(); offBalance = null; offRefresh?.(); offRefresh = null;
-  holds.splice(0).forEach(h => clearTimeout(h.timer)); frozen = null; clearTimeout(freezeTimer); serverBalance = 0; seq = applied = 0;
+  holds.splice(0).forEach(h => clearTimeout(h.timer)); heldItems.forEach(t => clearTimeout(t)); heldItems.clear(); frozen = null; clearTimeout(freezeTimer); serverBalance = 0; seq = applied = 0;
   if (isServerWallet()) { setServerWallet(false); emit('wallet', false); }
 }
 
@@ -161,6 +175,7 @@ export interface OpenedCase { uid: string; item: string; ticket: number; value: 
 /** Open 1 to 10 cases. The items are in the inventory when this returns; the balance is after the stake. */
 export async function openCases(caseId: string, count: number): Promise<{ balance: number; cost: number; opened: OpenedCase[] }> {
   const r = await call<{ balance: number; cost: number; opened: OpenedCase[] }>('open_cases', { p_case: caseId, p_count: count });
+  holdItems(r.opened.map(o => o.uid));                                  // in the inventory now, but not counted in the top bar until the reels stop
   addInventory(r.opened.map(o => ({ uid: o.uid, id: o.item, at: Date.now() })));
   applyBalance(r.balance); scheduleRefresh();
   return r;
@@ -175,7 +190,7 @@ export interface UpgradeResult { balance: number; win: boolean; roll: number; ch
 export async function upgradeItem(uids: string[], coins: number, target: string, over: boolean): Promise<UpgradeResult> {
   const r = await call<UpgradeResult>('upgrade_item', { p_uids: uids, p_coins: coins, p_target: target, p_over: over });
   dropInventory(uids);
-  if (r.win && r.uid) addInventory([{ uid: r.uid, id: r.item, at: Date.now() }]);
+  if (r.win && r.uid) { holdItems([r.uid]); addInventory([{ uid: r.uid, id: r.item, at: Date.now() }]); }
   applyBalance(r.balance); scheduleRefresh();
   return r;
 }
@@ -238,7 +253,7 @@ export interface FreeCase { claimed: boolean; item?: string; uid?: string; ticke
 /** Open a free crate ('welcome', 'daily_case', 'level_10' ...). The item is in the inventory when this returns. */
 export async function openFreeCase(kind: string): Promise<FreeCase> {
   const r = await call<FreeCase>('open_free_case', { p_kind: kind });
-  if (r.claimed && r.uid && r.item) addInventory([{ uid: r.uid, id: r.item, at: Date.now() }]);
+  if (r.claimed && r.uid && r.item) { holdItems([r.uid]); addInventory([{ uid: r.uid, id: r.item, at: Date.now() }]); }
   await refreshWallet(false).catch(() => {});
   return r;
 }

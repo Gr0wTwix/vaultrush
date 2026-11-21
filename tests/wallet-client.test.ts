@@ -20,7 +20,7 @@ vi.mock('../src/live.js', async importOriginal => ({
 
 import { CASE, ITEM } from '../src/data.js';
 import { addItems, credit, debit, debitError, emit, grant, removeItems, resetAccount, setServerWallet, state } from '../src/state.js';
-import { applyBalance, claimFaucet, freezeBalance, heldPayouts, holdPayout, initWallet, minesStart, openCases, plinkoDrop, refreshWallet, releasePayout, sellItems, stopWallet, unfreezeBalance, upgradeItem } from '../src/wallet.js';
+import { applyBalance, claimFaucet, freezeBalance, heldPayouts, holdItems, holdPayout, initWallet, minesStart, openCases, openFreeCase, plinkoDrop, refreshWallet, releaseItems, releasePayout, sellItems, stopWallet, unfreezeBalance, upgradeItem, visibleInventoryCount } from '../src/wallet.js';
 import { renderCase } from '../src/views/cases.js';
 import * as inventory from '../src/views/inventory.js';
 import * as rewards from '../src/views/rewards.js';
@@ -287,3 +287,38 @@ describe('Rewards page with the server wallet', () => {
 });
 
 void emit;
+
+describe('a new item is revealed by its animation, not before', () => {
+  it('Cases: the item is in the inventory at once, but the top bar counts it only when the reels have stopped', async () => {
+    await on(); mount(renderCase, 'starter');
+    (el.querySelector('#openBtn') as HTMLElement).click(); await vi.advanceTimersByTimeAsync(300);       // the reels are still turning
+    expect(state.inv).toHaveLength(1);                                                                   // the Inventory page (or a refresh) shows it now...
+    expect(visibleInventoryCount()).toBe(0);                                                             // ...the counter beside the balance does not
+    mount(inventory.render); expect(el.querySelectorAll('.contents .card, .contents > *').length).toBeGreaterThan(0);
+    await settle();
+    expect(visibleInventoryCount()).toBe(1);
+  });
+  it('leaving the page mid-spin counts the item at once', async () => {
+    await on(); mount(renderCase, 'starter');
+    (el.querySelector('#openBtn') as HTMLElement).click(); await vi.advanceTimersByTimeAsync(300);
+    expect(visibleInventoryCount()).toBe(0);
+    if (typeof leave === 'function') leave(); leave = undefined;
+    expect(visibleInventoryCount()).toBe(1);
+  });
+  it('a won upgrade and a free crate hold their item the same way, and a hold never lasts more than two minutes', async () => {
+    await on();
+    srv.handlers['open_free_case'] = () => { const e = give('p1'); return { claimed: true, item: 'p1', uid: e.uid, ticket: 1, value: 0.08, case: 'daily', label: 'Daily case', next: null, nonce: 0 }; };
+    await openFreeCase('daily_case');
+    expect(state.inv).toHaveLength(1); expect(visibleInventoryCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_001);
+    expect(visibleInventoryCount()).toBe(1);
+    srv.handlers['upgrade_item'] = () => { const t = give('k1'); return { balance: 100, win: true, roll: 0.1, chance: 0.4, stake: 1, item: 'k1', uid: t.uid, from_item: null, nonce: 1, bet_id: 1 }; };
+    await upgradeItem([], 1, 'k1', false);
+    expect(state.inv).toHaveLength(2); expect(visibleInventoryCount()).toBe(1);
+    releaseItems([state.inv[0]!.uid]); expect(visibleInventoryCount()).toBe(2);
+  });
+  it('without the server wallet nothing is held', async () => {
+    state.inv = [{ uid: 'a', id: 'p1', at: 1 }];
+    holdItems(['a']); expect(visibleInventoryCount()).toBe(1);
+  });
+});

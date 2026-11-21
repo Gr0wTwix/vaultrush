@@ -6,7 +6,7 @@ import { pushDrop } from '../feed.js';
 import { takeFreeClaim } from '../live.js';
 import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, SPEEDS, reelMs, guestCard } from '../ui.js';
 import { sfx } from '../sfx.js';
-import { serverWallet, openFreeCase as openFree, sellItems, claimRakeback, claimCalendar, redeemPromo } from '../wallet.js';
+import { serverWallet, openFreeCase as openFree, sellItems, claimRakeback, claimCalendar, redeemPromo, releaseItems } from '../wallet.js';
 
 export const LEVEL_CASES: [number, string][] = [[10, 'starter'], [20, 'neon'], [30, 'charmed'], [40, 'sniper'], [50, 'blade'], [60, 'high']];
 const CALENDAR = [1, 2, 3, 5, 8, 12, 25];
@@ -34,6 +34,7 @@ export async function openFreeCase(c, label, kind?: string) {
     logTx(label, item.value, `${item.weapon} | ${item.skin}`);
   }
   await spinReel($('#freeReel', m.el), c.entries, item, { duration: reelMs() });
+  releaseItems([added.uid]);                                          // the reel has stopped: now the top bar counts the item
   pushDrop({ user: state.name, item, source: c.name });
   if (['legendary', 'mythic', 'epic'].includes(item.rarity)) { sfx.big(); confetti(RARITY[item.rarity].color); } else sfx.win();
   const res = $('#freeRes', m.el);

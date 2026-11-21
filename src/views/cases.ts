@@ -5,7 +5,7 @@ import { pushDrop, pushBet } from '../feed.js';
 import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, SPEEDS, reelMs, speedSeg } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
-import { serverWallet, openCases, sellItems } from '../wallet.js';
+import { serverWallet, openCases, sellItems, releaseItems } from '../wallet.js';
 
 const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50+', 50, Infinity]] as [string, string, number, number][];
 
@@ -50,7 +50,7 @@ function toggleFav(id) {
 export function renderCase(el, id) {
   const c = CASE[id];
   if (!c || c.reward) { el.innerHTML = `<div class="panel empty"><h2>Case not found</h2><a class="btn btn-primary" href="#/cases">All cases</a></div>`; return; }
-  let count = 1, busy = false, alive = true;
+  let count = 1, busy = false, alive = true, held: string[] = [];       // items the server has given but whose reels are still turning
 
   el.innerHTML = `
     <a class="back" href="#/cases">← All cases</a>
@@ -122,6 +122,7 @@ export function renderCase(el, id) {
         const r = await openCases(c.id, count);
         rolls = r.opened.map(o => ({ ticket: o.ticket, item: ITEM[o.item] }));
         added = r.opened.map(o => ({ uid: o.uid, id: o.item, at: Date.now() }));
+        held = added.map(a => a.uid);
       } catch (e) { setBusy(false); return toast(e instanceof Error ? e.message : 'Could not open the case', 'error'); }
     } else {
       // One nonce per case opened (consecutive nonces, like the reference sites).
@@ -139,6 +140,7 @@ export function renderCase(el, id) {
     const total = round2(winners.reduce((s, w) => s + w.value, 0));
     pushBet({ user: state.name, game: 'Cases', amount: cost, multi: round2(total / cost), payout: total, mine: true });
     await spinAll(winners);
+    releaseItems(held); held = [];                                      // the reels have stopped: now the top bar counts them
     winners.forEach(w => pushDrop({ user: state.name, item: w, source: c.name }));
     if (!alive) return;
     setBusy(false);
@@ -173,5 +175,5 @@ export function renderCase(el, id) {
     res.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
-  return () => { alive = false; };
+  return () => { alive = false; releaseItems(held); };               // leaving mid-spin: the items are in the inventory, show them
 }

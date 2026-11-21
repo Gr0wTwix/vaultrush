@@ -20,7 +20,7 @@ import * as responsible from './views/responsible.js';
 import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
 import { initSite, gameOff, pausedPanel, GAME_OF_NAV } from './site.js';
-import { serverWallet, claimFaucet } from './wallet.js';
+import { serverWallet, claimFaucet, visibleInventoryCount } from './wallet.js';
 import * as home from './views/home.js';
 import * as cases from './views/cases.js';
 import * as battles from './views/battles.js';
@@ -193,7 +193,7 @@ function renderTopbar() {
     const calm = !s.ui.fx || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (calm) el.textContent = fmt(to);
     else { const anim = t => { const k = Math.min(1, (t - t0) / 450); el.textContent = fmt(from + (to - from) * (1 - (1 - k) ** 3)); if (k < 1) requestAnimationFrame(anim); }; requestAnimationFrame(anim); }
-    $('#invCount b').textContent = s.inv.length;
+    $('#invCount b').textContent = visibleInventoryCount();       // an item still being revealed is not counted yet
   });
 }
 

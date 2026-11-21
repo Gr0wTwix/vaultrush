@@ -5,7 +5,7 @@ import { pushBet, pushDrop } from '../feed.js';
 import { $, $$, fmt, money, itemCard, toast, icon, coin, confetti, avatar, esc, itemArt } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { randomBot } from '../data.js';
-import { serverWallet, upgradeItem } from '../wallet.js';
+import { serverWallet, upgradeItem, releaseItems } from '../wallet.js';
 
 const liveUps = [];
 function simUp() {
@@ -22,7 +22,7 @@ const upRow = u => `<div class="lu-row ${u.win ? 'win' : 'lose'} ${u.mine ? 'min
 
 export function render(el) {
   const sel = new Set<string>();          // selected inventory uids
-  let coins = 0, target = null, busy = false, alive = true, rotation = 0, over = false;
+  let coins = 0, target = null, busy = false, alive = true, rotation = 0, over = false, held: string[] = [];       // a won item whose reveal is still playing
 
   el.innerHTML = `
     <div class="up-king" id="upKing"></div>
@@ -154,6 +154,7 @@ export function render(el) {
       try {
         const r = await upgradeItem(uids, coins, target.id, dirOver);
         ch = r.chance; f = r.roll; win = r.win;
+        held = r.uid ? [r.uid] : [];
       } catch (e) { busy = false; drawStage(); return toast(e instanceof Error ? e.message : 'Could not upgrade', 'error'); }
     } else {
       removeItems(uids);
@@ -191,6 +192,7 @@ export function render(el) {
       requestAnimationFrame(tick);
     });
     await new Promise(r => setTimeout(r, 100));
+    releaseItems(held); held = [];                                      // the pointer has landed: now the top bar counts the item
     if (alive) { rollEl.textContent = final.toFixed(2); $('#chanceLbl', el).textContent = win ? 'winning roll' : 'roll'; rollEl.className = win ? 'pos' : 'neg'; }
     pushLiveUp({ user: state.name, mine: true, from: fromItem, to: tgt, multi: round2(tgt.value / sv), chance: ch, win });
     if (!alive) return;
@@ -211,5 +213,5 @@ export function render(el) {
     toast(`Battle winnings ready to upgrade: ${fmt(coins)}`, 'win');
   }
   drawInv(); drawStage();
-  return () => { alive = false; clearInterval(liveTimer); };
+  return () => { alive = false; clearInterval(liveTimer); releaseItems(held); };
 }
