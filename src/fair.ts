@@ -105,6 +105,8 @@ export async function rotate(): Promise<void> {
 // ---- Game math shared by the games and the verifier -------------------------------------------
 export const HOUSE = { cases: 0.9, crash: 0.97, mines: 0.97, upgrade: 0.95, plinko: 0.97, coinflip: 0.97, double: 0.9333 } as const;
 
+/** Crash climbs as multiplier = e^(CRASH_GROWTH x ms). The database uses the same number (crash_rate() in supabase/migrations/0013_crash_pace.sql). */
+export const CRASH_GROWTH = 0.00008;
 export const crashPoint = (f: number): number => Math.min(10000, Math.max(1, Math.floor((100 * HOUSE.crash) / (1 - f)) / 100));
 
 // ---- Double: 15 tiles, 0 = green, odd = purple, even = gray; bait = tiles 1 and 14 ----------------

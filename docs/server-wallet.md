@@ -50,6 +50,7 @@ Run these in the Supabase SQL editor, in order, after 0007 (each is one paste):
 3. `0010_solo_games.sql` (Cases, Upgrade, Plinko, Mines)
 4. `0011_live_wallet.sql` (Coinflip, Battles, Crash, Double use the wallet). It **closes every game that was waiting or running** and deletes undecided round bets, **without refunds**: their stakes were in browsers, not in the database.
 5. `0012_rewards.sql` (rewards, race, and the switch)
+6. `0013_crash_pace.sql` (a slower Crash: 2x after 8.7 s instead of 5.8 s; deploy the site right after, the page and the database must share the pace)
 
 Then redeploy the game site. Existing browser coins are **not** migrated (your decision). Existing cloud accounts keep the server balance they had (100 from sign-up); new accounts start at 0 and earn from the faucet, crates, rewards and promo codes. To change a balance, use SQL for now: the owner wallet adjustment and the ledger viewer are part of the admin plan (step D, admin side) and are not built yet.
 

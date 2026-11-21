@@ -29,7 +29,7 @@ The database keeps **one current round per game**. Nothing runs in the backgroun
 | | Crash | Double |
 |---|---|---|
 | Betting | 7 s | 12 s |
-| Round | multiplier `e^(0.00012 x ms)` until the crash point | the reel rolls for 5.2 s to the drawn tile |
+| Round | multiplier `e^(0.00008 x ms)` (migration 0013; it was 0.00012) until the crash point | the reel rolls for 5.2 s to the drawn tile |
 | Pause | 3.5 s | 2.6 s |
 | Secret | the crash point stays hidden until the crash instant (the seed is revealed when the round is finished) | the tile is revealed when betting closes, since nobody can bet any more |
 | Bets | one per player; optional auto cash-out | several lanes per player, but not purple with gray; repeating a lane adds to it |

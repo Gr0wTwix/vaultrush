@@ -8,7 +8,7 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CASE, entryForTicket, ticketOf } from '../src/data.js';
 import { decide, FORMATS, shareOf } from '../src/battle-math.js';
-import { DOUBLE_PAY, doubleWins, floatsFor } from '../src/fair.js';
+import { CRASH_GROWTH, DOUBLE_PAY, doubleWins, floatsFor } from '../src/fair.js';
 import type { DoubleLane } from '../src/types.js';
 
 const A = '44444444-4444-4444-4444-444444444444';
@@ -50,7 +50,7 @@ const betsOf = (uid: string, game: string) => sql(`select * from public.bets whe
 beforeAll(async () => {
   db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(PRELUDE);
-  for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps', '0005_rounds', '0006_admin', '0007_site_controls', '0008_wallet', '0009_catalogue', '0010_solo_games', '0011_live_wallet', '0012_rewards'])
+  for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps', '0005_rounds', '0006_admin', '0007_site_controls', '0008_wallet', '0009_catalogue', '0010_solo_games', '0011_live_wallet', '0012_rewards', '0013_crash_pace'])
     await db.exec(readFileSync(new URL(`../supabase/migrations/${m}.sql`, import.meta.url), 'utf8'));
   for (const [id, n] of [[A, 'Alice'], [B, 'Bob'], [C, 'Cara'], [Z, 'Zed']] as const) await rpc(id, 'complete_signup', n, TERMS, true);
 }, 120_000);
@@ -259,9 +259,20 @@ const crashRound = async (ok: (cp: number) => boolean): Promise<{ r: any; cp: nu
   throw new Error('no suitable round');
 };
 const startedAgo = (id: number, secs: number) => sql(`update public.game_rounds set betting_ends_at = now() - make_interval(secs => $2) where id = $1`, [id, secs]);
-const crashSecs = (cp: number): number => Math.log(cp) / 0.00012 / 1000;
+const crashSecs = (cp: number): number => Math.log(cp) / CRASH_GROWTH / 1000;
 
 describe('Crash', () => {
+  it('climbs at the pace the page shows: crash_rate() equals CRASH_GROWTH, and a cash-out pays e^(rate x ms)', async () => {
+    expect(Number((await sql('select public.crash_rate() as r'))[0].r)).toBe(CRASH_GROWTH);
+    await fund(B, 100);
+    const { r, cp } = await crashRound(x => x > 3);
+    await rpc(B, 'crash_place_bet', r.id, 10, null, false);
+    await startedAgo(r.id, 4);                                                                  // 4 s into the round
+    const c = await rpc(B, 'crash_cashout', r.id, 1);
+    expect(c.mult).toBeGreaterThanOrEqual(Math.floor(Math.exp(CRASH_GROWTH * 4000) * 100) / 100);
+    expect(c.mult).toBeLessThan(Math.exp(CRASH_GROWTH * 4400));                                 // (a moment later is fine, a different pace is not)
+    void cp;
+  });
   it('takes the stake at the bet, refunds a cancel, and writes the bet when the round ends', async () => {
     await fund(A, 100);
     const { r } = await crashRound(cp => cp > 3);

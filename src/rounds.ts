@@ -21,12 +21,23 @@ export interface CashoutResult { mult: number; take: number; got: number; riding
 // ---- a clock that agrees with the server's -----------------------------------------------------------------------------
 let offset = 0;                                              // server time minus this browser's time, in ms
 export const serverNow = (): number => Date.now() + offset;
+let confirmedAt = 0;                                          // the server's own time in its latest answer: up to then the round was certainly still running
+export const confirmedNow = (): number => confirmedAt;
+/** How far behind the server's clock the Crash number is shown. */
+export const DISPLAY_LAG_MS = 400;
+/**
+ * Milliseconds of a running Crash round to show (the multiplier is e^(CRASH_GROWTH x this)). The page only learns that a round crashed some moments after it
+ * happened (the server decides when somebody asks), so the number is shown a little behind the server's clock, and NEVER beyond the last moment the server
+ * confirmed the round was still running. That way it can fall behind for a moment, but it can never climb past the number the round then crashes at.
+ */
+export const liveElapsed = (now: number, confirmed: number, start: number): number => Math.max(0, Math.min(now - DISPLAY_LAG_MS, confirmed) - start);
 
 /** Do whatever is due on the server (open, start or finish a round) and return the current round. Safe to call as often as needed. */
 export async function advanceRound(game: 'crash' | 'double'): Promise<Round> {
   const t0 = Date.now();
   const r = await call<{ round: Round; now: string }>('advance_round', { p_game: game });
   offset = Date.parse(r.now) - (t0 + Date.now()) / 2;       // assume the reply took the same time each way
+  confirmedAt = Math.max(confirmedAt, Date.parse(r.now));
   return r.round;
 }
 

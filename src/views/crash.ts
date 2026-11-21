@@ -1,13 +1,13 @@
 import { randomBot } from '../data.js';
 import { state, debit, credit, round2, debitError } from '../state.js';
-import { bet, crashPoint, annotate } from '../fair.js';
+import { bet, crashPoint, annotate, CRASH_GROWTH } from '../fair.js';
 import { pushBet } from '../feed.js';
 import { $, $$, esc, fmt, money, icon, avatar, toast, amountField, wireAmount } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { roundsOn, liveMe } from '../live.js';
-import { advanceRound, serverNow, crashBet, crashCancel, crashCashout, roundBets, recentResults, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
+import { advanceRound, serverNow, confirmedNow, liveElapsed, crashBet, crashCancel, crashCashout, roundBets, recentResults, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
 
-const GROWTH = 0.00012;                 // multiplier = e^(GROWTH * ms)
+const GROWTH = CRASH_GROWTH;            // multiplier = e^(GROWTH * ms)
 const WAIT_MS = 7000, AFTER_MS = 3500;
 const history = [];
 const seenRounds = new Set<number>();            // shared rounds already added to the history strip
@@ -48,7 +48,8 @@ export function render(el) {
   $$('#part button', el).forEach(b => b.onclick = () => { part = +b.dataset.p; $$('#part button', el).forEach(x => x.classList.toggle('active', x === b)); updateButton(); });
 
   const multAt = t => Math.pow(Math.E, GROWTH * t);
-  const elapsed = () => performance.now() - phaseStart;
+  // A shared round shows the multiplier a little behind the server and never past what the server last confirmed (see liveElapsed in rounds.ts).
+  const elapsed = () => (LIVE && phase === 'running' && round ? liveElapsed(serverNow(), confirmedNow(), Date.parse(round.betting_ends_at)) : performance.now() - phaseStart);
 
   const drawHistory = () => {
     $('#hist', el).innerHTML = history.slice(0, 14).map(v => `<span class="hpill ${v >= 2 ? (v >= 10 ? 'h-gold' : 'h-good') : 'h-bad'}">${fmt(v)}×</span>`).join('') || '<span class="muted small">No rounds yet</span>';
@@ -251,7 +252,7 @@ export function render(el) {
     } else if (r.status === 'running') {
       phase = 'running';
       phaseStart = performance.now() - (now - Date.parse(r.betting_ends_at));
-      schedule(live() ? 250 : 1000);                                   // bettors check fast; the first to see the crash ends it for everyone
+      schedule(240 + Math.random() * 80);                              // everybody checks about four times a second; the first to see the crash ends it for everyone
     } else {
       if (phase !== 'crashed' || isNew) {
         cp = r.result?.point ?? 1; phase = 'crashed'; phaseStart = performance.now();
