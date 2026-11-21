@@ -52,15 +52,10 @@ export const itemOf = (id: string): Item => ITEM[id] ?? missingItem(id);
 /** "AK-47 | Redline (Field-Tested)" */
 export const itemName = (i: Item): string => `${i.st ? 'StatTrak™ ' : ''}${i.weapon}${i.skin ? ` | ${i.skin}` : ''}${i.wear ? ` (${WEAR_NAME[i.wear] ?? i.wear})` : ''}`;
 
-// Case box art (assets/cases/<id>.webp). Cases without a file fall back to the drawn crate in ui.js.
-const CASE_IMG = new Map<string, string>([...['starter', 'flip', 'neon', 'charmed', 'sniper', 'blade', 'high', 'wasteland', 'gearup', 'canyon', 'arcade', 'foundry', 'deeptide', 'blossom', 'relic', 'scopes', 'charmparade', 'heavy', 'gilded', 'knifeedge', 'fox33', 'daily', 'aurora'].map((id): [string, string] => [id, id]),
-  // no dedicated art yet: borrow the closest crate
-  ['phantom10', 'arcade'], ['blade20', 'deeptide'], ['cosmic5', 'aurora'], ['welcome', 'daily']]);
-
 // The cases, with their drop tables, prices and expected values, are generated (see the top of this file). A price keeps the 90% return: price = expected value / 0.9.
 const build = (c: any): Case => ({
   id: c.id, name: c.name, hue: c.hue, tag: c.tag, reward: c.reward || undefined,
-  img: CASE_IMG.has(c.id) ? `assets/cases/${CASE_IMG.get(c.id)}.webp` : undefined,
+  img: `assets/cases/${c.id}.webp`,                               // every case has its own picture: public/assets/cases/<id>.webp
   entries: c.entries.map((e: any): CaseEntry => ({ item: ITEM[e.id] as Item, weight: e.chance, chance: e.chance, from: e.from, to: e.to })),
   ev: c.ev, price: c.price,
 });

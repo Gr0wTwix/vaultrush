@@ -43,8 +43,13 @@ describe('spinning a reel', () => {
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return VIEW; } });
     document.body.innerHTML = '<div id="host"></div>'; host = document.getElementById('host') as HTMLElement;
     vi.mocked(sfx.tick).mockClear();
+    // A fake clock and a frame every millisecond: the result no longer depends on how busy the machine is (real frames made this test flaky under load).
+    vi.useFakeTimers();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => setTimeout(() => cb(performance.now()), 1) as unknown as number);
   });
-  afterEach(() => { vi.restoreAllMocks(); delete (HTMLElement.prototype as any).offsetWidth; delete (HTMLElement.prototype as any).clientWidth; });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); delete (HTMLElement.prototype as any).offsetWidth; delete (HTMLElement.prototype as any).clientWidth; });
+  /** Spin and let the clock run until the reel has finished. */
+  const spin = async (winner: (typeof ITEMS)[number], opts: { duration: number; sound?: boolean }): Promise<void> => { const p = spinReel(host, pool, winner, opts); await vi.advanceTimersByTimeAsync(opts.duration + 800); await p; };
 
   const pool = ITEMS.slice(0, 8).map(item => ({ item, weight: 1 }));
   const x = (): number => { const m = /translate3d\((-?[\d.]+)px/.exec((host.querySelector('.reel-strip') as HTMLElement).style.transform); return m ? parseFloat(m[1] as string) : 0; };
@@ -52,9 +57,9 @@ describe('spinning a reel', () => {
   it('lands exactly under the marker on the winning tile, with no correction move at the end, and then lights the winner', async () => {
     const winner = ITEMS[20]!, seen: number[] = [];
     const strip = (): HTMLElement => host.querySelector('.reel-strip') as HTMLElement;
-    const p = spinReel(host, pool, winner, { duration: 600, sound: true });
     const tm = setInterval(() => seen.push(x()), 8);
-    await p; clearInterval(tm);
+    await spin(winner, { duration: 600, sound: true });
+    clearInterval(tm);
     const final = x(), centre = VIEW / 2 - (46 * STEP + SIZE / 2);                   // the winner sits at index 46 of 56
     expect(Math.abs(final - centre)).toBeLessThanOrEqual(SIZE * 0.3);                // inside the winning tile, away from its edges
     expect(strip().style.transition).toBe('none');                                   // one moving transform, nothing animating on the side
@@ -66,11 +71,11 @@ describe('spinning a reel', () => {
     const tail = seen.slice(-5); expect(Math.max(...tail) - Math.min(...tail)).toBeLessThan(40);
   });
   it('ticks once for every tile that passes the marker', async () => {
-    await spinReel(host, pool, ITEMS[5]!, { duration: 500, sound: true });
+    await spin(ITEMS[5]!, { duration: 500, sound: true });
     const n = vi.mocked(sfx.tick).mock.calls.length;
     expect(n).toBeGreaterThan(35); expect(n).toBeLessThanOrEqual(47);             // about 46 tiles go by
     vi.mocked(sfx.tick).mockClear();
-    await spinReel(host, pool, ITEMS[5]!, { duration: 300, sound: false });
+    await spin(ITEMS[5]!, { duration: 300, sound: false });
     expect(sfx.tick).not.toHaveBeenCalled();
   });
   it('shows no big glow blobs: the glow is contained in its tile', () => {

@@ -2,7 +2,7 @@
 import { RARITY, itemName } from './data.js';
 import { state } from './state.js';
 import { sfx } from './sfx.js';
-import { itemArtSvg } from './art.js';
+import { itemArtSvg, NO_PICTURE } from './art.js';
 
 // DOM helpers. They return `any` on purpose: the views poke at many element kinds (inputs, buttons, svg) and the
 // ids are validated by the browser tests, not by the type system.
@@ -46,22 +46,9 @@ export function itemCard(item, { compact = false, extra = '', cls = '', eager = 
   </div>`;
 }
 
+/** The picture of a case (assets/cases/<id>.webp, set in src/data.ts). */
 export function caseArt(c, size = '') {
-  if (c.img) return `<img class="case-art case-img ${size}" src="${c.img}" alt="" loading="lazy" decoding="async">`;
-  const a = `hsl(${c.hue} 90% 60%)`, b = `hsl(${c.hue} 80% 32%)`, d = `hsl(${c.hue} 70% 18%)`;
-  const id = `c${c.id}${Math.random().toString(36).slice(2, 6)}`;
-  return `<svg class="case-art ${size}" viewBox="0 0 120 100" aria-hidden="true"><defs>
-    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>
-    <radialGradient id="${id}g"><stop offset="0" stop-color="${a}" stop-opacity=".55"/><stop offset="1" stop-color="${a}" stop-opacity="0"/></radialGradient></defs>
-    <ellipse cx="60" cy="60" rx="58" ry="40" fill="url(#${id}g)"/>
-    <path d="M18 42 60 30l42 12v38L60 94 18 80z" fill="${d}"/>
-    <path d="M18 42 60 54v40L18 80z" fill="url(#${id}f)"/>
-    <path d="M102 42 60 54v40l42-14z" fill="${b}"/>
-    <path d="M14 34 60 21l46 13-4 9-42-12-42 12z" fill="${a}"/>
-    <path d="M60 54v40" stroke="rgba(0,0,0,.35)" stroke-width="1.5"/>
-    <path d="M42 58 36 72h6l-3 12 11-16h-6l4-10z" fill="#fff" opacity=".9"/>
-    <path d="M78 58v24M86 55v24" stroke="rgba(255,255,255,.25)" stroke-width="3"/>
-  </svg>`;
+  return `<img class="case-art case-img ${size}" src="${c.img || NO_PICTURE}" alt="" loading="lazy" decoding="async" draggable="false" onerror="this.onerror=null;this.src='${NO_PICTURE}'">`;
 }
 
 const AV_COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];

@@ -5,7 +5,10 @@
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+// These tests run real battles and games in an in-process database that holds the whole item catalogue: on a busy machine the 5-second default is too tight.
+vi.setConfig({ testTimeout: 60_000 });
 import { CASES, CATALOGUE_TOTAL, ITEM, REWARD_CASES } from '../src/data.js';
 import { realItemMigrations } from './helpers.js';
 

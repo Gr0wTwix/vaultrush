@@ -137,7 +137,7 @@ describe('crash', () => {
     const { r, cp } = await crashRound(c => c >= 3);
     await rpc(ALICE, 'crash_place_bet', r.id, 10, 1.5, false);       // auto cash-out below the crash point: paid by the server
     await rpc(BOB, 'crash_place_bet', r.id, 4, null, false);         // never cashes out: busts
-    await rpc(CARA, 'crash_place_bet', r.id, 6, cp + 1, false);      // auto above the crash point: busts
+    await rpc(CARA, 'crash_place_bet', r.id, 6, Math.min(1000, Math.round((cp + 1) * 100) / 100), false);      // auto above the crash point: busts (rounded to cents: 5.35 + 1 can come out as 6.3500000000000005, which the database refuses)
     await startedAgo(r.id, crashSecs(cp) - 0.2);
     expect((await advance(ALICE, 'crash')).status).toBe('running');   // 0.2 s before the crash: still running
     await startedAgo(r.id, crashSecs(cp) + 0.5);
