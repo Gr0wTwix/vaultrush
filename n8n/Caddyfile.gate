@@ -1,0 +1,10 @@
+# The only thing the internet can reach: n8n's production webhook addresses. The editor, its login, its API and everything else answer 404.
+:80 {
+	@hooks path /webhook/*
+	handle @hooks {
+		reverse_proxy n8n:5678
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

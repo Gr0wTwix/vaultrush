@@ -1,0 +1,50 @@
+# n8n on your own PC with Docker Desktop, reachable from the internet ONLY through a gate that lets nothing but webhook calls in.
+#
+#   Supabase (pg_net) --https--> ngrok --> gate (Caddy: only /webhook/* passes) --> n8n
+#   You             -----------------------------------------------------------> http://localhost:5678  (the n8n editor, only on this PC)
+#
+# Setup: copy .env.example to .env, fill it in, then (from this folder):
+#   docker compose up -d                       n8n and the gate, no tunnel (good for trying it)
+#   docker compose --profile tunnel up -d      the same plus the ngrok tunnel (what Supabase needs to reach it)
+# Steps and explanations: ../docs/n8n.md
+name: vaultrush-n8n
+
+services:
+  n8n:
+    image: n8nio/n8n:2.48.7                      # the version the workflows were tested with
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"                    # the editor is only on this PC, never on the network
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in .env}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}   # the daily report runs at 09:00 in this time zone
+      TZ: ${GENERIC_TIMEZONE:-UTC}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}   # what the editor shows as the "Production URL"
+      N8N_SECURE_COOKIE: "false"                 # the editor is used over http://localhost
+      N8N_PROXY_HOPS: "2"                        # ngrok and the gate sit in front of the webhooks
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n                 # workflows, credentials and users live here
+
+  gate:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [n8n]
+    ports:
+      - "127.0.0.1:8080:80"                      # only for testing the gate from this PC
+    volumes:
+      - ./Caddyfile.gate:/etc/caddy/Caddyfile:ro
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    depends_on: [gate]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?set NGROK_AUTHTOKEN in .env}
+    command: ["http", "--url=https://${NGROK_DOMAIN:?set NGROK_DOMAIN in .env}", "gate:80"]
+
+volumes:
+  n8n_data:

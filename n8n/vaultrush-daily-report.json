@@ -1,0 +1,152 @@
+{
+  "name": "Vaultrush daily report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000011",
+      "name": "Every morning",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b1b2c3d4-0000-4000-8000-000000000010",
+      "name": "Test it now (click Execute workflow)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/rpc/ops_daily_report",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "PASTE-THE-PUBLISHABLE-KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"p_hours\": 24 }",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000012",
+      "name": "Ask the database for the report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VAULTRUSH_REPORT_SECRET",
+          "name": "Vaultrush report secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns the report from ops_daily_report() into one chat message.\nconst r = $input.first().json;\nconst n = v => Number(v ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 });\nconst sign = v => (Number(v) >= 0 ? '+' : '') + n(v);\nconst lines = [\n  '**Vaultrush report, last ' + r.hours + ' h**' + (r.maintenance_on ? '  (maintenance is ON)' : ''),\n  'Players: ' + n(r.players_total) + ' in total, ' + n(r.new_players) + ' new, ' + n(r.active_players) + ' active',\n  'Bets: ' + n(r.bets) + ', wagered ' + n(r.wagered) + ', paid out ' + n(r.paid_out) + ', house ' + sign(r.house_result),\n];\nconst games = (r.by_game ?? []).slice(0, 5).map(g => g.game + ' ' + n(g.wagered) + ' (' + n(g.bets) + ' bets)');\nif (games.length) lines.push('Top games: ' + games.join(', '));\nif (r.biggest_win) lines.push('Biggest win: ' + r.biggest_win.name + ' won ' + n(r.biggest_win.payout) + ' on ' + r.biggest_win.game + ' (bet ' + n(r.biggest_win.amount) + ')');\nlines.push('Coins in wallets: ' + n(r.coins_in_wallets) + '; items held: ' + n(r.items_held) + ' (worth ' + n(r.items_value) + ')');\nlines.push('Free coins issued: ' + n(r.free_coins_issued) + '; added by hand: ' + n(r.coins_adjusted) + ' in ' + n(r.adjustments) + ' step(s)');\nreturn [{ json: { message: lines.join('\\n').slice(0, 1900) } }];"
+      },
+      "id": "b1b2c3d4-0003-4000-8000-000000000013",
+      "name": "Write the message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PASTE-YOUR-DISCORD-WEBHOOK-URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $json.message }) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0004-4000-8000-000000000014",
+      "name": "Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every morning": {
+      "main": [
+        [
+          {
+            "node": "Ask the database for the report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test it now (click Execute workflow)": {
+      "main": [
+        [
+          {
+            "node": "Ask the database for the report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask the database for the report": {
+      "main": [
+        [
+          {
+            "node": "Write the message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write the message": {
+      "main": [
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

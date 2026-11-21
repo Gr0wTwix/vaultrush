@@ -24,3 +24,6 @@ supabase/.temp/
 dist-admin/
 
 .cache/
+
+# n8n setup secrets (see n8n/.env.example)
+n8n/.env

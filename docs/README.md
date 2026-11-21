@@ -8,6 +8,7 @@ Vaultrush is an original **play-money** skin-game demo. Coins cannot be bought, 
 | [accounts-and-auth.md](accounts-and-auth.md) | Browser accounts, Supabase cloud accounts, Google and Steam sign-in, the signed-out rules |
 | [server-wallet.md](server-wallet.md) | Where coins and items live now (the database): what each game does there, how the page mirrors it, setup steps, what is still simplified |
 | [real-catalogue.md](real-catalogue.md) | The real Counter-Strike 2 items: where names, pictures and prices come from, the coin rate, what is bundled and what loads on demand, the database files, how to refresh prices |
+| [n8n.md](n8n.md) | Operator alerts and a daily report through n8n: what is sent, the database file 0016, the two workflows, setup steps, security, what was tested |
 | [live-multiplayer.md](live-multiplayer.md) | Real battles, coinflip, chat and feed between players: what is live, the trust model, how to turn it on |
 | [admin-site.md](admin-site.md) | The separate admin site that exists so far: sign-in chain, roles, permissions, audit log, data explorer, setup and commands |
 | [admin-panel-proposal-2026-11-21.md](admin-panel-proposal-2026-11-21.md) | Proposal (not built): everything an admin panel could hold, the wallet constraint, security design, roles, example screens, phases and the decisions to approve |

@@ -48,6 +48,7 @@ supabase/
   migrations/0012_rewards.sql   faucet, rakeback, calendar, promo codes, free crates, race prize, race boards, and wallet_ready()
   migrations/0013_crash_pace.sql   a slower Crash (crash_rate())
   migrations/0014_real_items_*.sql, 0015_real_cases.sql   GENERATED (npm run build:catalogue): the real CS2 items with prices, the cases and their tickets; see real-catalogue.md
+  migrations/0016_ops_events.sql   operator alerts (pg_net to an n8n webhook) and ops_daily_report(); off until switched on; see n8n.md
   functions/steam-login      Steam OpenID sign-in
   functions/close-login      finishes account deletion
   functions/_shared          Steam OpenID verification and name/avatar parsing (unit-tested)

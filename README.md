@@ -33,6 +33,7 @@ Node 22.12 or newer is required.
 index.html            app shell (Vite entry)
 public/assets/        images served as-is: cases, home
 public/catalogue/     the whole CS2 item catalogue (search index and item files), loaded on demand; generated
+n8n/                  importable n8n workflows: operator alerts and a daily report (docs/n8n.md)
 src/app.ts            router, sidebar, top bar, live-drop ticker, chat button
 src/types.ts          shared domain types
 src/fair.ts           provably fair (HMAC-SHA256) + every game's maths and payout tables   [strict]

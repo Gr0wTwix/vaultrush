@@ -116,7 +116,7 @@ export const DOCS: Record<string, Doc> = {
       ]],
       ['7. Who can see your data', [
         ['Other players see your username, profile picture, chat messages, your name in live battles and coinflips, and your bets and drops in the shared feed. Turn on Anonymous mode (Account > Options) to hide your name in the feed; it cannot hide it in live chat.',
-          'Service providers act for us: hosting (Vercel), database and authentication (Supabase), sign-in (Google, Steam) and fonts (Google Fonts). Each applies its own policy.',
+          'Service providers act for us: hosting (Vercel), database and authentication (Supabase), sign-in (Google, Steam), fonts (Google Fonts) and, if the operator switches it on, an automation service for operator alerts (n8n), which receives only a player name, a game and amounts, never e-mail addresses. Each applies its own policy.',
           'We may share data if the law requires it or to protect people from harm.']
       ]],
       ['8. How long we keep it', [

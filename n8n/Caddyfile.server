@@ -1,0 +1,4 @@
+# Automatic https for your domain; everything goes to n8n (the editor needs to be reachable too on a server).
+{$N8N_DOMAIN} {
+	reverse_proxy n8n:5678
+}

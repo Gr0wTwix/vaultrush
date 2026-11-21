@@ -1,0 +1,87 @@
+{
+  "name": "Vaultrush alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vaultrush-events",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Event from the database",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "a1b2c3d4-0000-4000-8000-0000000000aa",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VAULTRUSH_ALERT_SECRET",
+          "name": "Vaultrush alert secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns one event from the database into one short chat message.\nconst body = $input.first().json.body ?? {};\nconst event = String(body.event ?? 'unknown');\nconst d = body.data ?? {};\nconst n = v => Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });\nconst clean = v => String(v ?? '').replace(/[\\r\\n]+/g, ' ').slice(0, 200);\nlet text;\nswitch (event) {\n  case 'signup': text = ':new: New player: **' + clean(d.name) + '**'; break;\n  case 'big_win': text = ':moneybag: Big win: **' + clean(d.name) + '** won ' + n(d.payout) + ' coins on ' + clean(d.game) + ' (' + n(d.multiplier) + 'x, bet ' + n(d.amount) + ')'; break;\n  case 'adjustment': text = ':warning: Coins added by hand: **' + clean(d.name) + '** +' + n(d.amount) + ' (balance now ' + n(d.balance_after) + ')'; break;\n  case 'admin': text = ':lock: Admin action: ' + clean(d.action) + ' by ' + clean(d.actor) + ' (' + clean(d.role) + ')' + (d.reason ? ' - ' + clean(d.reason) : ''); break;\n  case 'maintenance': text = (d.on ? ':tools: Maintenance is ON' : ':white_check_mark: Maintenance is OFF') + (d.message ? ': ' + clean(d.message) : ''); break;\n  case 'test': text = ':white_check_mark: Test message from the Vaultrush database'; break;\n  default: text = 'Vaultrush event \"' + clean(event) + '\": ' + clean(JSON.stringify(d)).slice(0, 500);\n}\nreturn [{ json: { message: text.slice(0, 1900) } }];"
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Write the message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PASTE-YOUR-DISCORD-WEBHOOK-URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $json.message }) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Event from the database": {
+      "main": [
+        [
+          {
+            "node": "Write the message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write the message": {
+      "main": [
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
