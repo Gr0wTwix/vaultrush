@@ -532,3 +532,6 @@ table.bets { width: 100%; border-collapse: collapse; font-size: 13px; }
   .pill-mobile { display: inline-block; padding: 4px 8px; font-size: 9px; }
 }
 @media (max-width: 520px) { body:not(.logged-out) .pill-mobile { display: none; } }
+
+/* Phones: the toasts sit above the bottom menu bar instead of on top of it */
+@media (max-width: 900px) { .toasts { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); } }

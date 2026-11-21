@@ -764,3 +764,22 @@ img.item-art { object-fit: contain; display: block; margin: 0 auto; filter: drop
 .hdot .hd-c { position: absolute; right: 2px; bottom: 2px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(4, 30, 28, .9); }
 .hdot.bait.c-purple .hd-c { background: #9d7bff; }
 .hdot.bait.c-gray .hd-c { background: #8b97b3; }
+
+/* ===== Phones (2026-11-21 mobile pass) =====
+   A battle with 4 or more players (4-way, 6-way, 2v2, 3v3) used to squeeze every column into 50 to 80 px, so names, totals and item cards were cut off and the VS chips sat on top of them.
+   Now the three rows (reels, players, items) scroll sideways together inside .bt-board and each column keeps a readable width; a 1v1 or 3-way still fits without scrolling.
+   Wide screens: .bt-board and .bt-board-in generate no box at all, so the rows lay out exactly as before. */
+.bt-board, .bt-board-in { display: contents; }
+.bt-swipe { display: none; }
+@media (max-width: 900px) {
+  .bt-board { display: block; overflow-x: auto; overscroll-behavior-x: contain; margin: 0 -16px; padding: 0 16px 8px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  .bt-board-in { display: flex; flex-direction: column; gap: 22px; width: max(100%, calc(var(--P) * 92px + (var(--P) - 1) * 32px + 36px)); }
+  .bt-swipe { display: block; margin: -8px 0 -10px; text-align: center; }
+  .bt-players .pbar { padding: 8px; }
+  .bt-players .pb-top { flex-direction: column; align-items: flex-start; gap: 4px; }                /* the name gets the whole width under the avatar */
+  .bt-players .pb-top .pname { flex: none; width: 100%; }
+}
+/* Plinko: the multiplier under each slot is turned on its side when the slots are only about 20 px wide, so the numbers no longer run into each other */
+@media (max-width: 600px) {
+  .bucket { writing-mode: vertical-lr; padding: 7px 0; font-size: 10px; line-height: 1; letter-spacing: 0; }     /* the gap stays 3 px: the slot pitch must match the pegs above */
+}

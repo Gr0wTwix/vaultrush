@@ -1,9 +1,10 @@
 // Account window > Responsible Play: limits, reality check, session, breaks, self-assessment and help.
-import { state, save, isExcluded } from './state.js';
+import { state, save, isExcluded, isServerWallet } from './state.js';
 import {
   COOL_OFF_OPTIONS, DAY_MS, HELP_RESOURCES, LIMIT_LABELS, PGSI_OPTIONS, PGSI_QUESTIONS, activityStatement, cancelPending, netLoss,
-  playedTodayMs, scorePgsi, sessionSummary, setLimit, stakedToday, startCoolOff,
+  playedTodayMs, scorePgsi, sessionSummary, setLimit, stakedToday,
 } from './rg.js';
+import { cancelServerLimit, isServerLimit, limitsFetchedAt, refreshLimits, serverUsage, setServerLimit, takeBreak } from './rg-server.js';
 import type { RgLimitKey } from './types.js';
 import { $, $$, esc, fmt, icon, toast, toastKeep } from './ui.js';
 import { sfx } from './sfx.js';
@@ -17,9 +18,9 @@ const left = (ms: number): string => { const h = Math.max(0, Math.ceil(ms / 3_60
 function usage(key: RgLimitKey): { used: number; limit: number } | null {
   const lim = state.rg.limits[key];
   if (lim === null || lim === 0) return null;
-  const rg = state.rg, now = Date.now();
-  const used = key === 'lossDaily' ? netLoss(rg, 1, now) : key === 'lossWeekly' ? netLoss(rg, 7, now) : key === 'lossMonthly' ? netLoss(rg, 30, now)
-    : key === 'wagerDaily' ? stakedToday(rg, now) : key === 'timeDailyMin' ? Math.floor(playedTodayMs(rg, now) / 60_000) : 0;
+  const rg = state.rg, now = Date.now(), su = serverUsage();                          // with the server wallet the database's own count is shown, not this browser's
+  const used = key === 'lossDaily' ? (su ? su.loss1 : netLoss(rg, 1, now)) : key === 'lossWeekly' ? (su ? su.loss7 : netLoss(rg, 7, now)) : key === 'lossMonthly' ? (su ? su.loss30 : netLoss(rg, 30, now))
+    : key === 'wagerDaily' ? (su ? su.stakedToday : stakedToday(rg, now)) : key === 'timeDailyMin' ? (su ? su.activeMinutes : Math.floor(playedTodayMs(rg, now) / 60_000)) : 0;
   return key === 'maxBet' ? null : { used, limit: lim };
 }
 
@@ -33,6 +34,7 @@ function limitRow(key: RgLimitKey): string {
     <div class="ac-inline"><input type="number" min="0" step="1" placeholder="${cur === null ? 'Set a limit' : 'New value'}" aria-label="${LIMIT_LABELS[key]}"><button class="btn btn-ghost btn-sm" data-set>Set</button>${cur === null ? '' : '<button class="btn btn-ghost btn-sm" data-off aria-label="Remove this limit after 24 hours">Remove (after 24 h)</button>'}</div>
     <div class="rg-hint muted small" data-hint aria-live="polite"></div>
     ${cur === 0 ? '<div class="ac-note">A limit of 0 blocks betting until you raise it. Raising takes 24 hours.</div>' : ''}
+    ${key === 'timeDailyMin' && isServerWallet() ? '<div class="ac-note">The database cannot see your screen, so it estimates play time from your bets: the time between two bets (when it is 5 minutes or less) plus 20 seconds for each bet.</div>' : ''}
     ${p ? `<div class="rg-pending">Change to <b>${p.value === null ? 'no limit' : `${fmt(p.value)} ${unit}`}</b> takes effect on ${when(p.effectiveAt)} (in ${left(p.effectiveAt - Date.now())}). <button class="link" data-cancel>Cancel</button></div>` : ''}
   </div>`;
 }
@@ -47,6 +49,7 @@ export function renderResponsible(pane: HTMLElement, ctx: PaneCtx): void {
     ${blocked ? `<div class="ac-card ac-warn"><h3>Betting is paused</h3><p class="ac-note">${esc(blocked)}. Rewards, browsing and the Fairness tools keep working.</p></div>` : ''}
 
     <div class="ac-card"><h3>Limits</h3>
+      ${isServerWallet() ? '<p class="ac-note">These limits are kept by the database, so they hold on every device and cannot be changed by editing the page.</p>' : ''}
       <p class="ac-note">A limit you tighten applies at once. Raising or removing a limit takes 24 hours and can be cancelled. Type a new value and the note under the box tells you which of the two it is. Loss limits count settled bets, so winnings offset losses.</p>
       <div class="rg-limits">${[...MONEY_LIMITS, 'timeDailyMin' as RgLimitKey].map(limitRow).join('')}</div>
       <div class="ac-row"><span>Reality check<small>A reminder of your time and results</small></span>
@@ -80,7 +83,16 @@ export function renderResponsible(pane: HTMLElement, ctx: PaneCtx): void {
 
   $$('.rg-limit', pane).forEach((box: HTMLElement) => {
     const key = box.dataset.k as RgLimitKey, input = $('input', box) as HTMLInputElement;
-    const apply = (v: number | null) => {
+    const apply = async (v: number | null) => {
+      if (isServerWallet() && isServerLimit(key)) {                                      // the database keeps and checks this limit
+        if (v !== null && (!Number.isFinite(v) || v < 0)) return toast('Enter a number of zero or more', 'error');
+        try {
+          const r = await setServerLimit(key, v);
+          if (r === 'same') return toastKeep('That is already your limit');
+          sfx.click(); toastKeep(r === 'pending' ? `Change requested: it takes effect on ${when(Date.now() + DAY_MS)}` : 'Limit saved', 'win');
+        } catch (e) { return toast((e as Error).message, 'error'); }
+        ctx.rerender(); return;
+      }
       const r = setLimit(rg, key, v);
       if (r.status === 'invalid') return toast('Enter a number of zero or more', 'error');
       if (r.status === 'same') return toastKeep('That is already your limit');
@@ -96,25 +108,32 @@ export function renderResponsible(pane: HTMLElement, ctx: PaneCtx): void {
       const tighter = now === null || typed < now;
       hint.textContent = (tighter ? 'Tighter: applies now.' : `Looser: applies on ${when(Date.now() + DAY_MS)}.`) + (typed === 0 ? ' A limit of 0 stops betting.' : '');
     });
-    $('[data-set]', box).onclick = () => { if (input.value === '') return toast('Enter a value first', 'error'); apply(Number(input.value)); };
-    $('[data-off]', box)?.addEventListener('click', () => apply(null));
-    $('[data-cancel]', box)?.addEventListener('click', () => { cancelPending(rg, key); save(); ctx.rerender(); });
+    $('[data-set]', box).onclick = () => { if (input.value === '') return toast('Enter a value first', 'error'); void apply(Number(input.value)); };
+    $('[data-off]', box)?.addEventListener('click', () => { void apply(null); });
+    $('[data-cancel]', box)?.addEventListener('click', async () => {
+      if (isServerWallet() && isServerLimit(key)) { try { await cancelServerLimit(key); } catch (e) { toast((e as Error).message, 'error'); } ctx.rerender(); return; }
+      cancelPending(rg, key); save(); ctx.rerender();
+    });
   });
   ($('#rgReality', pane) as HTMLSelectElement).onchange = e => {
     const r = setLimit(rg, 'realityMin', Number((e.target as HTMLSelectElement).value));
     save(); toastKeep(r.status === 'pending' ? `Change requested: it takes effect on ${when(Date.now() + DAY_MS)}` : 'Reality check updated', 'win'); ctx.rerender();
   };
   $('[data-cancel-reality]', pane)?.addEventListener('click', () => { cancelPending(rg, 'realityMin'); save(); ctx.rerender(); });
-  $$('[data-cool]', pane).forEach((b: HTMLElement) => b.onclick = () => {
-    const until = Date.now() + Number(b.dataset.cool);
+  $$('[data-cool]', pane).forEach((b: HTMLElement) => b.onclick = async () => {
+    const ms = Number(b.dataset.cool), until = Date.now() + ms;
     if (!confirm(`Start a cool-off for ${b.textContent?.replace('Cool-off ', '')}? You cannot bet until ${when(until)}.`)) return;
-    startCoolOff(rg, Number(b.dataset.cool)); save(); toastKeep(`Cool-off started. Betting is paused until ${when(Math.max(until, rg.coolOffUntil))}.`); ctx.rerender();
+    try { const end = await takeBreak('cool-off', ms); toastKeep(`Cool-off started. Betting is paused until ${when(Math.max(until, end))}.`); } catch (e) { toast((e as Error).message, 'error'); }
+    ctx.rerender();
   });
-  $$('[data-excl]', pane).forEach((b: HTMLElement) => b.onclick = () => {
-    const until = Date.now() + Number(b.dataset.excl);
+  $$('[data-excl]', pane).forEach((b: HTMLElement) => b.onclick = async () => {
+    const ms = Number(b.dataset.excl), until = Date.now() + ms;
     if (!confirm(`${b.textContent}? You cannot bet until ${when(until)}, and it cannot be lifted early.`)) return;
-    state.excludedUntil = Math.max(state.excludedUntil, until); save(); toastKeep(`Self-exclusion started. Betting is paused until ${when(state.excludedUntil)}.`); ctx.rerender();
+    try { const end = await takeBreak('self-exclusion', ms); toastKeep(`Self-exclusion started. Betting is paused until ${when(Math.max(until, end))}.`); } catch (e) { toast((e as Error).message, 'error'); }
+    ctx.rerender();
   });
+  // With the server wallet, the database's numbers are fetched when the page opens (and the page is drawn again once they arrive; the 10 second guard stops a loop).
+  if (isServerWallet() && Date.now() - limitsFetchedAt() > 10_000) void refreshLimits().then(() => ctx.rerender()).catch(() => {});
   $('#rgPolicy', pane).onclick = () => ctx.close();
   $('#rgQuiz', pane).onclick = () => quiz($('#rgQuizBox', pane), ctx);
 }

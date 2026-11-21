@@ -3,7 +3,9 @@ export const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, c
 export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
 export const $$ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T[] => [...root.querySelectorAll(sel)] as T[];
 export const when = (iso: string | null | undefined): string => (iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'medium' }) : '');
-export const mmss = (ms: number): string => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+/** Coins with two decimals and thousands separators (1,234.50). */
+export const coins = (n: unknown): string => Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const mmss =(ms: number): string => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 export function toast(msg: string, kind: 'info' | 'ok' | 'error' = 'info'): void {
   const box = document.getElementById('toasts'); if (!box) return;

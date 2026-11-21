@@ -80,6 +80,19 @@ export const guestCard = (title: string, text: string): string =>
 /** A toast that Settings > Notifications can never hide. */
 export const toastKeep = (msg: string, kind = 'info'): void => toast(msg, kind, true);
 
+/** On a phone the arena or the reels sit below the controls the player just pressed, so a battle or an opening would start out of sight:
+ *  bring them into view (smoothly, unless the player asked for less motion). Does nothing on wide screens or when the top is already visible. */
+export function bringIntoView(node: Element | null | undefined): void {
+  try {
+    if (!node || !globalThis.matchMedia?.('(max-width: 900px)').matches) return;
+    const top = node.getBoundingClientRect().top;
+    if (top >= 70 && top <= globalThis.innerHeight * 0.5) return;
+    const calm = !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // scroll the page itself (not scrollIntoView, which would also slide a sideways-scrolling board that holds the node); 78 px leaves room for the top bar
+    globalThis.scrollTo({ top: Math.max(0, globalThis.scrollY + top - 78), behavior: calm ? 'auto' : 'smooth' });
+  } catch { /* scrolling is a nicety: never let it break a game */ }
+}
+
 export const ICONS = {
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   home: '<path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/>',
@@ -202,6 +215,9 @@ export function spinReel(host, pool, winner, { axis = 'x', duration = 5200, tota
 
 /** Reel durations for the three speeds the reference sites offer. */
 export const SPEEDS = { normal: 5200, fast: 2600, turbo: 1200 };
+/** How long a case battle rests on what everyone pulled before the next case starts, in ms. It used to be 400 (150 on Turbo), too short to read the item names and values. */
+export const ROUND_PAUSE = { normal: 2600, fast: 1800, turbo: 800 };
+export const roundPauseMs = (): number => ROUND_PAUSE[state.speed] ?? ROUND_PAUSE.normal;       // not shortened by reduced motion: it is reading time
 /** Case opening: the normal length, or the fast open (the lightning button) which is between the old Fast and Turbo. People who ask their system for less motion always get the quickest. */
 export const OPEN_MS = { normal: 5200, fast: 1800, reduced: 1200 } as const;
 export const openMs = (): number => ((() => { try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })() ? OPEN_MS.reduced : state.ui.fastOpen ? OPEN_MS.fast : OPEN_MS.normal);

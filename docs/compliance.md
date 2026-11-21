@@ -7,9 +7,30 @@ Everything here is a **demonstration** for a play-money site. No gambling licenc
 - **One bet gate.** `betBlockReason(state, amount)` is the only place that decides whether a wager may be placed: age confirmed, not self-excluded, no cool-off, within the maximum bet, within daily, weekly and monthly loss limits, within the daily wager and daily play-time limits, and within the verification tier's bet cap. `debit()` calls it for every game.
 - **Limits.** Loss (daily, weekly, monthly), daily wager, maximum bet, daily play time and a reality-check interval. **Tightening applies instantly; loosening waits 24 hours.** A pending change can be cancelled.
 - **Cool-off and self-exclusion.** Fixed periods that can only be extended, never shortened.
+- **Where the rules run.** With the server wallet on (every cloud account) **the database enforces all of this, not the page**: see "Where the limits are enforced" below. `betBlockReason()` above is the gate of the browser-only fallback.
 - **Reality check.** A periodic pop-up with session time and net result, with options to keep playing, review limits, or take a 24-hour break. Play time is tracked in the background; the on-screen session timer was removed from the top bar at the owner's request.
 - **18+ confirmation.** A tickbox when registering, and the database function `complete_signup` refuses a profile without it. Signed-in browser accounts also get an age gate if the confirmation is missing.
 - **Self-assessment.** A short PGSI-style questionnaire with links to free support organisations (Responsible play page, `#/responsible`).
+
+### Where the limits are enforced (`0018_server_limits.sql`, since 2026-11-21)
+
+Before this migration only the maximum bet and the daily loss limit could exist on the server, and nothing in the page ever sent them; weekly and monthly loss limits, the daily wager limit, the play-time limit, cool-offs and self-exclusion lived only in the browser, so a reload, another browser or an edited page could get around them. Now `wallet_gate()` is the one gate that **every stake passes** (bets, case openings, upgrades, coinflips, battles, Crash, Double), and it refuses with its own message:
+
+| Rule | Database error | How it is counted |
+|---|---|---|
+| Age confirmed | `age_not_confirmed` | the profile's confirmation |
+| Self-exclusion | `self_excluded` | until the date; can only be extended (1 hour to 365 days) |
+| Cool-off | `cool_off` | until the date; can only be extended (1 hour to 30 days) |
+| Maximum single bet | `max_bet_exceeded` | the stake itself |
+| Verification cap | `tier_cap_exceeded` | 10,000 / 25,000 / 50,000 by level |
+| Daily wager limit | `wager_daily_limit` | coins staked today (UTC day), from the ledger; a refunded stake does not count |
+| Daily, weekly, monthly loss limit | `daily_loss_limit`, `weekly_loss_limit`, `monthly_loss_limit` | settled bets over today, the last 7 and the last 30 UTC days: stakes minus payouts, winnings offset losses but never below zero; the new stake plus that loss must stay within the limit |
+| Daily play time | `time_limit` | **estimated** from the stakes, because the server cannot see an open page: the time between two stakes counts when it is 5 minutes or less, plus 20 seconds for each stake; a stake is refused once the estimate has reached the limit |
+
+- **Changing a limit** is `request_limit_change()`: tighter (or the first limit) applies at once, looser or removed waits 24 hours, asking for the current value cancels a waiting change. The page's Responsible Play window talks to it through `src/rg-server.ts`; `my_limits()` returns the limits, waiting changes, what has been used and the break dates, and the page shows the database's own usage numbers. A cool-off is `start_cool_off()`, self-exclusion `self_exclude()`; the reality-check pop-up's 24-hour break uses the same call.
+- **Nothing is loosened by switching over.** The first time a cloud account is loaded after `0018`, limits and breaks the browser kept that are **stricter** than the database's are copied up once; looser ones are ignored.
+- **Honest limits.** A live game's stake (coinflip, Crash, Double, battle) counts toward the *loss* limits only when the round settles (like the daily loss limit always did); it counts at once toward the wager limit. The play-time limit is an estimate. The reality check and the page's own play timer stay in the browser. KYC and AML are still sandbox demonstrations.
+- Tested by `tests/server-limits-db.test.ts` (every rule above, the day, week and month edges, refunds, wins offsetting losses, a due change being applied, breaks that cannot be shortened, all kinds of stake) and `tests/rg-server.test.ts` (the page's side).
 
 ## Sandbox identity checks (`kyc.ts`, Account, Verification)
 

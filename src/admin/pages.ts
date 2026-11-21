@@ -1,7 +1,7 @@
 // The pages of the admin panel that exist so far (step A of the plan). The other modules are listed on the "Coming next" page.
-import type { AdminApi, AuditRow, Controls, Status } from './api.js';
+import type { AdminApi, AuditRow, BetRow, Controls, LedgerRow, Status, WalletOverview, WalletTotals } from './api.js';
 import { errorText } from './api.js';
-import { $, $$, esc, reasonDialog, when } from './dom.js';
+import { $, $$, coins, esc, reasonDialog, when } from './dom.js';
 
 export interface PageCtx { api: AdminApi; status: Status; perms: string[]; toast: (m: string, k?: 'info' | 'ok' | 'error') => void; reload: () => void; lock: () => Promise<void> }
 export interface Page { title: string; perm?: string; render(el: HTMLElement, c: PageCtx): Promise<void> }
@@ -11,9 +11,9 @@ export const ROADMAP: { step: string; title: string; items: string; state: 'done
   { step: 'A', title: 'Admin site, roles, permissions, audit log, explorer', items: 'This site: three-step sign-in, staff roles, editable permissions, audit log, read-only data explorer', state: 'done' },
   { step: 'B', title: 'Control and visibility', items: 'Built: site controls (maintenance, notice, game switches, sign-ups, country restrictions). Still to build: dashboard, players, account actions, chat moderation (English room), live rooms, round control', state: 'partial' },
   { step: 'C', title: 'Catalogue in the database', items: 'Cases, items and odds you can add, edit and delete here', state: 'later' },
-  { step: 'D', title: 'Full server wallet', items: 'All coins in the database, every game rewritten around it, everyone starts at 0, owner wallet adjustments, bets and ledger viewer', state: 'later' },
+  { step: 'D', title: 'Full server wallet', items: 'All coins in the database, every game rewritten around it, everyone starts at 0. Built: owner wallet adjustments, wallet, ledger and bets viewer (the Wallets page)', state: 'done' },
   { step: 'E', title: 'Rewards and operations', items: 'Promo codes, free crates, races, rain, giveaways, game configuration, bots, in-app announcements', state: 'later' },
-  { step: 'F', title: 'Compliance, fairness, economy, risk, analytics', items: 'Verification queues, responsible-play enforcement, fairness audit, economy monitor, risk signals with IP and device marker, reports', state: 'later' },
+  { step: 'F', title: 'Compliance, fairness, economy, risk, analytics', items: 'Built: the responsible-play limits, cool-offs and self-exclusion are enforced by the database. Still to build: verification queues, admin tools to apply limits and exclusions to a player, fairness audit, economy monitor, risk signals with IP and device marker, reports', state: 'partial' },
   { step: 'G', title: 'Legal, system health, developer tools', items: 'Legal pages editor and privacy requests, system health, developer and test tools', state: 'later' },
 ];
 
@@ -86,6 +86,103 @@ export const PAGES: Record<string, Page> = {
         });
       };
       draw(await c.api.controls());
+    },
+  },
+
+  wallets: {
+    title: 'Wallets', perm: 'ledger.view',
+    async render(el, c) {
+      const canAdjust = c.perms.includes('wallet.adjust');
+      el.innerHTML = `<p class="muted">Every coin in the database, player by player. Looking is free and is not logged. Changing coins needs the <code>wallet.adjust</code> permission (the Owner only, unless the Owner switches it on for another role) and is written to the audit log with your reason and the balances before and after. Only coins can be changed here, never items.</p>
+        <div class="cards" id="wTotals"></div>
+        <form id="wFind" class="row"><label class="sr" for="wq">Search players</label><input id="wq" placeholder="Search a player by name" minlength="2" required><button class="btn">Search</button></form>
+        <div id="wFound"></div><div id="wPlayer"></div>`;
+      const drawTotals = (t: WalletTotals): void => {
+        const sum = (b: { count: number; staked: number; paid: number }): string => `${b.count} bets, ${coins(b.staked)} staked, ${coins(b.paid)} paid back`;
+        $('#wTotals', el).innerHTML = `<div class="card"><span class="muted small">Coins in all wallets</span><b>${coins(t.coins_in_wallets)}</b><span class="muted small">${t.wallets_with_coins} of ${t.wallets} wallets hold coins; the largest holds ${coins(t.top_balance)}</span></div>
+          <div class="card"><span class="muted small">Bets today (UTC)</span><b>${t.bets_today.count}</b><span class="muted small">${esc(sum(t.bets_today))}</span></div>
+          <div class="card"><span class="muted small">Bets in the last 7 days</span><b>${t.bets_7d.count}</b><span class="muted small">${esc(sum(t.bets_7d))}</span></div>
+          <div class="card"><span class="muted small">Adjustments, last 30 days</span><b>${t.adjustments_30d.count}</b><span class="muted small">+${coins(t.adjustments_30d.credited)} given, -${coins(t.adjustments_30d.debited)} taken</span></div>`;
+      };
+      drawTotals(await c.api.walletTotals());
+
+      // one request = one key: if the answer is lost and the same adjustment is tried again, the database pays it once
+      let attempt: { sig: string; key: string } | null = null;
+      const openPlayer = async (id: string): Promise<void> => {
+        const box = $('#wPlayer', el); box.innerHTML = '<p class="muted">Loading…</p>';
+        let o: WalletOverview;
+        try { o = await c.api.walletOverview(id); } catch (e) { box.innerHTML = `<p class="err" role="alert">${esc(errorText(e))}</p>`; return; }
+        let tab: 'ledger' | 'bets' = 'ledger', ledger: LedgerRow[] = [], bets: BetRow[] = [], moreLedger = true, moreBets = true;
+        const r = o.responsible, w = o.wallet, name = o.player.name;
+        const ago = (iso: string | null): string => (iso && Date.parse(iso) > Date.now() ? when(iso) : 'not active');
+        const limitRows = r ? ([['Maximum single bet', r.limits.max_bet, null, 'coins'], ['Daily loss', r.limits.loss_daily, r.usage.loss_1, 'coins'], ['Weekly loss', r.limits.loss_weekly, r.usage.loss_7, 'coins'],
+          ['Monthly loss', r.limits.loss_monthly, r.usage.loss_30, 'coins'], ['Daily wager', r.limits.wager_daily, r.usage.staked_today, 'coins'], ['Daily play time', r.limits.time_daily_min, r.usage.active_minutes, 'min']] as const) : [];
+        box.innerHTML = `<section class="block"><h2>${esc(name)} ${o.player.staff_role ? `<span class="pill partial">staff: ${esc(o.player.staff_role)}</span>` : ''}${o.player.closed ? ' <span class="pill warn">closed</span>' : ''}</h2>
+          <p class="muted small">Joined ${esc(when(o.player.created_at))}. <code>${esc(o.player.id)}</code></p>
+          <div class="cards">
+            <div class="card"><span class="muted small">Balance</span><b id="wBal">${coins(w.balance)}</b><span class="muted small">changed ${esc(when(w.updated_at))}</span></div>
+            <div class="card"><span class="muted small">Wagered / won</span><b>${coins(w.wagered)}</b><span class="muted small">won ${coins(w.won)}</span></div>
+            <div class="card"><span class="muted small">Ledger check</span><b>${o.ledger.difference === 0 ? 'matches' : coins(o.ledger.difference)}</b><span class="muted small">${o.ledger.rows} rows add up to ${coins(o.ledger.sum)}${o.ledger.difference === 0 ? '' : '; the balance is higher or lower by the amount shown (balances from before the ledger existed can differ)'}</span></div>
+            <div class="card"><span class="muted small">Bets</span><b>${o.bets.count}</b><span class="muted small">${coins(o.bets.staked)} staked, ${coins(o.bets.paid)} paid back${o.bets.last_at ? `; last ${esc(when(o.bets.last_at))}` : ''}</span></div>
+            <div class="card"><span class="muted small">Inventory</span><b>${o.inventory.items}</b><span class="muted small">items worth ${coins(o.inventory.value)}</span></div></div>
+          <h3>Coins by kind</h3><div class="tablewrap"><table class="grid"><thead><tr><th>Kind</th><th>Rows</th><th>Total</th></tr></thead><tbody>${o.ledger.by_kind.map(k => `<tr><td><code>${esc(k.kind)}</code></td><td>${k.count}</td><td class="${k.sum < 0 ? 'neg' : ''}">${k.sum > 0 ? '+' : ''}${coins(k.sum)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No ledger rows yet.</td></tr>'}</tbody></table></div>
+          ${r ? `<h3>Responsible play <span class="muted small">(limits are kept by the database)</span></h3><div class="tablewrap"><table class="grid"><thead><tr><th>Limit</th><th>Value</th><th>Used now</th></tr></thead><tbody>${limitRows.map(([l, v, used, unit]) => `<tr><td>${l}</td><td>${v === null ? '<span class="muted">none</span>' : `${coins(v)} ${unit}`}</td><td>${v === null || used === null ? '' : `${coins(used)} ${unit}`}</td></tr>`).join('')}</tbody></table></div>
+            <p class="muted small">Self-exclusion: ${esc(ago(r.excluded_until))}. Cool-off: ${esc(ago(r.cool_off_until))}. Verification level ${r.kyc_tier}.</p>` : ''}
+          ${canAdjust ? `<h3>Change this player's coins</h3><form id="adj" class="row wrap"><label for="adjAmt">Amount (coins)</label><input id="adjAmt" type="number" min="0.01" max="10000000" step="0.01" required inputmode="decimal" style="width:11em">
+            <label for="adjDir">Direction</label><select id="adjDir"><option value="credit">Give coins (credit)</option><option value="debit">Take coins (debit)</option></select><button class="btn danger">Adjust…</button></form>
+            <p class="muted small">You will be asked for a reason. It is written to the audit log, the player sees the row as an "adjustment" in their transactions, and it does not count as a bet or a win. A debit cannot take the balance below zero.</p>` : '<p class="muted small">You can look at this wallet but not change it: that needs the <code>wallet.adjust</code> permission.</p>'}
+          <div class="row"><button class="btn" id="tabLedger" aria-pressed="true">Ledger</button><button class="btn ghost" id="tabBets" aria-pressed="false">Bets</button></div>
+          <div class="tablewrap"><table class="grid"><thead id="wHead"></thead><tbody id="wRows"></tbody></table></div>
+          <p><button class="btn ghost" id="wMore" hidden>Load older</button></p></section>`;
+
+        const drawRows = (): void => {
+          $('#wHead', box).innerHTML = tab === 'ledger' ? '<tr><th>Time</th><th>Kind</th><th>Amount</th><th>Balance after</th><th>Bet</th></tr>' : '<tr><th>Time</th><th>Game</th><th>Stake</th><th>Paid back</th><th>Multiplier</th><th>Net</th></tr>';
+          $('#wRows', box).innerHTML = tab === 'ledger'
+            ? ledger.map(l => `<tr><td>${esc(when(l.at))}</td><td><code>${esc(l.kind)}</code></td><td class="${l.amount < 0 ? 'neg' : 'pos'}">${l.amount > 0 ? '+' : ''}${coins(l.amount)}</td><td>${coins(l.balance_after)}</td><td class="muted small">${l.bet_id ?? ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No rows.</td></tr>'
+            : bets.map(b => `<tr><td>${esc(when(b.at))}</td><td>${esc(b.game)}</td><td>${coins(b.amount)}</td><td>${coins(b.payout)}</td><td>x${coins(b.multiplier)}</td><td class="${b.payout - b.amount < 0 ? 'neg' : 'pos'}">${b.payout - b.amount > 0 ? '+' : ''}${coins(b.payout - b.amount)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No bets.</td></tr>';
+          ($('#wMore', box) as HTMLButtonElement).hidden = !(tab === 'ledger' ? moreLedger : moreBets);
+          $('#tabLedger', box).setAttribute('aria-pressed', String(tab === 'ledger')); $('#tabBets', box).setAttribute('aria-pressed', String(tab === 'bets'));
+          $('#tabLedger', box).classList.toggle('ghost', tab !== 'ledger'); $('#tabBets', box).classList.toggle('ghost', tab !== 'bets');
+        };
+        const more = async (): Promise<void> => {
+          try {
+            if (tab === 'ledger') { const got = await c.api.walletLedger(id, ledger.length ? ledger[ledger.length - 1]!.id : undefined); ledger = [...ledger, ...got]; moreLedger = got.length >= 50; }
+            else { const got = await c.api.walletBets(id, bets.length ? bets[bets.length - 1]!.id : undefined); bets = [...bets, ...got]; moreBets = got.length >= 50; }
+          } catch (e) { c.toast(errorText(e), 'error'); }
+          drawRows();
+        };
+        $('#tabLedger', box).onclick = () => { tab = 'ledger'; if (!ledger.length && moreLedger) void more(); else drawRows(); };
+        $('#tabBets', box).onclick = () => { tab = 'bets'; if (!bets.length && moreBets) void more(); else drawRows(); };
+        $('#wMore', box).onclick = () => void more();
+        drawRows(); void more();
+
+        const form = $<HTMLFormElement>('#adj', box);
+        if (form) form.onsubmit = async e => {
+          e.preventDefault();
+          const amount = Math.round(Number(($<HTMLInputElement>('#adjAmt', box)).value) * 100) / 100, debit = ($<HTMLSelectElement>('#adjDir', box)).value === 'debit';
+          if (!(amount > 0) || amount > 10_000_000) { c.toast('Enter an amount above zero, up to 10,000,000.', 'error'); return; }
+          if (debit && amount > w.balance) { c.toast(errorText('debit_exceeds_balance'), 'error'); return; }
+          const signed = debit ? -amount : amount, sig = `${id}:${signed}`;
+          if (attempt?.sig !== sig) attempt = { sig, key: crypto.randomUUID() };
+          const reason = await reasonDialog(`${debit ? 'Take' : 'Give'} ${coins(amount)} coins ${debit ? 'from' : 'to'} ${name}?`, `Balance ${coins(w.balance)} becomes ${coins(w.balance + signed)}. This cannot be undone except by another adjustment, and it is written to the audit log.`, debit ? 'Take coins' : 'Give coins');
+          if (!reason) return;
+          try {
+            const res = await c.api.walletAdjust(id, signed, reason, attempt.key);
+            attempt = null;
+            c.toast(res.replayed ? 'That adjustment had already been made' : `Done. New balance ${coins(res.balance_after)}`, 'ok');
+            void c.api.walletTotals().then(drawTotals).catch(() => {});
+            await openPlayer(id);
+          } catch (er) { c.toast(errorText(er), 'error'); }                                  // the key is kept, so trying the same thing again cannot pay twice
+        };
+      };
+
+      const found = $('#wFound', el);
+      $<HTMLFormElement>('#wFind', el).onsubmit = async e => {
+        e.preventDefault();
+        const list = await c.api.walletSearch(($<HTMLInputElement>('#wq', el)).value).catch(er => { c.toast(errorText(er), 'error'); return []; });
+        found.innerHTML = list.length ? `<div class="tablewrap"><table class="grid"><thead><tr><th>Player</th><th>Balance</th><th>Wagered</th><th>Joined</th><th></th></tr></thead><tbody>${list.map(p => `<tr data-p="${esc(p.id)}"><td>${esc(p.name)}</td><td>${coins(p.balance)}</td><td>${coins(p.wagered)}</td><td class="muted small">${esc(when(p.created_at))}</td><td><button class="btn" data-open>Open wallet</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">No player found.</p>';
+        $$('tr[data-p]', found).forEach(tr => $('[data-open]', tr).addEventListener('click', () => void openPlayer(tr.dataset['p'] as string)));
+      };
     },
   },
 

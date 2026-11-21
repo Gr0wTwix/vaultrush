@@ -21,9 +21,11 @@ The live site uses it (the two Supabase variables are set; see [../docs/setup-st
 | **Real CS2 catalogue**: all priced items, the cases and their drop tickets | `migrations/0014_real_items_*.sql`, `0015_real_cases.sql` (generated, see `../docs/real-catalogue.md`) |
 | **Admin and site controls**: roles, permissions, audit log, maintenance, notice, game switches, sign-ups, countries | `migrations/0006_admin.sql`, `0007_site_controls.sql` (see `../docs/admin-site.md`) |
 | **Verification only above 10,000 coins**: the stake caps by verification level are 10,000 / 25,000 / 50,000, and the live games' hard limit is 50,000 | `migrations/0017_bet_caps.sql` (patches `wallet_gate`, `place_bet`, the three live-game entry points and the coinflip table rule; see `../docs/compliance.md`) |
+| **Every responsible-play limit enforced by the database**: weekly and monthly loss, daily wager, play time, cool-off and self-exclusion (plus the older max bet and daily loss); `my_limits()` for the page | `migrations/0018_server_limits.sql` (rewrites `wallet_gate`, `request_limit_change`; adds `start_cool_off`; see `../docs/compliance.md`) |
+| **Admin wallet tools**: totals, player search, wallet overview, ledger and bets viewers, the owner's audited coin adjustment | `migrations/0019_admin_wallet.sql` (see `../docs/admin-site.md`) |
 | **Operator alerts and a daily report** for n8n (off until switched on, and now switched on in the live project; the settings table is readable by nobody but the owner) | `migrations/0016_ops_events.sql`: `ops_settings`, `ops_notify()`, `ops_daily_report()` (see `../docs/n8n.md`) |
 
-Every game and reward now runs on the server (migrations 0008 to 0012, see ../docs/server-wallet.md). Still to come: the full limit set (weekly/monthly loss, time limits), KYC and AML on the server, and wiring the chat UI to the realtime table are the next steps.
+Every game and reward now runs on the server (migrations 0008 to 0012, see ../docs/server-wallet.md). Every responsible-play limit is on the server since migration 0018, and the admin wallet tools since 0019. Still to come: KYC and AML on the server, and wiring the chat UI to the realtime table.
 
 ## Set it up
 

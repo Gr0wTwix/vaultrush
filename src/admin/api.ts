@@ -23,6 +23,29 @@ export interface Controls {
   games_off: string[]; blocked_countries: string[]; games: string[]; updated_at: string; updated_by: string | null;
 }
 
+/** The wallet tools (migration 0019). Money amounts arrive as numbers; times as ISO strings. */
+export interface BetsSum { count: number; staked: number; paid: number }
+export interface WalletTotals {
+  coins_in_wallets: number; wallets: number; wallets_with_coins: number; top_balance: number; bets_today: BetsSum; bets_7d: BetsSum;
+  adjustments_30d: { count: number; credited: number; debited: number }; now: number;
+}
+export interface WalletFound { id: string; name: string; balance: number; wagered: number; created_at: string }
+export interface WalletOverview {
+  player: { id: string; name: string; created_at: string; closed: boolean; staff_role: string | null };
+  wallet: { balance: number; wagered: number; won: number; updated_at: string };
+  ledger: { rows: number; sum: number; difference: number; by_kind: { kind: string; count: number; sum: number }[] };
+  bets: BetsSum & { last_at: string | null };
+  inventory: { items: number; value: number };
+  responsible: null | {
+    limits: { max_bet: number | null; loss_daily: number | null; loss_weekly: number | null; loss_monthly: number | null; wager_daily: number | null; time_daily_min: number | null };
+    usage: { staked_today: number; loss_1: number; loss_7: number; loss_30: number; active_minutes: number };
+    excluded_until: string | null; cool_off_until: string | null; kyc_tier: number;
+  };
+}
+export interface LedgerRow { id: number; kind: string; amount: number; balance_after: number; bet_id: number | null; at: string }
+export interface BetRow { id: number; game: string; amount: number; payout: number; multiplier: number; nonce: number; at: string }
+export interface AdjustResult { user_id: string; amount: number; balance_before: number; balance_after: number; ledger_id?: number; replayed: boolean }
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -54,6 +77,13 @@ export interface AdminApi {
   setGame(game: string, off: boolean, reason: string): Promise<Controls>;
   setSignups(open: boolean, reason: string): Promise<Controls>;
   setCountries(codes: string[], reason: string): Promise<Controls>;
+  walletTotals(): Promise<WalletTotals>;
+  walletSearch(q: string): Promise<WalletFound[]>;
+  walletOverview(user: string): Promise<WalletOverview>;
+  walletLedger(user: string, before?: number): Promise<LedgerRow[]>;
+  walletBets(user: string, before?: number): Promise<BetRow[]>;
+  /** A positive amount credits, a negative one debits. `key` makes a repeat of the same request harmless (the same key is paid once). */
+  walletAdjust(user: string, amount: number, reason: string, key: string): Promise<AdjustResult>;
 }
 
 export const realApi: AdminApi = {
@@ -95,6 +125,12 @@ export const realApi: AdminApi = {
   setGame: (game, off, reason) => call<Controls>('admin_set_game', { p_game: game, p_off: off, p_reason: reason }),
   setSignups: (open, reason) => call<Controls>('admin_set_signups', { p_open: open, p_reason: reason }),
   setCountries: (codes, reason) => call<Controls>('admin_set_countries', { p_codes: codes, p_reason: reason }),
+  walletTotals: () => call<WalletTotals>('admin_wallet_totals'),
+  walletSearch: q => call<WalletFound[]>('admin_wallet_search', { p_query: q }),
+  walletOverview: user => call<WalletOverview>('admin_wallet_overview', { p_user: user }),
+  walletLedger: (user, before) => call<LedgerRow[]>('admin_wallet_ledger', { p_user: user, p_before: before ?? null, p_limit: 50 }),
+  walletBets: (user, before) => call<BetRow[]>('admin_wallet_bets', { p_user: user, p_before: before ?? null, p_limit: 50 }),
+  walletAdjust: (user, amount, reason, key) => call<AdjustResult>('admin_wallet_adjust', { p_user: user, p_amount: amount, p_reason: reason, p_key: key }),
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -115,6 +151,8 @@ export const ADMIN_ERRORS: Record<string, string> = {
   invalid_query: 'Write a query first.',
   invalid_value: 'That value is not allowed.', text_too_long: 'That text is too long.', text_required: 'Write the text to show first.',
   unknown_game: 'Unknown game.', invalid_country: 'Use two-letter country codes such as US or GB (at most 250).',
+  adjust_amount_invalid: 'Enter an amount above zero with at most 2 decimals, up to 10,000,000.', debit_exceeds_balance: 'The player does not have that many coins: a debit cannot take the balance below zero.',
+  key_reused: 'That request was already used for something else. Close this box and start again.', player_not_found: 'That player has no open account.',
 };
 export const errorText = (e: unknown): string => {
   const m = e instanceof Error ? e.message : String(e);

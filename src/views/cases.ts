@@ -2,7 +2,7 @@ import { CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf, isHugeDrop } from 
 import { state, save, debit, addItems, round2, debitError } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop, pushBet } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs, preloadImages } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs, preloadImages, bringIntoView } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
 import { serverWallet, openCases, releaseItems } from '../wallet.js';
@@ -94,6 +94,7 @@ export function renderCase(el, id) {
   const spinAll = winners => {
     const axis = winners.length > 2 ? 'y' : 'x';
     const dur = openMs();
+    bringIntoView(reels);                                               // on a phone the reels are below the Open button: show them
     return preloadImages(c.entries.map(e => e.item)).then(() => {
       reels.innerHTML = winners.map(() => '<div class="reel-host"></div>').join('');
       return Promise.all([...reels.children].map((host, i) => spinReel(host, c.entries, winners[i], { axis, duration: dur + i * 90, sound: i === 0, ...(axis === 'y' ? { total: 40, winIndex: 34 } : {}) })));

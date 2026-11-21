@@ -10,6 +10,7 @@ import { emit, isServerWallet, on, round2, save, setServerWallet, state } from '
 import { ITEM } from './data.js';
 import { ensureItems } from './catalogue.js';
 import { watchTable } from './live.js';
+import { refreshLimits, resetServerLimits } from './rg-server.js';
 import type { HistoryBet, InvEntry } from './types.js';
 import { toast } from './ui.js';
 
@@ -134,6 +135,7 @@ export async function initWallet(userId: string): Promise<boolean> {
   emit('wallet:quiet');                                                   // the first numbers from the server are an account being loaded, not a gain: no glow
   listenWallet();
   try { await refreshWallet(true); } catch { /* the poll below retries */ }
+  void refreshLimits().catch(() => {});                                   // the limits and breaks the database holds (older databases without 0018 just fail quietly)
   void loadHistory().catch(() => {});
   void claimRacePrize().then(r => { if (r.paid) toast(`You finished #${r.rank} in yesterday's race: +${r.prize}`, 'win'); }).catch(() => {});
   try {
@@ -155,6 +157,7 @@ export function stopWallet(): void {
   if (visibility) document.removeEventListener('visibilitychange', visibility); visibility = null;
   offCredit?.(); offCredit = null; offBalance?.(); offBalance = null; offRefresh?.(); offRefresh = null;
   holds.splice(0).forEach(h => clearTimeout(h.timer)); heldItems.forEach(t => clearTimeout(t)); heldItems.clear(); frozen = null; clearTimeout(freezeTimer); serverBalance = 0; seq = applied = 0;
+  resetServerLimits();
   if (isServerWallet()) { setServerWallet(false); emit('wallet', false); }
 }
 

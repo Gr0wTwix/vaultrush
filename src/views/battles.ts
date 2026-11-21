@@ -3,7 +3,7 @@ import { state, save, debit, credit, round2, debitError, handoff } from '../stat
 import { bet, annotate, pickWeighted, floatsFor } from '../fair.js';
 import { tellBalance, isLive, liveMe, createLiveBattle, joinLiveBattle, callLiveBot, leaveLiveBattle, getLiveBattle, openLiveBattles, myLiveBattles, liveBattleSeed, watchBattles, refundOnce, settleOnce, isSettled, onReconcile, type LiveBattle } from '../live.js';
 import { pushBet, pushDrop } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt, preloadImages } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt, preloadImages, bringIntoView, roundPauseMs } from '../ui.js';
 import { sfx } from '../sfx.js';
 
 import { FORMATS, decide, shareOf } from '../battle-math.js';
@@ -466,12 +466,15 @@ function drawBattle(el, b) {
     <div class="bt-status"><div><h2 id="bStatus">Waiting for players…</h2><span class="muted small">${MODES[b.mode].desc}</span></div>
       <div class="row lobby-ctl" id="lobbyCtl"><button class="btn btn-primary" id="callAll" data-needs-auth="battle">Call all bots</button><button class="btn btn-ghost" id="cancelB">Cancel battle</button></div></div>
     <div id="jpRoll"></div>
+    ${P > 3 ? '<p class="bt-swipe muted small">Swipe sideways to see every player</p>' : ''}
+    <div class="bt-board" style="--P:${P}"><div class="bt-board-in">
     <div class="battle-stage bt-stage ${teams ? 'teams' : ''}" style="--P:${P}">
       <span class="stage-arrow l"></span><span class="stage-arrow r"></span><div class="stage-line"></div>
       <div class="bt-grid">${b.players.map((p, i) => `<div class="bt-reel ${hasSep(i) ? 'has-vs' : ''}" data-p="${i}" style="--pc:${PCOLORS[i]}"><div class="reel-host vreel" id="reel${i}">${seatHtml(i)}</div></div>`).join('')}</div>
     </div>
     <div class="bt-grid bt-players" style="--P:${P}">${b.players.map((p, i) => `<div class="pbar ${hasSep(i) ? 'has-vs' : ''}" id="pbar${i}" data-p="${i}" style="--pc:${PCOLORS[i]}">${pbarInner(i)}</div>`).join('')}</div>
-    <div class="bt-grid bt-slots" style="--P:${P}">${b.players.map((p, i) => `<div class="slots ${hasSep(i) ? 'has-vs' : ''}" id="items${i}" data-p="${i}">${b.ids.map((c, r) => `<div class="slot" id="slot${i}_${r}">${slotEmpty(r)}</div>`).join('')}</div>`).join('')}</div>`;
+    <div class="bt-grid bt-slots" style="--P:${P}">${b.players.map((p, i) => `<div class="slots ${hasSep(i) ? 'has-vs' : ''}" id="items${i}" data-p="${i}">${b.ids.map((c, r) => `<div class="slot" id="slot${i}_${r}">${slotEmpty(r)}</div>`).join('')}</div>`).join('')}</div>
+    </div></div>`;
 
   const colsOf = p => $$(`[data-p="${p}"]`, el);
   $('#shareB', el).onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Battle link copied'); } catch { toast('Copy the address bar to share'); } };
@@ -644,6 +647,7 @@ function drawBattle(el, b) {
       $('#lobbyCtl', el)?.remove();
       // Countdown while "waiting for the block" that seeds the rolls (shown as a big overlay).
       const stage = $('.battle-stage', el);
+      bringIntoView(stage);                                              // on a phone the arena starts below the buttons: show the countdown and the reels
       const ov = document.createElement('div');
       ov.className = 'countdown-ov';
       const block = 4e8 + Math.floor(b.jackpotF * 1e8);
@@ -657,7 +661,7 @@ function drawBattle(el, b) {
       ov.classList.add('out');
       setTimeout(() => ov.remove(), 300);
       await sleep(200);
-    }
+    } else bringIntoView($('.battle-stage', el));                         // a replay pressed at the top of the page
     for (let r = 0; r < b.ids.length; r++) {
       if (!live()) return;
       const c = CASE[b.ids[r]];
@@ -690,7 +694,7 @@ function drawBattle(el, b) {
       b.players.forEach((_, p) => $(`#reel${p} .reel-won`, el)?.classList.add(vals[p] === best ? 'best' : 'worse'));
       $('#pot', el).innerHTML = money(running.reduce((s, v) => s + v, 0));
       sfx.tick();
-      await sleep(state.speed === 'turbo' ? 150 : 400);
+      await sleep(roundPauseMs());                                      // let everyone read what was pulled before the next case starts
     }
     if (!live()) return;
 

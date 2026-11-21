@@ -1,6 +1,7 @@
 // Responsible-gambling runtime: the 18+ gate, play-time tracking and the reality check.
 import { state, save } from './state.js';
-import { acknowledgeReality, addPlayTime, confirmAge, realityDue, sessionSummary, startCoolOff, startSession } from './rg.js';
+import { acknowledgeReality, addPlayTime, confirmAge, realityDue, sessionSummary, startSession } from './rg.js';
+import { takeBreak } from './rg-server.js';
 import { $, fmt, h, icon } from './ui.js';
 import { openAccount } from './account.js';
 import { sfx } from './sfx.js';
@@ -53,7 +54,12 @@ function showReality(): void {
   const done = (): void => { acknowledgeReality(state.rg); save(); el.remove(); };
   $('#rgGo', el).onclick = done;
   $('#rgLimits', el).onclick = () => { done(); openAccount('responsible'); };
-  $('#rgBreak', el).onclick = () => { const until = startCoolOff(state.rg, 24 * 3_600_000); done(); toastKeep(`Cool-off started. Betting is paused until ${new Date(until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.`); };
+  $('#rgBreak', el).onclick = async () => {
+    try {
+      const until = await takeBreak('cool-off', 24 * 3_600_000);                       // kept by the database when the server wallet is on
+      done(); toastKeep(`Cool-off started. Betting is paused until ${new Date(until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.`);
+    } catch (e) { toast((e as Error).message, 'error'); }
+  };
 }
 
 /** Call once at start-up (after the top bar exists). */

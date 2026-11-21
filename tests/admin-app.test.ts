@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Admin, AdminApi, AuditRow, Controls, Matrix, QueryResult, Status } from '../src/admin/api.js';
+import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, Controls, LedgerRow, Matrix, QueryResult, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
 const ROLES = [
@@ -17,12 +17,26 @@ const MATRIX: Matrix = {
   ],
   grants: [{ role: 'admin', permission: 'players.view' }, { role: 'admin', permission: 'chat.delete' }, { role: 'moderator', permission: 'players.view' }],
 };
-const OWNER_PERMS = ['audit.read', 'chat.delete', 'dashboard.view', 'explorer.query', 'players.view', 'players.view_email', 'roles.manage', 'site.countries', 'site.games', 'site.maintenance', 'site.notice', 'site.signups'];
+const OWNER_PERMS = ['audit.read', 'chat.delete', 'dashboard.view', 'explorer.query', 'ledger.view', 'players.view', 'players.view_email', 'roles.manage', 'site.countries', 'site.games', 'site.maintenance', 'site.notice', 'site.signups', 'wallet.adjust'];
+const TOTALS: WalletTotals = { coins_in_wallets: 12345.5, wallets: 9, wallets_with_coins: 4, top_balance: 5000, bets_today: { count: 12, staked: 800, paid: 650.25 }, bets_7d: { count: 90, staked: 6000, paid: 5800 },
+  adjustments_30d: { count: 2, credited: 300, debited: 50 }, now: Date.now() };
+const FOUND: WalletFound[] = [{ id: 'p1', name: 'Nova', balance: 1250.75, wagered: 400, created_at: '2026-11-18T10:00:00Z' }, { id: 'p2', name: 'Novak', balance: 3, wagered: 0, created_at: '2026-11-19T10:00:00Z' }];
+const overview = (o: Partial<WalletOverview> = {}): WalletOverview => ({
+  player: { id: 'p1', name: 'Nova', created_at: '2026-11-18T10:00:00Z', closed: false, staff_role: null },
+  wallet: { balance: 1250.75, wagered: 400, won: 380.5, updated_at: '2026-11-21T10:00:00Z' },
+  ledger: { rows: 6, sum: 1250.75, difference: 0, by_kind: [{ kind: 'bet', count: 3, sum: -400 }, { kind: 'bonus', count: 1, sum: 1000 }, { kind: 'win', count: 2, sum: 650.75 }] },
+  bets: { count: 3, staked: 400, paid: 380.5, last_at: '2026-11-21T09:00:00Z' }, inventory: { items: 2, value: 99.5 },
+  responsible: { limits: { max_bet: 500, loss_daily: null, loss_weekly: 2000, loss_monthly: null, wager_daily: null, time_daily_min: 120 }, usage: { staked_today: 400, loss_1: 20, loss_7: 150, loss_30: 150, active_minutes: 15 }, excluded_until: null, cool_off_until: null, kyc_tier: 0 },
+  ...o,
+});
+/** 120 ledger rows, newest (highest id) first, so the second page can be asked for. */
+const LEDGER: LedgerRow[] = Array.from({ length: 120 }, (_, i) => ({ id: 120 - i, kind: i % 2 ? 'win' : 'bet', amount: i % 2 ? 10 : -10, balance_after: 1000 + i, bet_id: i % 2 ? null : 7, at: '2026-11-21T09:00:00Z' }));
+const BETS: BetRow[] = [{ id: 9, game: 'plinko', amount: 100, payout: 40, multiplier: 0.4, nonce: 3, at: '2026-11-21T09:00:00Z' }, { id: 8, game: 'cases', amount: 50, payout: 160, multiplier: 3.2, nonce: 2, at: '2026-11-21T08:00:00Z' }];
 const CONTROLS: Controls = { maintenance_on: false, maintenance_message: '', notice_on: false, notice_text: '', notice_kind: 'info', signups_open: true, games_off: [], blocked_countries: [],
   games: ['cases', 'battles', 'upgrade', 'crash', 'double', 'plinko', 'mines', 'coinflip'], updated_at: '2026-11-21T09:00:00Z', updated_by: null };
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
-interface Fake { api: AdminApi; calls: Record<string, any[][]>; state: { user: { id: string } | null; status: Status; perms: string[]; factors: { id: string; status: string }[]; unlockResult: any; admins: Admin[]; audit: AuditRow[]; queryResult: QueryResult; controls: Controls } }
+interface Fake { api: AdminApi; calls: Record<string, any[][]>; state: { user: { id: string } | null; status: Status; perms: string[]; factors: { id: string; status: string }[]; unlockResult: any; admins: Admin[]; audit: AuditRow[]; queryResult: QueryResult; controls: Controls; overview: WalletOverview; adjustFails: string | null } }
 function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}): Fake {
   const calls: Fake['calls'] = {};
   const state: Fake['state'] = {
@@ -37,7 +51,7 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
       { id: 11, at: '2026-11-21T12:00:00Z', actor: 'me', actor_name: 'Mirage', actor_role: 'owner', action: 'admin.unlock', target_type: 'admin', target_id: 'me', before: null, after: null, reason: null, meta: {} },
     ],
     queryResult: { columns: ['display_name', 'id'], rows: [{ display_name: 'Kai', id: 'k' }, { display_name: 'Mirage', id: 'm' }], truncated: false },
-    controls: { ...CONTROLS },
+    controls: { ...CONTROLS }, overview: overview(), adjustFails: null,
     ...over,
   };
   const rec = <T,>(name: string, fn: (...a: any[]) => T) => (...a: any[]): T => { (calls[name] ||= []).push(a); return fn(...a); };
@@ -61,6 +75,17 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     setGame: rec('setGame', async (game: string, off: boolean) => (state.controls = { ...state.controls, games_off: off ? [...state.controls.games_off, game] : state.controls.games_off.filter(g => g !== game) })),
     setSignups: rec('setSignups', async (open: boolean) => (state.controls = { ...state.controls, signups_open: open })),
     setCountries: rec('setCountries', async (codes: string[]) => (state.controls = { ...state.controls, blocked_countries: [...new Set(codes)].sort() })),
+    walletTotals: rec('walletTotals', async () => TOTALS),
+    walletSearch: rec('walletSearch', async () => FOUND),
+    walletOverview: rec('walletOverview', async () => state.overview),
+    walletLedger: rec('walletLedger', async (_user: string, before?: number) => LEDGER.filter(l => before === undefined || l.id < before).slice(0, 50)),
+    walletBets: rec('walletBets', async () => BETS),
+    walletAdjust: rec('walletAdjust', async (_user: string, amount: number): Promise<AdjustResult> => {
+      if (state.adjustFails) throw new Error(state.adjustFails);
+      const before = state.overview.wallet.balance, after = Math.round((before + amount) * 100) / 100;
+      state.overview = { ...state.overview, wallet: { ...state.overview.wallet, balance: after } };
+      return { user_id: 'p1', amount, balance_before: before, balance_after: after, ledger_id: 99, replayed: false };
+    }),
     ...apiOver,
   };
   return { api, calls, state };
@@ -168,7 +193,7 @@ describe('the panel', () => {
   it('shows the owner every page, with the role and a session timer', async () => {
     await start(fake());
     await wait(() => expect(root.querySelector('nav')).not.toBeNull());
-    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Site controls', 'Staff and roles', 'Permissions', 'Audit log', 'Data explorer']);
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Site controls', 'Wallets', 'Staff and roles', 'Permissions', 'Audit log', 'Data explorer']);
     expect(q('#roleTag').textContent).toBe('Owner');
     expect(q('#timer').textContent).toMatch(/^\d+:\d\d$/);
     expect(root.textContent).toContain('Everything you do here is written to the audit log');
@@ -443,5 +468,131 @@ describe('site controls', () => {
   it('does not show the page to someone without the dashboard permission', async () => {
     const f = fake({ perms: ['audit.read'] }); await start(f);
     expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).not.toContain('Site controls');
+  });
+});
+
+describe('wallets', () => {
+  const open = async (f: Fake): Promise<void> => { await start(f); await goto('wallets', '#wFind'); };
+  const find = async (): Promise<void> => {
+    q<HTMLInputElement>('#wq').value = 'nov'; submit('#wFind');
+    await wait(() => expect(root.querySelector('tr[data-p="p1"]')).not.toBeNull());
+  };
+  const openNova = async (): Promise<void> => { await find(); q('tr[data-p="p1"] [data-open]').click(); await wait(() => expect(q('#wBal')).not.toBeNull()); };
+  const amount = (v: string, dir: 'credit' | 'debit' = 'credit'): void => { q<HTMLInputElement>('#adjAmt').value = v; q<HTMLSelectElement>('#adjDir').value = dir; submit('#adj'); };
+
+  it('is in the menu only for staff who may see ledgers, and starts with the totals of the economy', async () => {
+    await start(fake({ perms: ['dashboard.view'] }));
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).not.toContain('Wallets');
+    app?.stop(); document.body.innerHTML = '';
+    const f = fake(); await open(f);
+    expect(f.calls['walletTotals']).toHaveLength(1);
+    const cards = q('#wTotals').textContent ?? '';
+    expect(cards).toContain('12,345.50'); expect(cards).toContain('4 of 9 wallets'); expect(cards).toContain('Bets today'); expect(cards).toContain('+300.00 given, -50.00 taken');
+  });
+
+  it("searching lists players with balances; opening one shows the wallet, the ledger check, coins by kind and the player's limits", async () => {
+    const f = fake(); await open(f); await find();
+    expect(f.calls['walletSearch']).toEqual([['nov']]);
+    expect(q('tr[data-p="p1"]').textContent).toContain('1,250.75');
+    q('tr[data-p="p1"] [data-open]').click();
+    await wait(() => expect(q('#wBal')).not.toBeNull());
+    expect(f.calls['walletOverview']).toEqual([['p1']]);
+    expect(q('#wBal').textContent).toBe('1,250.75');
+    const page = q('#wPlayer').textContent ?? '';
+    expect(page).toContain('matches'); expect(page).toContain('6 rows add up to 1,250.75');
+    expect(page).toMatch(/bet[\s\S]*-400\.00/); expect(page).toContain('items worth 99.50');
+    expect(page).toContain('Weekly loss'); expect(page).toContain('2,000.00 coins'); expect(page).toContain('Daily play time'); expect(page).toContain('120.00 min');
+    expect(page).toContain('Verification level 0');
+  });
+
+  it('shows a ledger that does not add up, and no responsible-play block for staff who may not see it', async () => {
+    const f = fake({ overview: overview({ ledger: { rows: 2, sum: 100, difference: 5, by_kind: [] }, responsible: null }) }); await open(f); await openNova();
+    const page = q('#wPlayer').textContent ?? '';
+    expect(page).toContain('5.00'); expect(page).not.toContain('matches'); expect(page).toContain('before the ledger existed');
+    expect(page).not.toContain('Responsible play');
+  });
+
+  it('the ledger loads on open, "Load older" asks for the rows before the last one, and the bets tab has its own table', async () => {
+    const f = fake(); await open(f); await openNova();
+    await wait(() => expect(root.querySelectorAll('#wRows tr')).toHaveLength(50));
+    expect(f.calls['walletLedger']).toEqual([['p1', undefined]]);
+    expect(q('#wRows tr').textContent).toContain('1,000.00');                                          // the newest row first
+    expect(q<HTMLButtonElement>('#wMore').hidden).toBe(false);
+    q('#wMore').click();
+    await wait(() => expect(root.querySelectorAll('#wRows tr')).toHaveLength(100));
+    expect(f.calls['walletLedger']?.[1]).toEqual(['p1', 71]);                                           // 120 down to 71 shown, older than id 71 next
+    q('#wMore').click();
+    await wait(() => expect(root.querySelectorAll('#wRows tr')).toHaveLength(120));
+    expect(q<HTMLButtonElement>('#wMore').hidden).toBe(true);                                          // fewer than a full page came back: that was the end
+    q('#tabBets').click();
+    await wait(() => expect(root.querySelectorAll('#wRows tr')).toHaveLength(2));
+    expect(q('#wRows').textContent).toContain('plinko'); expect(q('#wRows').textContent).toContain('-60.00'); expect(q('#wRows').textContent).toContain('+110.00');
+  });
+
+  it('crediting asks for a reason first, then sends a signed amount with a fresh key and refreshes the wallet', async () => {
+    const f = fake(); await open(f); await openNova();
+    amount('250.5');
+    await cancelReason();
+    expect(f.calls['walletAdjust']).toBeUndefined();                                                  // cancelled: nothing sent
+    amount('250.5'); await answerReason('compensation for a lost round');
+    await wait(() => expect(f.calls['walletAdjust']).toHaveLength(1));
+    const [user, amt, reason, key] = f.calls['walletAdjust']![0]!;
+    expect([user, amt, reason]).toEqual(['p1', 250.5, 'compensation for a lost round']);
+    expect(key).toMatch(/^[0-9a-f-]{36}$/);
+    await wait(() => expect(q('#wBal').textContent).toBe('1,501.25'));                                 // the page shows the new balance
+    expect(f.calls['walletOverview']).toHaveLength(2); expect(f.calls['walletTotals']!.length).toBeGreaterThanOrEqual(2);
+    expect(document.querySelector('.toast.ok')?.textContent).toContain('1,501.25');
+  });
+
+  it('a debit is sent as a negative amount, and one above the balance is stopped before anything is asked', async () => {
+    const f = fake(); await open(f); await openNova();
+    amount('5000', 'debit');
+    expect(document.querySelector('.toast.error')?.textContent).toMatch(/cannot take the balance below zero/);
+    expect(document.querySelector('#dlgReason')).toBeNull(); expect(f.calls['walletAdjust']).toBeUndefined();
+    amount('50', 'debit'); await answerReason('wrong bonus');
+    await wait(() => expect(f.calls['walletAdjust']?.[0]?.slice(0, 3)).toEqual(['p1', -50, 'wrong bonus']));
+    await wait(() => expect(q('#wBal').textContent).toBe('1,200.75'));
+  });
+
+  it('refuses amounts that make no sense without calling the database', async () => {
+    const f = fake(); await open(f); await openNova();
+    for (const bad of ['0', '-5', '10000000.01', '']) { amount(bad); expect(document.querySelector('#dlgReason'), bad).toBeNull(); }
+    expect(f.calls['walletAdjust']).toBeUndefined();
+  });
+
+  it('a failed adjustment shows the reason in plain words and keeps the same key for the same retry, but a different request gets a new one', async () => {
+    const f = fake({ adjustFails: 'network down' }); await open(f); await openNova();
+    amount('20'); await answerReason('first try');
+    await wait(() => expect(document.querySelector('.toast.error')?.textContent).toContain('network down'));
+    expect(q('#wBal').textContent).toBe('1,250.75');                                                  // nothing changed on the page
+    amount('20'); await answerReason('second try');
+    await wait(() => expect(f.calls['walletAdjust']).toHaveLength(2));
+    expect(f.calls['walletAdjust']![1]![3]).toBe(f.calls['walletAdjust']![0]![3]);                    // the same request again: the same key, so it can only be paid once
+    amount('21'); await answerReason('another amount');
+    await wait(() => expect(f.calls['walletAdjust']).toHaveLength(3));
+    expect(f.calls['walletAdjust']![2]![3]).not.toBe(f.calls['walletAdjust']![0]![3]);
+  });
+
+  it("turns the database's refusals into readable text", async () => {
+    const f = fake({ adjustFails: 'debit_exceeds_balance' }); await open(f); await openNova();
+    amount('10'); await answerReason('try');
+    await wait(() => expect(document.querySelector('.toast.error')?.textContent).toMatch(/below zero/));
+    f.state.adjustFails = 'admin_denied';
+    amount('11'); await answerReason('try again');
+    await wait(() => expect([...document.querySelectorAll('.toast.error')].some(t => /do not have access/.test(t.textContent ?? ''))).toBe(true));
+  });
+
+  it('someone who may look but not change sees the wallet without the adjust form', async () => {
+    const f = fake({ perms: ['ledger.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) }); await open(f); await openNova();
+    expect(root.querySelector('#adj')).toBeNull();
+    expect(q('#wPlayer').textContent).toContain('wallet.adjust');
+    expect(q('#wBal').textContent).toBe('1,250.75');
+  });
+
+  it('player names and ids from the database are escaped', async () => {
+    const f = fake({ overview: overview({ player: { id: 'p1', name: '<img src=x onerror=alert(1)>', created_at: '2026-11-18T10:00:00Z', closed: true, staff_role: 'moderator' } }) }); await open(f); await openNova();
+    expect(root.querySelector('#wPlayer img')).toBeNull();
+    expect(q('#wPlayer h2').textContent).toContain('<img');
+    expect(q('#wPlayer h2').textContent).toContain('closed'); expect(q('#wPlayer h2').textContent).toContain('staff: moderator');
   });
 });

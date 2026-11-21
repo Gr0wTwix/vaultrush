@@ -26,7 +26,8 @@ src/
   live.ts           live multiplayer client: lobbies, realtime, chat, shared feed, settle-once helpers (see live-multiplayer.md)
   signup.ts         username, email and password rules, terms version
   fair.ts           provably fair seeds, HMAC floats, game mappings
-  rg.ts, rgui.ts    responsible-gambling rules and their UI (limits, cool-off, reality check)
+  rg.ts, rgui.ts    responsible-gambling rules and their UI (limits, cool-off, reality check); the rules of the browser-only fallback
+  rg-server.ts      the limits the database keeps (0018): reads them and their usage into the page, changes a limit, starts a cool-off or self-exclusion (see compliance.md)
   kyc.ts, aml.ts    sandbox verification tiers and monitoring rules
   rng.ts, rnglab.ts NIST SP 800-22, FIPS 140-2, SP 800-90B health monitor and the lab UI
   account*.ts       the account window and its tabs
@@ -55,6 +56,8 @@ supabase/
   migrations/0014_real_items_*.sql, 0015_real_cases.sql   GENERATED (npm run build:catalogue): the real CS2 items with prices, the cases and their tickets; see real-catalogue.md
   migrations/0016_ops_events.sql   operator alerts (pg_net to an n8n webhook) and ops_daily_report(); off until switched on; see n8n.md
   migrations/0017_bet_caps.sql   verification only above 10,000 coins: stake caps 10,000 / 25,000 / 50,000 and the live games' limit 50,000; see compliance.md
+  migrations/0018_server_limits.sql   every responsible-play limit, cool-off and self-exclusion enforced by wallet_gate(); my_limits(); see compliance.md
+  migrations/0019_admin_wallet.sql   the admin Wallets page: totals, search, wallet overview, ledger and bets viewers, the audited coin adjustment; see admin-site.md
   functions/steam-login      Steam OpenID sign-in
   functions/close-login      finishes account deletion
   functions/_shared          Steam OpenID verification and name/avatar parsing (unit-tested)
@@ -95,7 +98,7 @@ Two layers stop signed-out visitors from acting. Both live in `state.ts` and `au
 
 Browsing, filters, tabs and normal links are not guarded.
 
-A bet also passes through `betBlockReason()` in `rg.ts` (age, self-exclusion, cool-off, max bet, loss limits, verification-tier cap). That is the single bet gate for responsible-gambling rules.
+With the server wallet on, every stake passes `wallet_gate()` in the database (age, self-exclusion, cool-off, max bet, verification-tier cap, wager, loss and play-time limits): that is the single bet gate. In the browser-only fallback a bet passes through `betBlockReason()` in `rg.ts` instead, with the same rules.
 
 ## Avatars
 

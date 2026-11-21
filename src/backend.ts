@@ -20,7 +20,10 @@ export const ERROR_TEXT: Record<string, string> = {
   not_authenticated: 'Sign in first.', no_account: 'Create your cloud account first.', age_not_confirmed: 'Confirm that you are 18 or older first.',
   self_excluded: 'Self-exclusion is active. Betting is paused.', cool_off: 'A cool-off is active. Betting is paused.',
   max_bet_exceeded: 'That is above your maximum bet limit.', tier_cap_exceeded: 'Bets this large need a higher verification level.',
-  daily_loss_limit: 'This bet could pass your daily loss limit.', insufficient_funds: 'Not enough coins.',
+  daily_loss_limit: 'This bet could pass your daily loss limit.', weekly_loss_limit: 'This bet could pass your weekly loss limit.', monthly_loss_limit: 'This bet could pass your monthly loss limit.',
+  wager_daily_limit: 'This bet would pass your daily wager limit.', time_limit: 'You have used your daily play-time limit.',
+  unknown_limit: 'That limit does not exist.', invalid_limit: 'Enter a number of zero or more (whole minutes for the time limit, up to 2 decimals for coins).', invalid_duration: 'That break length is not allowed.',
+  insufficient_funds: 'Not enough coins.',
   adult_required: 'Confirm that you are at least 18 years old.', terms_required: 'Accept the Terms of Service first.', name_taken: 'That username is already taken.',
   invalid_name: 'Use 2 to 20 letters, numbers, spaces, _ or -.', account_closed: 'This account has been closed.',
   invalid_amount: 'Enter a valid amount (up to 2 decimals).', invalid_target: 'The cash-out target must be between 1.01 and 1000.', unsupported_game: 'That game is not available on the server yet.',
@@ -166,8 +169,14 @@ export const serverBet = (amount: number, target: number, idem: string = crypto.
   call<ServerBet>('place_bet', { p_game: 'crash', p_amount: amount, p_params: { target }, p_idem: idem });
 export const rotateServerSeed = () => call<{ server_seed: string; server_hash: string; client_seed: string; nonces: number }>('rotate_seed');
 export const setServerClientSeed = (seed: string) => call<void>('set_client_seed', { p_seed: seed });
-export const requestServerLimit = (key: 'max_bet' | 'loss_daily', value: number | null) => call<'applied' | 'pending' | 'same'>('request_limit_change', { p_key: key, p_value: value });
-export const serverSelfExclude = (hours: number) => call<string>('self_exclude', { p_hours: hours });
+export type ServerLimitName = 'max_bet' | 'loss_daily' | 'loss_weekly' | 'loss_monthly' | 'wager_daily' | 'time_daily_min';
+/** The names of the limits the database holds (migration 0018), and what it answers when asked for them (src/rg-server.ts makes the calls). */
+export interface ServerLimits {
+  limits: Record<ServerLimitName, number | string | null>;
+  pending: { key: ServerLimitName; value: number | string | null; effective_at: number }[];
+  usage: { staked_today: number | string; loss_1: number | string; loss_7: number | string; loss_30: number | string; active_minutes: number };
+  excluded_until: number | null; cool_off_until: number | null; kyc_tier: number; now: number;
+}
 
 /** True when this browser holds a saved cloud sign-in (so the real chat and live games are about to switch on after a refresh). Reads storage only: no request. */
 export function hasStoredSession(): boolean {

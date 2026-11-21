@@ -25,7 +25,7 @@ npm run dev        # http://localhost:5173
 | `npm run build` | Type-checks, then builds the site into `dist/` |
 | `npm run preview` | Serves the production build locally |
 | `npm run typecheck` | `tsc` with the loose config (whole app) and the strict config (game core) |
-| `npm test` | About 660 tests: the fairness maths, odds tables, wallet rules and verifier, plus in-process Postgres tests of every migration |
+| `npm test` | About 800 tests: the fairness maths, odds tables, wallet rules and verifier, plus in-process Postgres tests of every migration |
 | `npm run build:catalogue` | Refreshes the CS2 items, prices and cases (see [docs/real-catalogue.md](docs/real-catalogue.md)) |
 
 Node 22.12 or newer is required.

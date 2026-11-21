@@ -20,7 +20,7 @@ Nothing about coins, items, bets or payouts goes through n8n. Those stay in data
 |---|---|---|
 | `signup` | a new player finishes sign-up | the player's name |
 | `big_win` | a bet pays at least `big_win_min` coins (default 1,000) and more than the stake | name, game, stake, payout, multiplier |
-| `adjustment` | coins are added by hand (the "give coins" SQL, or an admin tool later) | name, amount, balance after |
+| `adjustment` | coins are added by hand (the "give coins" SQL, or the admin site's Wallets page) | name, amount, balance after |
 | `admin` | any admin-site action is written to the audit log | the action, who, their role, the target, the reason (never the before/after values) |
 | `maintenance` | maintenance mode is switched on or off | on or off, the message |
 | `test` | you run `select public.ops_notify('test', '{}')` | nothing |
