@@ -6,14 +6,8 @@ import { pushBet, pushDrop } from '../feed.js';
 import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt } from '../ui.js';
 import { sfx } from '../sfx.js';
 
-export const FORMATS = {
-  '1v1': { size: 2, label: '1v1' },
-  '1v1v1': { size: 3, label: '3-way' },
-  '1v1v1v1': { size: 4, label: '4-way' },
-  '6way': { size: 6, label: '6-way' },
-  '2v2': { size: 4, label: '2v2', teams: [[0, 1], [2, 3]] },
-  '3v3': { size: 6, label: '3v3', teams: [[0, 1, 2], [3, 4, 5]] },
-};
+import { FORMATS, decide } from '../battle-math.js';
+export { FORMATS };
 export const MODES = {
   normal: { label: 'Normal', desc: 'Highest total wins everything.' },
   crazy: { label: 'Crazy', desc: 'Lowest total wins everything.' },
@@ -45,41 +39,6 @@ function makeLobby() {
   return { uid: lobSeq++, ids, format, mode, bots };
 }
 const lobbies = Array.from({ length: 8 }, makeLobby);
-
-/** Decide the winners. Returns { winners: [player idx], scores, points, weights }. */
-function decide(mode, format, results, extraF) {
-  const P = results.length, R = results[0].length;
-  const totals = results.map(row => round2(row.reduce((s, it) => s + it.value, 0)));
-  const last = results.map(row => row[R - 1].value);
-  const tie = idx => (idx.length === 1 ? idx : [idx[Math.min(idx.length - 1, Math.floor(extraF * idx.length))]]);
-  const best = (vals, low) => { const t = low ? Math.min(...vals) : Math.max(...vals); return vals.map((v, i) => (v === t ? i : -1)).filter(i => i >= 0); };
-  const teams = FORMATS[format].teams;
-
-  if (teams) {
-    const vals = mode === 'terminal' ? last : totals;
-    const teamScores = teams.map(t => round2(t.reduce((s, i) => s + vals[i], 0)));
-    const winTeam = tie(best(teamScores, mode === 'crazy'))[0];
-    return { winners: teams[winTeam], totals, teamScores, winTeam };
-  }
-  switch (mode) {
-    case 'group': return { winners: [...Array(P).keys()], totals };
-    case 'terminal': return { winners: tie(best(last, false)), totals };
-    case 'crazy': return { winners: tie(best(totals, true)), totals };
-    case 'jackpot':
-    case 'crazyjackpot': {
-      const weights = totals.map(t => (mode === 'jackpot' ? Math.max(t, 0.01) : 1 / (t + 0.05)));
-      const sum = weights.reduce((a, b) => a + b, 0);
-      const w = pickWeighted<{ i: number; weight: number }>(weights.map((weight, i) => ({ i, weight })), extraF).i;
-      return { winners: [w], totals, chances: weights.map(x => x / sum) };
-    }
-    case 'pointrush': {
-      const points = Array(P).fill(0);
-      for (let r = 0; r < R; r++) best(results.map(row => row[r].value), false).forEach(i => points[i]++);
-      return { winners: tie(best(points, false)), totals, points };
-    }
-    default: return { winners: tie(best(totals, false)), totals };
-  }
-}
 
 async function createBattle(ids, format, mode, preBots = []) {
   const cost = costOf(ids);
