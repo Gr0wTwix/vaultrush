@@ -458,3 +458,13 @@ describe('the ledger replays to the wallet', () => {
     expect(run).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('giving coins with a promo code of any size', () => {
+  it('is a table row, works once per player, and is the other way to give yourself coins', async () => {
+    await sql(`insert into public.promo_codes (code, amount) values ('BIGGIFT', 100000)`);
+    await fund(C, 0);
+    expect((await rpc(C, 'redeem_promo', 'biggift')).amount).toBe(100000);
+    expect(await bal(C)).toBe(100000);
+    await fails(rpc(C, 'redeem_promo', 'BIGGIFT'), 'code_used');
+  });
+});

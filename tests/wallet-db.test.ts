@@ -435,3 +435,25 @@ describe('every bet the database makes can be re-checked in the browser', () => 
     expect(checkable({ id: 1, game: 'coinflip', amount: 1, payout: 0, multiplier: 0, nonce: null, client_seed: null, server_hash: null, params: {}, result: {}, created_at: '' })).toBeNull();
   });
 });
+
+describe('the owner can give coins with plain SQL (documented in docs/server-wallet.md)', () => {
+  const GIVE = `with me as (select id from public.profiles where lower(display_name) = lower($1)),
+    upd as (update public.wallets w set balance = w.balance + $2::numeric, updated_at = now() from me where w.user_id = me.id returning w.user_id, w.balance)
+    insert into public.ledger (user_id, kind, amount, balance_after) select user_id, 'adjustment', $2::numeric, balance from upd`;
+  const SET = `with me as (select id from public.profiles where lower(display_name) = lower($1)),
+    cur as (select w.user_id, w.balance from public.wallets w join me on me.id = w.user_id),
+    upd as (update public.wallets w set balance = $2::numeric, updated_at = now() from cur where w.user_id = cur.user_id returning w.user_id, w.balance, cur.balance as before)
+    insert into public.ledger (user_id, kind, amount, balance_after) select user_id, 'adjustment', balance - before, balance from upd`;
+  it('adds an amount, or sets an exact balance, writes one ledger line, and the page sees it', async () => {
+    await fund(P1, 10);
+    await sql(GIVE, ['nova', 250000]);                                         // the name is not case sensitive
+    expect(await balance(P1)).toBe(250010);
+    await sql(SET, ['Nova', 777]);
+    expect(await balance(P1)).toBe(777);
+    const led = await sql(`select kind, amount, balance_after from public.ledger where user_id = $1 order by id desc limit 2`, [P1]);
+    expect(led.map(l => [l.kind, Number(l.amount), Number(l.balance_after)])).toEqual([['adjustment', -249233, 777], ['adjustment', 250000, 250010]]);
+    expect((await rpc(P1, 'wallet_me')).balance).toBe(777);
+    await sql(GIVE, ['nobody-by-this-name', 5]);                               // an unknown name changes nothing
+    expect(await balance(P1)).toBe(777);
+  });
+});

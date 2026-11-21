@@ -53,6 +53,29 @@ Run these in the Supabase SQL editor, in order, after 0007 (each is one paste):
 
 Then redeploy the game site. Existing browser coins are **not** migrated (your decision). Existing cloud accounts keep the server balance they had (100 from sign-up); new accounts start at 0 and earn from the faucet, crates, rewards and promo codes. To change a balance, use SQL for now: the owner wallet adjustment and the ledger viewer are part of the admin plan (step D, admin side) and are not built yet.
 
+### Giving coins to an account (until the admin wallet tool exists)
+
+Players cannot change a balance; the owner can, in the Supabase SQL editor (it runs with full rights). Replace `YOUR_NAME` with the player's name on the site (not case sensitive). Both statements write an `adjustment` line to the ledger, so the ledger still adds up to the wallet. They are tested in `tests/wallet-db.test.ts`.
+
+Add an amount:
+
+```sql
+with me as (select id from public.profiles where lower(display_name) = lower('YOUR_NAME')),
+  upd as (update public.wallets w set balance = w.balance + 100000, updated_at = now() from me where w.user_id = me.id returning w.user_id, w.balance)
+insert into public.ledger (user_id, kind, amount, balance_after) select user_id, 'adjustment', 100000, balance from upd;
+```
+
+Set an exact balance:
+
+```sql
+with me as (select id from public.profiles where lower(display_name) = lower('YOUR_NAME')),
+  cur as (select w.user_id, w.balance from public.wallets w join me on me.id = w.user_id),
+  upd as (update public.wallets w set balance = 5000, updated_at = now() from cur where w.user_id = cur.user_id returning w.user_id, w.balance, cur.balance as before)
+insert into public.ledger (user_id, kind, amount, balance_after) select user_id, 'adjustment', balance - before, balance from upd;
+```
+
+The page shows the new balance within moments (realtime) or at the next 20-second sync. A name that does not exist changes nothing. A single bet is still limited by the verification tier (1,000 / 2,500 / 5,000), whatever the balance. The other way is a promo code of any size: `insert into public.promo_codes (code, amount) values ('MYCODE', 100000);`, then redeem it on the Rewards page (once per player).
+
 ### The catalogue
 
 `0009_catalogue.sql` is generated from `src/data.ts` by `npm run gen:catalogue`. The tests check the database copy equals `src/data.ts` (every item value, every price, every ticket range, all 100,000 tickets covered). Prices keep a 90% return. **If you change `src/data.ts`, run `npm run gen:catalogue` and run the new file again.** The admin catalogue editor (step C) will replace this by editing the tables directly.
