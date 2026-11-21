@@ -6,7 +6,13 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CASES, REWARD_CASES, ITEMS, ITEM, entryForTicket, ticketOf } from '../src/data.js';
+import { CASES, REWARD_CASES, ITEMS, ITEM, CATALOGUE_TOTAL, entryForTicket, ticketOf } from '../src/data.js';
+import { realItemMigrations } from './helpers.js';
+
+// Items of the cases picked by their worth, so the tests keep working when the prices are refreshed.
+const near = (v: number): string => ITEMS.reduce((a, b) => (Math.abs(b.value - v) < Math.abs(a.value - v) ? b : a)).id;
+const [CHEAP, X44, MID2, T12, T40, T60, T250, T300] = [near(0.3), near(0.4), near(2), near(12), near(40), near(60), near(250), near(300)] as string[];
+const TOP = ITEMS[ITEMS.length - 1]!.id;
 import { floatsFor, minePositions, minesMultiplier, plinkoTable, upgradeChance } from '../src/fair.js';
 
 const OWNER = '11111111-1111-1111-1111-111111111111';
@@ -52,7 +58,7 @@ const lastBet = async (uid: string, game: string) => (await sql(`select * from p
 beforeAll(async () => {
   db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(PRELUDE);
-  for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps', '0005_rounds', '0006_admin', '0007_site_controls', '0008_wallet', '0009_catalogue', '0010_solo_games'])
+  for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps', '0005_rounds', '0006_admin', '0007_site_controls', '0008_wallet', '0009_catalogue', '0010_solo_games', ...realItemMigrations()])
     await db.exec(readFileSync(new URL(`../supabase/migrations/${m}.sql`, import.meta.url), 'utf8'));
   for (const [id, n] of [[OWNER, 'Mirage'], [P1, 'Nova'], [P2, 'Quill']] as const) await rpc(id, 'complete_signup', [n, TERMS, true]);
 }, 120_000);
@@ -68,7 +74,7 @@ describe('new accounts and the wallet snapshot', () => {
   });
   it('nobody can touch money or items directly', async () => {
     await fails(q(P1, `update public.wallets set balance = 999999 where user_id = '${P1}'`), 'permission denied');
-    await fails(q(P1, `insert into public.inventory (user_id, item_id) values ('${P1}', 'p1')`), 'permission denied');
+    await fails(q(P1, `insert into public.inventory (user_id, item_id) values ('${P1}', '${CHEAP}')`), 'permission denied');
     await fails(q(P1, `delete from public.inventory`), 'permission denied');
     await fails(q(P1, `insert into public.ledger (user_id, kind, amount, balance_after) values ('${P1}', 'win', 1, 1)`), 'permission denied');
     await fails(q(P1, `update public.player_rewards set rb_instant = 1000`), 'permission denied');
@@ -87,10 +93,12 @@ describe('new accounts and the wallet snapshot', () => {
 });
 
 describe('the catalogue equals src/data.ts', () => {
-  it('has every item with the same value', async () => {
+  it('has the whole priced catalogue, the invented items gone, and every item of a case with the same value, grade and name as the page', async () => {
     const rows = await sql(`select id, value, rarity, weapon, skin from public.catalog_items`);
-    expect(rows).toHaveLength(ITEMS.length);
-    for (const r of rows) { const it = ITEM[r.id]!; expect(Number(r.value), r.id).toBe(it.value); expect(r.rarity).toBe(it.rarity); expect(r.weapon).toBe(it.weapon); expect(r.skin).toBe(it.skin); }
+    expect(rows).toHaveLength(CATALOGUE_TOTAL);
+    expect((await sql(`select count(*)::int as n from public.catalog_items where legacy`))[0].n).toBe(0);
+    const byId = new Map(rows.map(r => [r.id, r]));
+    for (const it of ITEMS) { const r = byId.get(it.id)!; expect(r, it.id).toBeTruthy(); expect(Number(r.value), it.id).toBe(it.value); expect(r.rarity).toBe(it.rarity); expect(r.weapon).toBe(it.weapon); expect(r.skin).toBe(it.skin); }
   });
   it('has every case with the same price and exactly the same ticket ranges, covering all 100,000 tickets', async () => {
     const all = [...CASES, ...REWARD_CASES];
@@ -205,10 +213,10 @@ describe('selling', () => {
 });
 
 describe('Upgrade', () => {
-  const cheap = ITEMS.find(i => i.id === 'p1')!;     // 0.08
+  const cheap = ITEM[CHEAP]!;
   it('uses the same chance as the browser and decides by the roll', async () => {
     await fund(P1, 1000);
-    for (const [coins, target] of [[10, 'k1'], [3, 'r3'], [50, 'n4']] as const) {
+    for (const [coins, target] of [[10, T60], [3, T12], [50, T300]] as const) {
       const r = await rpc(P1, 'upgrade_item', [[], coins, target, false]);
       expect(r.chance).toBeCloseTo(upgradeChance(coins, ITEM[target]!.value), 12);
       expect(r.win).toBe(r.roll < r.chance);
@@ -217,52 +225,52 @@ describe('Upgrade', () => {
   });
   it('"over" wins above 1 - chance', async () => {
     await fund(P1, 1000);
-    for (let i = 0; i < 6; i++) { const r = await rpc(P1, 'upgrade_item', [[], 40, 'k2', true]); expect(r.win).toBe(r.roll > 1 - r.chance); }
+    for (let i = 0; i < 6; i++) { const r = await rpc(P1, 'upgrade_item', [[], 40, T250, true]); expect(r.win).toBe(r.roll > 1 - r.chance); }
   });
   it('is recomputable from the revealed seed', async () => {
     await fund(P1, 1000);
-    const r = await rpc(P1, 'upgrade_item', [[], 20, 'n4', false]);
+    const r = await rpc(P1, 'upgrade_item', [[], 20, T300, false]);
     const seed = await reveal(P1);
     expect((await floatsFor(seed.server_seed, seed.client_seed, r.nonce, 1))[0]).toBe(r.roll);
   });
   it('consumes the staked items and coins, and gives the target on a win', async () => {
     await fund(P2, 1000); await sql(`delete from public.inventory where user_id = $1`, [P2]);
-    for (let i = 0; i < 3; i++) await sql(`insert into public.inventory (user_id, item_id) values ($1, 'x44')`, [P2]);
+    for (let i = 0; i < 3; i++) await sql(`insert into public.inventory (user_id, item_id) values ($1, '${X44}')`, [P2]);
     const ids = (await inv(P2)).map(x => x.id), stakeItems = ids.slice(0, 2);
-    const b0 = await balance(P2), v = ITEM['x44']!.value;
-    const r = await rpc(P2, 'upgrade_item', [stakeItems, 5, 'x29', false]);
+    const b0 = await balance(P2), v = ITEM[X44]!.value;
+    const r = await rpc(P2, 'upgrade_item', [stakeItems, 5, T40, false]);
     expect(r.stake).toBeCloseTo(v * 2 + 5, 2);
     expect(await balance(P2)).toBeCloseTo(b0 - 5, 2);
     const left = await inv(P2);
     expect(left.some(x => stakeItems.includes(x.id))).toBe(false);
-    if (r.win) { expect(left.map(x => x.item_id).sort()).toEqual(['x29', 'x44']); expect(r.uid).toBeTruthy(); } else expect(left.map(x => x.item_id)).toEqual(['x44']);
-    expect(r.from_item).toBe('x44');
-    const bet = await lastBet(P2, 'upgrade'); expect(Number(bet.amount)).toBeCloseTo(v * 2 + 5, 2); expect(Number(bet.payout)).toBe(r.win ? ITEM['x29']!.value : 0);
+    if (r.win) { expect(left.map(x => x.item_id).sort()).toEqual([T40, X44].sort()); expect(r.uid).toBeTruthy(); } else expect(left.map(x => x.item_id)).toEqual([X44]);
+    expect(r.from_item).toBe(X44);
+    const bet = await lastBet(P2, 'upgrade'); expect(Number(bet.amount)).toBeCloseTo(v * 2 + 5, 2); expect(Number(bet.payout)).toBe(r.win ? ITEM[T40]!.value : 0);
   });
   it('stakes items alone (no coins, no gate, no wallet movement)', async () => {
-    await fund(P2, 77); await sql(`delete from public.inventory where user_id = $1`, [P2]); await sql(`insert into public.inventory (user_id, item_id) values ($1, 'c2')`, [P2]);
+    await fund(P2, 77); await sql(`delete from public.inventory where user_id = $1`, [P2]); await sql(`insert into public.inventory (user_id, item_id) values ($1, '${MID2}')`, [P2]);
     const id = (await inv(P2))[0]!.id;
-    const r = await rpc(P2, 'upgrade_item', [[id], 0, 'k1', false]);
+    const r = await rpc(P2, 'upgrade_item', [[id], 0, T60, false]);
     expect(await balance(P2)).toBe(77); expect(r.balance).toBe(77);
   });
   it('refuses what is not allowed, changing nothing', async () => {
     await fund(P2, 100); await sql(`delete from public.inventory where user_id = $1`, [P2]);
-    for (let i = 0; i < 5; i++) await sql(`insert into public.inventory (user_id, item_id) values ($1, 'p1')`, [P2]);
+    for (let i = 0; i < 5; i++) await sql(`insert into public.inventory (user_id, item_id) values ($1, '${CHEAP}')`, [P2]);
     const ids = (await inv(P2)).map(x => x.id), n0 = await nonceOf(P2);
-    await fails(rpc(P2, 'upgrade_item', [ids, 0, 'k1', false]), 'too_many_items');            // 5 items
-    await fails(rpc(P2, 'upgrade_item', [[], 0, 'k1', false]), 'invalid_amount');             // nothing staked
+    await fails(rpc(P2, 'upgrade_item', [ids, 0, T60, false]), 'too_many_items');            // 5 items
+    await fails(rpc(P2, 'upgrade_item', [[], 0, T60, false]), 'invalid_amount');             // nothing staked
     await fails(rpc(P2, 'upgrade_item', [[], 10, 'nope', false]), 'unknown_item');
-    await fails(rpc(P2, 'upgrade_item', [[], 10, 'p1', false]), 'target_too_low');            // target not worth more than the stake
-    await fails(rpc(P2, 'upgrade_item', [[], 1000, 'x18', false]), 'insufficient_funds');
-    await fails(rpc(P2, 'upgrade_item', [[], -1, 'k1', false]), 'invalid_amount');
-    const theirs = (await inv(P1))[0] ?? (await (async () => { await sql(`insert into public.inventory (user_id, item_id) values ($1, 'p1')`, [P1]); return (await inv(P1))[0]!; })());
-    await fails(rpc(P2, 'upgrade_item', [[theirs.id], 0, 'k1', false]), 'item_not_found');    // somebody else's item
+    await fails(rpc(P2, 'upgrade_item', [[], 10, CHEAP, false]), 'target_too_low');            // target not worth more than the stake
+    await fails(rpc(P2, 'upgrade_item', [[], 1000, TOP, false]), 'insufficient_funds');
+    await fails(rpc(P2, 'upgrade_item', [[], -1, T60, false]), 'invalid_amount');
+    const theirs = (await inv(P1))[0] ?? (await (async () => { await sql(`insert into public.inventory (user_id, item_id) values ($1, '${CHEAP}')`, [P1]); return (await inv(P1))[0]!; })());
+    await fails(rpc(P2, 'upgrade_item', [[theirs.id], 0, T60, false]), 'item_not_found');    // somebody else's item
     expect(await nonceOf(P2)).toBe(n0); expect(await balance(P2)).toBe(100); expect((await inv(P2)).length).toBe(5);
     void cheap;
   });
   it('respects the site switch', async () => {
     await sql(`update public.site_controls set games_off = '{upgrade}'`);
-    await fails(rpc(P2, 'upgrade_item', [[], 5, 'k1', false]), 'game_off');
+    await fails(rpc(P2, 'upgrade_item', [[], 5, T60, false]), 'game_off');
     await sql(`update public.site_controls set games_off = '{}'`);
   });
 });
@@ -415,7 +423,7 @@ describe('every bet the database makes can be re-checked in the browser', () => 
     await fund(P1, 5000); await sql(`update public.mines_games set status = 'cancelled' where user_id = $1 and status = 'active'`, [P1]);
     await rotate(P1); const firstNew = Number((await sql('select coalesce(max(id), 0) as m from public.bets'))[0].m);                              // start a fresh seed so all bets below share it
     await rpc(P1, 'open_cases', ['neon', 2]);
-    await rpc(P1, 'upgrade_item', [[], 30, 'k1', false]); await rpc(P1, 'upgrade_item', [[], 30, 'k1', true]);
+    await rpc(P1, 'upgrade_item', [[], 30, T60, false]); await rpc(P1, 'upgrade_item', [[], 30, T60, true]);
     await rpc(P1, 'plinko_drop', [12, 'normal', 5]); await rpc(P1, 'plinko_drop', [8, 'high', 5]);
     const s = await rpc(P1, 'mines_start', [5, 25, 4]), bombs = (await sql(`select bombs from public.mines_secrets where game_id = $1`, [s.game]))[0].bombs as number[];
     await rpc(P1, 'mines_pick', [s.game, bombs[0]]);                                                         // lose on purpose: the bombs are then in the bet

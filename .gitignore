@@ -22,3 +22,5 @@ source-art/
 !.env.example
 supabase/.temp/
 dist-admin/
+
+.cache/

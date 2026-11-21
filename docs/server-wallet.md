@@ -51,6 +51,7 @@ Run these in the Supabase SQL editor, in order, after 0007 (each is one paste):
 4. `0011_live_wallet.sql` (Coinflip, Battles, Crash, Double use the wallet). It **closes every game that was waiting or running** and deletes undecided round bets, **without refunds**: their stakes were in browsers, not in the database.
 5. `0012_rewards.sql` (rewards, race, and the switch)
 6. `0013_crash_pace.sql` (a slower Crash: 2x after 8.7 s instead of 5.8 s; deploy the site right after, the page and the database must share the pace)
+7. `0014_real_items_1.sql` ... `0014_real_items_5.sql`, then `0015_real_cases.sql` (the real Counter-Strike 2 items and the new cases; old inventory items are swapped for the closest real item; see [real-catalogue.md](real-catalogue.md))
 
 Then redeploy the game site. Existing browser coins are **not** migrated (your decision). Existing cloud accounts keep the server balance they had (100 from sign-up); new accounts start at 0 and earn from the faucet, crates, rewards and promo codes. To change a balance, use SQL for now: the owner wallet adjustment and the ledger viewer are part of the admin plan (step D, admin side) and are not built yet.
 
@@ -79,7 +80,7 @@ The page shows the new balance within moments (realtime) or at the next 20-secon
 
 ### The catalogue
 
-`0009_catalogue.sql` is generated from `src/data.ts` by `npm run gen:catalogue`. The tests check the database copy equals `src/data.ts` (every item value, every price, every ticket range, all 100,000 tickets covered). Prices keep a 90% return. **If you change `src/data.ts`, run `npm run gen:catalogue` and run the new file again.** The admin catalogue editor (step C) will replace this by editing the tables directly.
+`0009_catalogue.sql` was the first, invented catalogue. Since 0014 and 0015 the catalogue is the real Counter-Strike 2 item list with Skinport prices (see [real-catalogue.md](real-catalogue.md)), **generated** by `npm run build:catalogue`. The tests check the database copy equals the page's (every item value of a case, every price, every ticket range, all 100,000 tickets covered; the whole priced catalogue is present). Prices keep a 90% return. **To refresh prices run `npm run build:catalogue`, deploy, and run the new 0014 and 0015 files again.** The admin catalogue editor (step C) will replace this by editing the tables directly.
 
 ## What is still simplified
 
@@ -92,7 +93,7 @@ The page shows the new balance within moments (realtime) or at the next 20-secon
 
 | File | What it proves |
 |---|---|
-| `tests/wallet-db.test.ts` (37) | New accounts start at 0; nobody can touch money or items directly; the catalogue equals `src/data.ts`; every game's math equals the browser's (case tickets, upgrade chance, plinko tables, mines multiplier and bomb positions); results are recomputable from the revealed seed; refusals change nothing; the gate and the site switches hold. |
+| `tests/wallet-db.test.ts` (37) | New accounts start at 0; nobody can touch money or items directly; the catalogue equals the page's (`tests/real-items-db.test.ts` also covers the move from the invented items); every game's math equals the browser's (case tickets, upgrade chance, plinko tables, mines multiplier and bomb positions); results are recomputable from the revealed seed; refusals change nothing; the gate and the site switches hold. |
 | `tests/wallet-live-db.test.ts` (30) | Coinflip, Battles (all 7 modes and 6 formats against `battle-math.ts` on real draws), Crash and Double take stakes and pay; leaving refunds; the rewards are the only source of free coins; **a ledger replays to the wallet**. |
 | `tests/wallet-client.test.ts` (25) | The page mirrors the server, mints nothing, holds payouts until the animation ends, never lets an old poll overwrite a newer answer; Cases, Inventory and Rewards ask the server. |
 | `tests/wallet-live-client.test.ts` (7) | Coinflip and Battles show the stake at once and a win only when the animation ends. |

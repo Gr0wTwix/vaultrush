@@ -7,6 +7,8 @@
 // calls holdPayout(); the shown balance leaves that amount out until the animation ends and credit() (see state.ts) reveals it.
 import { backendEnabled, call, getClient } from './backend.js';
 import { emit, isServerWallet, on, round2, save, setServerWallet, state } from './state.js';
+import { ITEM } from './data.js';
+import { ensureItems } from './catalogue.js';
 import { watchTable } from './live.js';
 import type { HistoryBet, InvEntry } from './types.js';
 import { toast } from './ui.js';
@@ -86,7 +88,11 @@ export function applySnapshot(s: Snapshot, balanceToo = true): void {
   state.calendar = { streak: r.calendar_streak, last: r.calendar_last ?? '' };
   state.promos = [...r.promos]; state.keysUsed = [...r.keys_used];
   state.welcomeLeft = r.welcome_at ? 0 : 1; state.lastDailyCase = local(r.daily_case_at); state.lastClaim = local(r.faucet_at);
-  if (s.inventory) state.inv = s.inventory.map(e => ({ uid: e.uid, id: e.id, at: e.at }));
+  if (s.inventory) {
+    state.inv = s.inventory.map(e => ({ uid: e.uid, id: e.id, at: e.at }));
+    // Items from an upgrade are not bundled with the page: fetch the ones the inventory holds, then tell the pages showing them.
+    if (state.inv.some(e => !ITEM[e.id])) void ensureItems(state.inv.map(e => e.id)).then(ok => { if (ok) emit('items:loaded'); });
+  }
   show(); save();
 }
 

@@ -75,7 +75,7 @@ This table decides what is possible. "Server" means in the Supabase database. "B
 | **Inventory (items), history, XP and level, rakeback, calendar, promo use** | **Browser** | **No** | **No** |
 | **Responsible-gambling limits, cool-off, self-exclusion for normal play** | **Browser** (`state.rg`) | **No** | **No** (a determined player can edit them) |
 | **Sandbox KYC and AML state** | **Browser** (`state.kyc`, `state.aml`) | **No** | **No** |
-| Case and item catalogue (25 cases, 2 reward cases, 73 items), odds, prices | **Code** (`src/data.ts`) | Only by reading the code | Only by deploying new code |
+| Case and item catalogue (25 cases, 2 reward cases, 166 case items out of 14,411 real CS2 items), odds, prices | **Code** (`src/data.ts`) | Only by reading the code | Only by deploying new code |
 | Economy numbers (house edges, free coins, rakeback, tiers, promo codes, timings) | **Code** (constants) | Only by reading the code | Only by deploying new code |
 | Bot names | Code | n/a | Deploy |
 | Page views, sessions, errors | Nowhere (no analytics by design) | No | n/a |
@@ -280,7 +280,7 @@ Each module lists: **Shows**, **Actions**, **Data**, **Today**, **Size**, **Note
 ### Phase 4: catalogue, economy and analytics
 
 #### 19. Case and item catalogue editor
-- **Shows:** all cases (25 plus 2 reward cases), their items (73 items today), prices, odds per item, art, rarity, expected return (RTP) per case, popularity.
+- **Shows:** all cases (25 plus 2 reward cases), their items (166 case items today, out of 14,411 priced CS2 items), prices, odds per item, art, rarity, expected return (RTP) per case, popularity.
 - **Actions:** create or edit a case, change odds with a **live RTP calculator** that refuses an edge outside a safe range, upload art, schedule a limited case, retire a case, import and export as JSON.
 - **Data:** the catalogue is **code** today (`src/data.ts`). It must move to tables (`cases`, `items`, `case_entries`) and be loaded at start-up (with a cached copy for speed). Live battles currently trust case ids the browser knows, so unknown ids are refused; the same check would use the table.
 - **Today:** Content. **Size:** XL (every game that uses cases reads this data).

@@ -60,7 +60,7 @@ Added 2026-11-21 after reading the legal pages and footers of three comparable o
 | Pattern seen on the reference sites | Vaultrush |
 |---|---|
 | Footer names the operating company, registration number and registered address | Footer and every policy name **Vaultrush Demo Ltd (fictional)**, reg. no. DEMO000000, a made-up address. All in `src/company.ts` |
-| "Not affiliated with Valve, Steam, Facepunch, Rust…" notice | Same notice in the footer, Terms and Disclaimer (item names are invented) |
+| "Not affiliated with Valve, Steam, Facepunch, Rust…" notice | Same notice in the footer, Terms and Disclaimer (the item names, pictures and prices are real Counter-Strike 2 data, shown only to describe play-money items; see real-catalogue.md) |
 | 18+ strip, "have a gaming problem? reach out", "no purchase necessary" | Footer strip with the 18+ badge, a help link, and "free to play" |
 | Footer columns: games, information, legal, responsible | Four columns, every link tested against the real routes |
 | Terms, Privacy, Cookie policy | Terms of Service, Privacy Policy, Cookie and Storage Policy |

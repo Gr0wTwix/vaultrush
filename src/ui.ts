@@ -1,5 +1,5 @@
 // Shared UI helpers: formatting, item art, toasts and the spinning reel.
-import { RARITY } from './data.js';
+import { RARITY, itemName } from './data.js';
 import { state } from './state.js';
 import { sfx } from './sfx.js';
 import { itemArtSvg } from './art.js';
@@ -16,16 +16,32 @@ export const h = (html: string): any => { const t = document.createElement('temp
 export const coin = (cls = '') => `<svg class="coin ${cls}" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="#ffc53d"/><circle cx="10" cy="10" r="6.2" fill="none" stroke="#b07a00" stroke-width="1.6"/><path d="M10.8 5.5 7.5 10.6h2.6l-.9 3.9 3.3-5.1H9.9z" fill="#7a5200"/></svg>`;
 export const money = (n, cls = '') => `<span class="money ${cls}">${coin()}${fmt(n)}</span>`;
 
-/** Detailed procedural item art (see art.js). Uses `item.img` instead when an image file is provided. */
-export const itemArt = item => itemArtSvg(item);
+/** The item's picture (see art.ts). `eager` for pictures inside a moving reel. */
+export const itemArt = (item, eager = false) => itemArtSvg(item, eager);
 
-export function itemCard(item, { compact = false, extra = '', cls = '' } = {}) {
+/**
+ * Fetch the pictures of these items now, so a reel that is about to spin shows them from its first frame. Resolves when every one has loaded or failed, or after
+ * `timeoutMs` (a slow connection never holds a spin for long). Pictures already in the browser's cache resolve at once.
+ */
+export function preloadImages(items: { img?: string }[], timeoutMs = 2500): Promise<void> {
+  if (typeof Image === 'undefined') return Promise.resolve();
+  const urls = [...new Set(items.map(i => i.img).filter((u): u is string => !!u))];
+  if (!urls.length) return Promise.resolve();
+  return new Promise<void>(resolve => {
+    let left = urls.length;
+    const timer = setTimeout(resolve, timeoutMs);
+    const one = (): void => { if (--left <= 0) { clearTimeout(timer); resolve(); } };
+    for (const u of urls) { const im = new Image(); im.onload = one; im.onerror = one; im.decoding = 'async'; im.referrerPolicy = 'no-referrer'; im.src = u; }
+  });
+}
+
+export function itemCard(item, { compact = false, extra = '', cls = '', eager = false } = {}) {
   const r = RARITY[item.rarity];
-  return `<div class="item ${compact ? 'item-compact' : ''} ${cls}" style="--rc:${r.color}" title="${esc(item.weapon)} | ${esc(item.skin)}">
+  return `<div class="item ${compact ? 'item-compact' : ''} ${cls}" style="--rc:${r.color}" title="${esc(itemName(item))}">
     <div class="item-glow"></div>
     ${item.wear ? `<span class="wear">${item.wear}</span>` : ''}
-    ${itemArt(item)}
-    <div class="item-meta"><div class="item-weapon">${item.st ? '<b class="st">ST</b> ' : ''}${esc(item.weapon)}</div><div class="item-skin">${esc(item.skin)}</div></div>
+    ${itemArt(item, eager)}
+    <div class="item-meta"><div class="item-weapon">${item.st ? '<b class="st">ST</b> ' : ''}${item.souv ? '<b class="st">SV</b> ' : ''}${esc(item.weapon)}</div><div class="item-skin">${esc(item.skin)}</div></div>
     <div class="item-value">${money(item.value)}</div>${extra}
   </div>`;
 }
@@ -124,7 +140,7 @@ export const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 2
  * pool: [{item, weight}] used to fill the strip; axis: 'x' (case opening) or 'y' (battles).
  */
 /** Card-less reel cell: item art floating on a rarity glow; name/value appear when it wins. */
-export const bareCell = it => `<div class="reel-cell bare" style="--rc:${RARITY[it.rarity].color}"><div class="bare-glow"></div>${itemArt(it)}<div class="bare-meta"><b>${esc(it.skin)}</b>${money(it.value)}</div></div>`;
+export const bareCell = it => `<div class="reel-cell bare" style="--rc:${RARITY[it.rarity].color}"><div class="bare-glow"></div>${itemArt(it, true)}<div class="bare-meta"><b>${esc(it.skin)}</b>${money(it.value)}</div></div>`;
 
 /**
  * How far along its way the strip is after a fraction t of the spin time (0 to 1). The speed starts from rest, picks up in the first few percent, then falls
@@ -154,7 +170,7 @@ export function spinReel(host, pool, winner, { axis = 'x', duration = 5200, tota
   // Near-miss tease: put a high-value item right next to the winner sometimes.
   if (Math.random() < 0.45 && pool.length > 1) list[winIndex + (Math.random() < 0.5 ? 1 : -1)] = pool[0].item;
 
-  host.innerHTML = `<div class="reel-strip">${list.map(it => (bare ? bareCell(it) : `<div class="reel-cell">${itemCard(it, { compact: true })}</div>`)).join('')}</div><div class="reel-marker"></div>`;
+  host.innerHTML = `<div class="reel-strip">${list.map(it => (bare ? bareCell(it) : `<div class="reel-cell">${itemCard(it, { compact: true, eager: true })}</div>`)).join('')}</div><div class="reel-marker"></div>`;
   host.classList.add('reel', axis === 'y' ? 'reel-y' : 'reel-x');
   host.classList.toggle('reel-bare', bare);
   host.classList.remove('settled');

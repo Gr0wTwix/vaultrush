@@ -1,6 +1,7 @@
 // Shared domain types. The core modules (fair, state, data, verify, race, feed) are checked with `strict: true`.
 
-export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
+/** Counter-Strike 2 grades, lowest first. */
+export type Rarity = 'consumer' | 'industrial' | 'milspec' | 'restricted' | 'classified' | 'covert' | 'extraordinary' | 'contraband';
 export type Speed = 'normal' | 'fast' | 'turbo';
 export type Risk = 'low' | 'normal' | 'high';
 export type DoubleLane = 'purple' | 'gray' | 'green' | 'bait';
@@ -9,6 +10,7 @@ export type DoubleColor = 'purple' | 'gray' | 'green';
 export interface Item {
   id: string; weapon: string; skin: string; type: string; rarity: Rarity; value: number;
   img?: string; wear: string; st: boolean;
+  souv?: boolean;                  // Souvenir variant
 }
 
 /** One row of a case's drop table. `from`/`to` are the inclusive ticket range out of 100,000. */

@@ -1,5 +1,6 @@
-import { ITEMS, ITEM, RARITY } from '../data.js';
-import { state, debit, addItems, removeItems, round2, debitError, handoff } from '../state.js';
+import { ITEMS, ITEM, RARITY, RARITY_ORDER, itemOf, itemName, CATALOGUE_TOTAL } from '../data.js';
+import { ensureItems, queryItems, cheapestAtLeast } from '../catalogue.js';
+import { state, debit, addItems, removeItems, round2, debitError, handoff, on } from '../state.js';
 import { bet, upgradeChance, annotate } from '../fair.js';
 import { pushBet, pushDrop } from '../feed.js';
 import { $, $$, fmt, money, itemCard, toast, icon, coin, confetti, avatar, esc, itemArt } from '../ui.js';
@@ -50,8 +51,9 @@ export function render(el) {
       </div>
       <div class="panel">
         <div class="panel-head"><h2>Target item</h2><div class="tabs" id="tSort"><button class="tab active" data-s="asc">Low → high</button><button class="tab" data-s="desc">High → low</button></div></div>
-        <input id="tSearch" class="search" placeholder="Search items…" autocomplete="off" style="margin-bottom:10px">
-        <div class="contents small-grid" id="targetPick"></div>
+        <input id="tSearch" class="search" placeholder="Search all ${CATALOGUE_TOTAL.toLocaleString('en-US')} skins…" autocomplete="off" aria-label="Search items" style="margin-bottom:10px">
+        <div class="row target-filters"><select id="tType" aria-label="Weapon type"><option value="">All weapons</option><option value="knife">Knives</option><option value="gloves">Gloves</option><option value="rifle">Rifles</option><option value="sniper">Snipers</option><option value="smg">SMGs</option><option value="pistol">Pistols</option><option value="heavy">Heavy</option><option value="equipment">Equipment</option></select><select id="tRar" aria-label="Grade"><option value="">All grades</option>${RARITY_ORDER.map(r => `<option value="${r}">${RARITY[r].label}</option>`).join('')}</select></div>
+        <div class="contents small-grid" id="targetPick" aria-live="polite"></div>
       </div>
     </div>
     <div class="panel"><div class="panel-head"><h2><span class="live-dot"></span> Live upgrades</h2><span class="muted small">What other players are going for</span></div><div class="lu-list" id="liveUp"></div></div>`;
@@ -67,15 +69,19 @@ export function render(el) {
   const pushLiveUp = u => { liveUps.unshift(u); liveUps.length = Math.min(liveUps.length, 20); drawLiveUp(); };
   drawLiveUp();
   const liveTimer = setInterval(() => pushLiveUp(simUp()), 3800);
-  let tq = '';
-  $('#tSearch', el).oninput = e => { tq = e.target.value.trim().toLowerCase(); drawTargets(); };
+  let tq = '', tType = '', tRar = '';
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  $('#tSearch', el).oninput = e => { tq = e.target.value.trim().toLowerCase(); clearTimeout(searchTimer); searchTimer = setTimeout(() => void drawTargets(), 160); };
+  $('#tType', el).onchange = e => { tType = e.target.value; void drawTargets(); };
+  $('#tRar', el).onchange = e => { tRar = e.target.value; void drawTargets(); };
 
-  const stakeValue = () => round2([...sel].reduce((s, u) => s + ITEM[state.inv.find(i => i.uid === u).id].value, 0) + coins);
+  const invItem = (u: string) => itemOf(state.inv.find(i => i.uid === u)?.id ?? '');
+  const stakeValue = () => round2([...sel].reduce((s, u) => s + invItem(u).value, 0) + coins);
 
   const drawInv = () => {
     for (const u of [...sel]) if (!state.inv.some(i => i.uid === u)) sel.delete(u);
     $('#invPick', el).innerHTML = state.inv.length
-      ? state.inv.map(e => `<button class="pick ${sel.has(e.uid) ? 'on' : ''}" data-u="${e.uid}">${itemCard(ITEM[e.id], { compact: true })}</button>`).join('')
+      ? state.inv.map(e => `<button class="pick ${sel.has(e.uid) ? 'on' : ''}" data-u="${e.uid}">${itemCard(itemOf(e.id), { compact: true })}</button>`).join('')
       : `<div class="muted small">No items yet. <a href="#/cases">Open a case</a> or stake coins instead.</div>`;
     $$('#invPick .pick', el).forEach(b => b.onclick = () => {
       if (busy) return;
@@ -85,18 +91,31 @@ export function render(el) {
     });
   };
 
-  let sortDir = 'asc';
-  const drawTargets = () => {
-    const sv = stakeValue();
-    const list = ITEMS.filter(i => i.value > sv * 1.05 && (!tq || `${i.weapon} ${i.skin}`.toLowerCase().includes(tq))).sort((a, b) => (sortDir === 'asc' ? a.value - b.value : b.value - a.value));
-    if (target && !list.includes(target)) target = null;
-    $('#targetPick', el).innerHTML = list.map(i => `<button class="pick ${target === i ? 'on' : ''}" data-id="${i.id}">${itemCard(i, { compact: true, extra: sv > 0 ? `<div class="chance">${(upgradeChance(sv, i.value) * 100).toFixed(2)}%</div>` : '' })}</button>`).join('');
-    $$('#targetPick .pick', el).forEach(b => b.onclick = () => { if (busy) return; target = ITEM[b.dataset.id]; sfx.click(); drawTargets(); drawStage(); });
+  // The target list searches the whole catalogue (src/catalogue.ts): items worth more than the stake, and not so much more that the chance rounds to nothing.
+  let sortDir = 'asc', shown = 0, token = 0;
+  const PAGE = 18, MAX_MULTI = 9500;
+  const drawTargets = async (more = false): Promise<void> => {
+    const sv = stakeValue(), mine = ++token, box = $('#targetPick', el);
+    if (target && target.value <= sv * 1.05) target = null;
+    if (!more) { shown = 0; if (!box.children.length) box.innerHTML = '<div class="muted small">Loading items…</div>'; }
+    let res;
+    try { res = await queryItems({ min: sv * 1.05, max: sv > 0 ? sv * MAX_MULTI : undefined, q: tq, dir: sortDir as 'asc' | 'desc', type: tType || undefined, rarity: (tRar || undefined) as any }, shown, PAGE); }
+    catch { if (alive && mine === token) box.innerHTML = '<div class="muted small">Could not load the item list. Check your connection, then change the search to try again.</div>'; return; }
+    if (!alive || mine !== token) return;                                // a newer search has started: this answer is stale
+    const card = i => `<button class="pick ${target === i ? 'on' : ''}" data-id="${i.id}">${itemCard(i, { compact: true, extra: sv > 0 ? `<div class="chance">${(upgradeChance(sv, i.value) * 100).toFixed(2)}%</div>` : '' })}</button>`;
+    if (!more) box.innerHTML = '';
+    box.querySelector('.more-row')?.remove();
+    box.insertAdjacentHTML('beforeend', res.items.map(card).join(''));
+    shown += res.items.length;
+    if (!box.children.length) box.innerHTML = sv > 0 ? '<div class="muted small">No item matches. Try another search or a bigger stake.</div>' : '<div class="muted small">Pick a stake first: the list shows items worth more than it.</div>';
+    else if (shown < res.total) box.insertAdjacentHTML('beforeend', `<div class="more-row"><button class="btn btn-ghost btn-sm" id="moreTargets">Show more (${(res.total - shown).toLocaleString('en-US')} left)</button></div>`);
+    $$('#targetPick .pick', el).forEach(b => b.onclick = () => { if (busy) return; target = ITEM[b.dataset.id]; sfx.click(); $$('#targetPick .pick', el).forEach(x => x.classList.toggle('on', x === b)); drawStage(); });
+    const mo = $('#moreTargets', el); if (mo) mo.onclick = () => void drawTargets(true);
   };
 
   const drawStage = () => {
     const sv = stakeValue();
-    const items = [...sel].map(u => ITEM[state.inv.find(i => i.uid === u).id]);
+    const items = [...sel].map(invItem);
     $('#stakeView', el).innerHTML = sv > 0
       ? `<div class="stake-stack">${items.map(i => itemCard(i, { compact: true })).join('')}${coins > 0 ? `<div class="coin-stake">${coin('lg')}${fmt(coins)}</div>` : ''}</div><div class="slot-total">${money(sv)}</div>`
       : '<div class="slot-empty">Pick items or enter coins</div>';
@@ -118,23 +137,23 @@ export function render(el) {
     drawTargetsIfNeeded();
   };
   let lastSv = -1;
-  const drawTargetsIfNeeded = () => { const sv = stakeValue(); if (sv !== lastSv) { lastSv = sv; drawTargets(); } };
+  const drawTargetsIfNeeded = () => { const sv = stakeValue(); if (sv !== lastSv) { lastSv = sv; void drawTargets(); } };
 
   $('#coinStake', el).oninput = e => {
     const v = Math.max(0, round2(+e.target.value || 0));
     coins = Math.min(v, state.balance);
     drawStage();
   };
-  $$('#tSort .tab', el).forEach(t => t.onclick = () => { $$('#tSort .tab', el).forEach(x => x.classList.toggle('active', x === t)); sortDir = t.dataset.s; drawTargets(); });
+  $$('#tSort .tab', el).forEach(t => t.onclick = () => { $$('#tSort .tab', el).forEach(x => x.classList.toggle('active', x === t)); sortDir = t.dataset.s; void drawTargets(); });
   // Multiplier presets pick the cheapest item worth at least stake × multiplier.
-  $$('#preset button', el).forEach(b => b.onclick = () => {
+  $$('#preset button', el).forEach(b => b.onclick = async () => {
     if (busy) return;
     const sv = stakeValue();
     if (!(sv > 0)) return toast('Pick a stake first', 'error');
-    const want = sv * +b.dataset.m;
-    const pick = ITEMS.filter(i => i.value >= want).sort((a, c) => a.value - c.value)[0];
+    const pick = await cheapestAtLeast(sv * +b.dataset.m).catch(() => null);
+    if (!alive) return;
     if (!pick) return toast('No item is that valuable', 'error');
-    target = pick; sfx.click(); drawTargets(); drawStage();
+    target = pick; sfx.click(); void drawTargets(); drawStage();
   });
   $$('#dir button', el).forEach(b => b.onclick = () => { if (busy) return; over = b.dataset.d === 'over'; $$('#dir button', el).forEach(x => x.classList.toggle('active', x === b)); drawStage(); });
 
@@ -145,7 +164,7 @@ export function render(el) {
     busy = true; drawStage();
     const uids = [...sel];
     // Shown in the live feed as "from → to": your most valuable staked item (or the closest item to a coin stake).
-    const fromItem = uids.map(u => ITEM[state.inv.find(i => i.uid === u).id]).sort((a, b) => b.value - a.value)[0]
+    const fromItem = uids.map(invItem).sort((a, b) => b.value - a.value)[0]
       || [...ITEMS].sort((a, b) => Math.abs(a.value - sv) - Math.abs(b.value - sv))[0];
     const dirOver = over;
     let ch: number, f: number, win: boolean;
@@ -198,7 +217,7 @@ export function render(el) {
     if (!alive) return;
     $('.upgrade-stage', el).classList.add(win ? 'up-win' : 'up-lose');
     setTimeout(() => $('.upgrade-stage', el)?.classList.remove('up-win', 'up-lose'), 1600);
-    if (win) { sfx.big(); confetti(RARITY[tgt.rarity].color); toast(`Upgrade hit! ${tgt.weapon} | ${tgt.skin}`, 'win'); pushDrop({ user: state.name, item: tgt, source: 'Upgrade' }); }
+    if (win) { sfx.big(); confetti(RARITY[tgt.rarity].color); toast(`Upgrade hit! ${itemName(tgt)}`, 'win'); pushDrop({ user: state.name, item: tgt, source: 'Upgrade' }); }
     else { sfx.lose(); toast('Upgrade missed', 'error'); }
     sel.clear(); coins = 0; $('#coinStake', el).value = ''; target = null; lastSv = -1;
     // Keep the landed roll visible for a moment before resetting the gauge.
@@ -213,5 +232,8 @@ export function render(el) {
     toast(`Battle winnings ready to upgrade: ${fmt(coins)}`, 'win');
   }
   drawInv(); drawStage();
-  return () => { alive = false; clearInterval(liveTimer); releaseItems(held); };
+  // Items that came from an upgrade are not bundled with the page: fetch the ones the inventory holds, then show them.
+  void ensureItems(state.inv.map(e => e.id));
+  const offItems = on('items:loaded', () => { if (alive) { drawInv(); drawStage(); } });
+  return () => { alive = false; clearInterval(liveTimer); clearTimeout(searchTimer); offItems(); releaseItems(held); };
 }

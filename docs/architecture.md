@@ -42,10 +42,12 @@ supabase/
   migrations/0006_admin.sql   admin roles, permissions, three-step sign-in, append-only audit log, read-only explorer
   migrations/0007_site_controls.sql   maintenance, notice, game switches, sign-ups, country restrictions (one row, guarded entry points)
   migrations/0008_wallet.sql   the server wallet: wallets, ledger kinds, inventory, catalogue tables, money helpers, rewards state
-  migrations/0009_catalogue.sql   GENERATED from src/data.ts (npm run gen:catalogue): items, cases, drop tickets, prices
+  migrations/0009_catalogue.sql   the first (invented) catalogue seed; replaced by 0014 and 0015 below
   migrations/0010_solo_games.sql   Cases, Upgrade, Plinko, Mines drawn and paid by the database
   migrations/0011_live_wallet.sql   Coinflip, Battles (all modes), Crash and Double take stakes and pay winners
   migrations/0012_rewards.sql   faucet, rakeback, calendar, promo codes, free crates, race prize, race boards, and wallet_ready()
+  migrations/0013_crash_pace.sql   a slower Crash (crash_rate())
+  migrations/0014_real_items_*.sql, 0015_real_cases.sql   GENERATED (npm run build:catalogue): the real CS2 items with prices, the cases and their tickets; see real-catalogue.md
   functions/steam-login      Steam OpenID sign-in
   functions/close-login      finishes account deletion
   functions/_shared          Steam OpenID verification and name/avatar parsing (unit-tested)

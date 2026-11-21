@@ -41,8 +41,9 @@ function load(): GameState {
     if (!raw) return defaults();
     const saved = JSON.parse(raw) as Partial<GameState>;
     const d = defaults();
+    const real = (e: { id?: unknown } | null | undefined): boolean => typeof e?.id === 'string' && e.id.startsWith('skin-');       // items of the old invented catalogue no longer exist
     const welcomeLeft = Math.min(1, typeof saved.welcomeLeft === 'number' ? saved.welcomeLeft : 1);   // one welcome crate per account (older saves had three)
-    return { ...d, ...saved, welcomeLeft, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui }, legal: { ...d.legal, ...saved.legal }, gameStats: { ...saved.gameStats },
+    return { ...d, ...saved, inv: (saved.inv ?? d.inv).filter(real), bestDrop: real(saved.bestDrop) ? saved.bestDrop! : null, welcomeLeft, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui }, legal: { ...d.legal, ...saved.legal }, gameStats: { ...saved.gameStats },
       rg: { ...d.rg, ...saved.rg, limits: { ...d.rg.limits, ...saved.rg?.limits } }, kyc: { ...d.kyc, ...saved.kyc }, aml: { ...d.aml, ...saved.aml } };
   } catch { return defaults(); }
 }

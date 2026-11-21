@@ -31,12 +31,14 @@ Node 22.12 or newer is required.
 
 ```
 index.html            app shell (Vite entry)
-public/assets/        images served as-is: items/web, cases, home
+public/assets/        images served as-is: cases, home
+public/catalogue/     the whole CS2 item catalogue (search index and item files), loaded on demand; generated
 src/app.ts            router, sidebar, top bar, live-drop ticker, chat button
 src/types.ts          shared domain types
 src/fair.ts           provably fair (HMAC-SHA256) + every game's maths and payout tables   [strict]
 src/state.ts          balance, inventory, XP/levels, rakeback, bet history, self-exclusion   [strict]
-src/data.ts           item catalog, cases and reward cases (ticket ranges, prices from odds) [strict]
+src/data.ts           the cases and reward cases (generated, with the items inside them), grades, helpers [strict]
+src/catalogue.ts      the full real CS2 catalogue, loaded on demand (search, paging, items an inventory holds)
 src/verify.ts         bet re-computation, house-edge simulation, uniformity test            [strict]
 src/race.ts           daily race standings (simulated rivals) and prize payout              [strict]
 src/feed.ts           simulated live drops and bets (stand-in for a WebSocket feed)         [strict]

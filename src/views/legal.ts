@@ -10,7 +10,7 @@ type Block = string | string[];
 interface Doc { title: string; intro: string; sections: [string, Block[]][]; legal?: boolean }
 
 const C = COMPANY;
-const NOT_AFFILIATED = 'Vaultrush is not affiliated with, endorsed by or associated with Valve, Steam, Counter-Strike, Facepunch, Rust or any other game publisher or platform. Weapon, skin and case names in Vaultrush are invented, and all third-party names and trademarks belong to their owners and are used only to describe how sign-in works.';
+const NOT_AFFILIATED = 'Vaultrush is not affiliated with, endorsed by or associated with Valve, Steam, Counter-Strike, Facepunch, Rust or any other game publisher or platform. The Counter-Strike weapon and skin names and pictures shown in Vaultrush (taken from the open CS2 data set and Valve\u2019s community image servers) and the prices next to them (taken from public Skinport listings) are used only to describe the play-money items; they belong to their owners and nothing here can be bought, sold or withdrawn. Case names are our own. All other third-party names and trademarks belong to their owners and are used only to describe how sign-in works.';
 
 export const DOCS: Record<string, Doc> = {
   terms: {
@@ -19,7 +19,7 @@ export const DOCS: Record<string, Doc> = {
     sections: [
       ['1. Who we are and what this is', [
         `Vaultrush is operated by ${companyLine()}. The company and all contact details on this site are fictional placeholders (see the Disclaimer).`,
-        'Vaultrush uses virtual coins and invented items. Coins have no cash value. They cannot be bought, sold, transferred to another person or withdrawn, and nothing you win can be exchanged for money, skins or any other real item.',
+        'Vaultrush uses virtual coins and virtual items that only look like Counter-Strike skins. Coins have no cash value. They cannot be bought, sold, transferred to another person or withdrawn, and nothing you win can be exchanged for money, skins or any other real item.',
         'It is a software demonstration. It is not a gambling service and holds no gambling licence.',
       ]],
       ['2. Eligibility', [
@@ -268,7 +268,7 @@ export const DOCS: Record<string, Doc> = {
     title: 'About Vaultrush',
     intro: 'A play-money demo of a modern skin-game site, built to show how the parts fit together responsibly.',
     sections: [
-      ['What it is', ['Vaultrush is an original demonstration of cases, case battles, crash, double, plinko, mines, coinflip and upgrading, with levels, rewards and a daily race. It uses invented items and free coins.']],
+      ['What it is', ['Vaultrush is an original demonstration of cases, case battles, crash, double, plinko, mines, coinflip and upgrading, with levels, rewards and a daily race. It uses play-money items named after Counter-Strike skins (priced from public market listings, in coins) and free coins.']],
       ['What makes it different', [
         ['Honest about being play money: coins cannot be bought or withdrawn.', 'Provably fair results you can re-check, and an RNG lab that tests the random source.', 'Responsible-play tools built in: limits, breaks, reality checks and self-exclusion.', 'Sandbox identity and AML controls that show how a regulated site behaves.', 'Real shared lobbies: battles, coinflip and chat between signed-in players.']]],
       ['Who runs it', [`${companyLine()}. This is a fictional company used so the demo looks like a real site; see the Disclaimer.`]],

@@ -1,8 +1,8 @@
-import { CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf } from '../data.js';
+import { CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf, isHugeDrop } from '../data.js';
 import { state, save, debit, addItems, round2, debitError } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop, pushBet } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs, preloadImages } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
 import { serverWallet, openCases, releaseItems } from '../wallet.js';
@@ -80,6 +80,7 @@ export function renderCase(el, id) {
     reels.innerHTML = Array.from({ length: count }, () => `<div class="reel-host reel ${count > 2 ? 'reel-y' : 'reel-x'} idle">${caseArt(c)}</div>`).join('');
   };
   drawIdle();
+  void preloadImages(c.entries.map(e => e.item));                       // the pictures are in the browser before the first spin
 
   $('#fav', el).onclick = () => { toggleFav(c.id); $('#fav', el).classList.toggle('on', state.favs.includes(c.id)); };
   $$('#count button', el).forEach(b => b.onclick = () => {
@@ -92,9 +93,11 @@ export function renderCase(el, id) {
   // 1–2 cases spin horizontally; 3+ spin as vertical columns side by side (like the reference sites).
   const spinAll = winners => {
     const axis = winners.length > 2 ? 'y' : 'x';
-    reels.innerHTML = winners.map(() => '<div class="reel-host"></div>').join('');
     const dur = openMs();
-    return Promise.all([...reels.children].map((host, i) => spinReel(host, c.entries, winners[i], { axis, duration: dur + i * 90, sound: i === 0, ...(axis === 'y' ? { total: 40, winIndex: 34 } : {}) })));
+    return preloadImages(c.entries.map(e => e.item)).then(() => {
+      reels.innerHTML = winners.map(() => '<div class="reel-host"></div>').join('');
+      return Promise.all([...reels.children].map((host, i) => spinReel(host, c.entries, winners[i], { axis, duration: dur + i * 90, sound: i === 0, ...(axis === 'y' ? { total: 40, winIndex: 34 } : {}) })));
+    });
   };
 
   $('#fastBtn', el).onclick = () => {
@@ -148,7 +151,7 @@ export function renderCase(el, id) {
     setBusy(false);
 
     const best = winners.reduce((a, b) => (b.value > a.value ? b : a));
-    if (['legendary', 'mythic'].includes(best.rarity)) { sfx.big(); confetti(RARITY[best.rarity].color); }
+    if (isHugeDrop(best.rarity) || best.value >= cost * 5) { sfx.big(); confetti(RARITY[best.rarity].color); }
     else if (total >= cost) sfx.win(); else sfx.lose();
   };
 

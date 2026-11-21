@@ -3,7 +3,7 @@ import { state, save, debit, credit, round2, debitError, handoff } from '../stat
 import { bet, annotate, pickWeighted, floatsFor } from '../fair.js';
 import { tellBalance, isLive, liveMe, createLiveBattle, joinLiveBattle, callLiveBot, leaveLiveBattle, getLiveBattle, openLiveBattles, myLiveBattles, liveBattleSeed, watchBattles, refundOnce, settleOnce, isSettled, onReconcile, type LiveBattle } from '../live.js';
 import { pushBet, pushDrop } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt, preloadImages } from '../ui.js';
 import { sfx } from '../sfx.js';
 
 import { FORMATS, decide, shareOf } from '../battle-math.js';
@@ -667,6 +667,7 @@ function drawBattle(el, b) {
       b.players.forEach((_, p) => $(`#slot${p}_${r}`, el).classList.add('active'));
       $('#bStatus', el).textContent = `${replay ? 'Replay · ' : ''}Round ${r + 1} of ${b.ids.length}`;
       const dur = Math.round(reelMs() * 0.6);
+      await preloadImages(c.entries.map(e => e.item));                  // the reels start with every picture in place
       await Promise.all(b.players.map((_, p) => spinReel($(`#reel${p}`, el), c.entries, b.results[p][r], { axis: 'y', duration: dur, total: 40, winIndex: 34, sound: p === mi() })));
       if (!live()) return;
       const top = Math.max(...b.players.map((_, p) => b.results[p][r].value));

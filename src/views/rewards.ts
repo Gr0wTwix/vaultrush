@@ -1,10 +1,10 @@
 // Rewards hub: level, rakeback, free cases (welcome, daily, level), promo codes and a login calendar.
-import { CASE, ITEM, RARITY, entryForTicket, ticketOf } from '../data.js';
+import { CASE, ITEM, RARITY, entryForTicket, ticketOf, isBigDrop } from '../data.js';
 import { state, save, grant, credit, logTx, addItems, removeItems, round2, level, xpForLevel, todayKey, DAY, isAuthed } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop } from '../feed.js';
 import { takeFreeClaim } from '../live.js';
-import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, openMs, guestCard } from '../ui.js';
+import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, openMs, guestCard, preloadImages } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { serverWallet, openFreeCase as openFree, sellItems, claimRakeback, claimCalendar, redeemPromo, releaseItems } from '../wallet.js';
 
@@ -33,10 +33,11 @@ export async function openFreeCase(c, label, kind?: string) {
     [added] = addItems([item]);       // granted before the animation
     logTx(label, item.value, `${item.weapon} | ${item.skin}`);
   }
+  await preloadImages(c.entries.map(e => e.item));
   await spinReel($('#freeReel', m.el), c.entries, item, { duration: openMs() });
   releaseItems([added.uid]);                                          // the reel has stopped: now the top bar counts the item
   pushDrop({ user: state.name, item, source: c.name });
-  if (['legendary', 'mythic', 'epic'].includes(item.rarity)) { sfx.big(); confetti(RARITY[item.rarity].color); } else sfx.win();
+  if (isBigDrop(item.rarity)) { sfx.big(); confetti(RARITY[item.rarity].color); } else sfx.win();
   const res = $('#freeRes', m.el);
   res.innerHTML = `${itemCard(item)}<div class="row"><button class="btn btn-ghost" id="keep">Keep in inventory</button><button class="btn btn-primary" id="sell">Sell for ${money(item.value)}</button></div>`;
   $('#keep', res).onclick = m.close;

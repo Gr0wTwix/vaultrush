@@ -1,4 +1,4 @@
-import { CASES, ITEMS, RARITY } from '../data.js';
+import { CASES, ITEMS, RARITY, CATALOGUE_TOTAL } from '../data.js';
 import { bets, drops } from '../feed.js';
 import { state, save, on, levelFromXp, xpForLevel, isAuthed } from '../state.js';
 import { $, $$, esc, fmt, money, icon, avatar, caseArt, itemArt, guestCard } from '../ui.js';
@@ -47,7 +47,7 @@ export function render(el) {
         ? '<a class="btn btn-primary btn-lg" href="#/cases">Open a case</a><a class="btn btn-ghost btn-lg" href="#/battles/create" data-needs-auth="battle">Start a battle</a>'
         : '<button type="button" class="btn btn-primary btn-lg" data-auth-open="register">Create a free account</button><a class="btn btn-ghost btn-lg" href="#/cases">Browse cases</a>',
       art: `<div class="hm-cases">${featured.map((c, i) => `<a href="#/case/${c.id}" class="float-case f${i}">${caseArt(c)}</a>`).join('')}</div>` },
-    { cls: 's-legend', eyebrow: `${icon('star')} Chase the legends`, title: `${CASES.length} cases.<br><span class="grad gold">${ITEMS.length} skins.</span>`, text: 'From starter crates to knife-tier vaults. Peek inside any case with the eye button before you open it.',
+    { cls: 's-legend', eyebrow: `${icon('star')} Chase the legends`, title: `${CASES.length} cases.<br><span class="grad gold">${CATALOGUE_TOTAL.toLocaleString('en-US')} skins.</span>`, text: 'From starter crates to knife-tier vaults. Peek inside any case with the eye button before you open it.',
       cta: '<a class="btn btn-primary btn-lg" href="#/cases">Browse cases</a>',
       art: `<div class="hm-items">${legends.map((it, i) => `<div class="hm-item i${i}" style="--rc:${RARITY[it.rarity].color}"><div class="hm-glow"></div>${itemArt(it)}<b>${fmt(it.value)}</b></div>`).join('')}</div>` },
     { cls: 's-mines', eyebrow: `${icon('mines')} Original`, title: 'Mines.<br><span class="grad">Find the gems.</span>', text: 'Pick a grid from 4×4 up to 8×8, choose your mines and cash out whenever you like. One wrong tile and the bet is gone.',

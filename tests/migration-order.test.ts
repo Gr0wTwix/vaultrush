@@ -3,6 +3,7 @@
 // site_guard function the wallet games call, and puts the guard into the older entry points that do not have it yet (sign-up, free crates, the Crash demo).
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
+import { realItemMigrations } from './helpers.js';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -37,7 +38,7 @@ beforeAll(async () => {
   const run = async (m: string) => db.exec(readFileSync(new URL(`../supabase/migrations/${m}.sql`, import.meta.url), 'utf8'));
   for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps', '0005_rounds', '0006_admin']) await run(m);
   await rpc(P, 'complete_signup', 'Nova', '2026-11-21', true);                                // an account that already exists
-  for (const m of ['0008_wallet', '0009_catalogue', '0010_solo_games', '0011_live_wallet', '0012_rewards']) await run(m);
+  for (const m of ['0008_wallet', '0009_catalogue', '0010_solo_games', '0011_live_wallet', '0012_rewards', ...realItemMigrations()]) await run(m);
   await run('0007_site_controls');                                                            // run last, as it happened on the real database
 }, 120_000);
 afterAll(async () => { await db.close(); });

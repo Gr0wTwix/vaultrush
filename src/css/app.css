@@ -106,7 +106,7 @@ a.drop { cursor: pointer; }
 a.drop:hover, .drop:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -12px var(--rc); }
 .drop-front, .drop-back { position: absolute; inset: 0; display: flex; transition: opacity .22s, transform .22s; }
 .drop-front { flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 10px 4px; }
-.drop .item-art { width: 112px; max-width: none; height: 46px; object-fit: contain; }
+.drop .item-art { width: 100px; max-width: none; height: 52px; object-fit: contain; }
 .drop-meta { width: 100%; display: flex; flex-direction: column; text-align: center; font-size: 12px; line-height: 1.25; }
 .drop-meta b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drop-meta span { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -162,7 +162,7 @@ a.drop:hover, .drop:hover { transform: translateY(-3px); box-shadow: 0 12px 24px
 /* ---------- items ---------- */
 .item { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px 10px; border-radius: 12px; background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 10%, var(--panel2)) 0%, var(--panel2) 70%); border: 1px solid var(--line); border-bottom: 3px solid var(--rc); text-align: center; }
 .item-glow { position: absolute; top: 8%; left: 50%; width: 70%; aspect-ratio: 1; transform: translateX(-50%); background: radial-gradient(circle, color-mix(in srgb, var(--rc) 40%, transparent), transparent 65%); pointer-events: none; }
-.item-art { position: relative; width: 100%; max-width: 130px; height: 52px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+.item-art { position: relative; width: 100%; max-width: 150px; height: 72px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
 .item-meta { position: relative; line-height: 1.2; min-width: 0; width: 100%; }
 .item-weapon { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-skin { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -171,11 +171,11 @@ a.drop:hover, .drop:hover { transform: translateY(-3px); box-shadow: 0 12px 24px
 .item .sell { position: relative; margin-top: 2px; background: var(--panel3); color: var(--text); border: 1px solid var(--line2); }
 .item.sold { opacity: .45; }
 .item-compact { padding: 8px 6px 7px; gap: 3px; }
-.item-compact .item-art { height: 40px; }
+.item-compact .item-art { height: 54px; }
 .item-compact .item-skin { font-size: 12px; }
 .item-compact .item-value { font-size: 12px; }
 .contents { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.contents.small-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); max-height: 430px; overflow: auto; padding: 2px; }
+.contents.small-grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); max-height: 430px; overflow: auto; padding: 2px; }
 
 /* ---------- home ---------- */
 .hero { position: relative; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 20px; padding: 34px 36px; border-radius: 20px; overflow: hidden; border: 1px solid var(--line);

@@ -21,7 +21,7 @@ export function footerHtml(): string {
       <div class="ft-about">
         <a class="ft-logo" href="#/" aria-label="Vaultrush home">VAULT<b>RUSH</b></a>
         <p><b>Vaultrush</b> is a play-money demonstration operated by ${esc(c.name)}, ${esc(c.description)} (registration no. ${esc(c.regNo)}), registered address: ${esc(c.address.join(', '))}. All company details on this site are fictional placeholders.</p>
-        <p>Vaultrush is not affiliated with, endorsed by or associated with Valve, Steam, Counter-Strike, Facepunch, Rust or any other game publisher or platform. All item names are invented and all third-party names and brands belong to their owners.</p>
+        <p>Vaultrush is not affiliated with, endorsed by or associated with Valve, Steam, Counter-Strike, Facepunch, Rust or any other game publisher or platform. Counter-Strike item names, pictures and prices are shown only to describe the play-money items (names and pictures come from the open CS2 data set and Valve's community image servers, prices from public Skinport listings); they belong to their owners and are not for sale here. All third-party names and brands belong to their owners.</p>
         <p>Coins have no cash value. They cannot be bought, sold or withdrawn, and nothing is won that has real value.</p>
       </div>
       ${FOOTER_COLUMNS.map(col => `<nav class="ft-col" aria-label="${esc(col.title)}"><h2>${esc(col.title)}</h2>${col.links.map(link).join('')}</nav>`).join('')}

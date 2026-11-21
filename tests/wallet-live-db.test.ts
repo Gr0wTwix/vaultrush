@@ -7,6 +7,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CASE, entryForTicket, ticketOf } from '../src/data.js';
+import { realItemMigrations } from './helpers.js';
 import { decide, FORMATS, shareOf } from '../src/battle-math.js';
 import { CRASH_GROWTH, DOUBLE_PAY, doubleWins, floatsFor } from '../src/fair.js';
 import type { DoubleLane } from '../src/types.js';
@@ -50,7 +51,7 @@ const betsOf = (uid: string, game: string) => sql(`select * from public.bets whe
 beforeAll(async () => {
   db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(PRELUDE);
-  for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps', '0005_rounds', '0006_admin', '0007_site_controls', '0008_wallet', '0009_catalogue', '0010_solo_games', '0011_live_wallet', '0012_rewards', '0013_crash_pace'])
+  for (const m of ['0001_core', '0002_live', '0003_live_erasure', '0004_claims_bots_caps', '0005_rounds', '0006_admin', '0007_site_controls', '0008_wallet', '0009_catalogue', '0010_solo_games', '0011_live_wallet', '0012_rewards', '0013_crash_pace', ...realItemMigrations()])
     await db.exec(readFileSync(new URL(`../supabase/migrations/${m}.sql`, import.meta.url), 'utf8'));
   for (const [id, n] of [[A, 'Alice'], [B, 'Bob'], [C, 'Cara'], [Z, 'Zed']] as const) await rpc(id, 'complete_signup', n, TERMS, true);
 }, 120_000);

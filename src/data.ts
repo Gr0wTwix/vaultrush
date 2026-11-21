@@ -1,172 +1,73 @@
-// Original item catalog and cases (invented names: swap in your own art and items).
-import { HOUSE } from './fair.js';
-import type { Case, CaseDef, CaseEntry, Item, Rarity } from './types.js';
+// The item catalogue and the cases. The items are the real Counter-Strike 2 skins (names, grades and pictures from ByMykel's CSGO-API; prices from
+// Skinport's lowest listing in USD x 1.64 coins per dollar, the rate a credit-card deposit pays on the reference sites). Everything below the cases is built by `npm run build:catalogue` (scripts/build-catalogue.mjs); the
+// whole catalogue (all ~14,000 priced items) is loaded on demand by src/catalogue.ts, only the items inside the cases are bundled with the page.
+import cat from './catalogue/cases.generated.json';
+import type { Case, CaseEntry, Item, Rarity } from './types.js';
 
+/** CS2's grades, lowest first, with the colours the game uses. */
 export const RARITY: Record<Rarity, { label: string; color: string }> = {
-  common: { label: 'Common', color: '#9aa6bd' },
-  uncommon: { label: 'Uncommon', color: '#4f9dff' },
-  rare: { label: 'Rare', color: '#8f6bff' },
-  epic: { label: 'Epic', color: '#ff4fc8' },
-  legendary: { label: 'Legendary', color: '#ff5a4f' },
-  mythic: { label: 'Mythic', color: '#ffc53d' },
+  consumer: { label: 'Consumer', color: '#b0c3d9' },
+  industrial: { label: 'Industrial', color: '#5e98d9' },
+  milspec: { label: 'Mil-Spec', color: '#4b69ff' },
+  restricted: { label: 'Restricted', color: '#8847ff' },
+  classified: { label: 'Classified', color: '#d32ce6' },
+  covert: { label: 'Covert', color: '#eb4b4b' },
+  extraordinary: { label: 'Extraordinary', color: '#ffcc33' },
+  contraband: { label: 'Contraband', color: '#ff9a3d' },
 };
+export const RARITY_ORDER: Rarity[] = ['consumer', 'industrial', 'milspec', 'restricted', 'classified', 'covert', 'extraordinary', 'contraband'];
+/** The grades that get the big celebration when they drop. */
+export const isBigDrop = (r: Rarity): boolean => r === 'covert' || r === 'extraordinary' || r === 'contraband';
+export const isHugeDrop = (r: Rarity): boolean => r === 'extraordinary' || r === 'contraband';
 
-const RAW: [string, string, string, string, Rarity, number][] = [
-  ['p1', 'Viper P9', 'Static', 'pistol', 'common', 0.08],
-  ['s1', 'Hornet SMG', 'Grid Rot', 'smg', 'common', 0.12],
-  ['p2', 'Viper P9', 'Sandblast', 'pistol', 'common', 0.15],
-  ['r1', 'Ranger AR', 'Field Kit', 'rifle', 'common', 0.22],
-  ['s2', 'Hornet SMG', 'Night Tide', 'smg', 'uncommon', 0.45],
-  ['p3', 'Duke .50', 'Ember', 'pistol', 'uncommon', 0.9],
-  ['n1', 'Longshot R8', 'Mossback', 'sniper', 'uncommon', 1.2],
-  ['r2', 'Ranger AR', 'Ice Vein', 'rifle', 'uncommon', 1.6],
-  ['c1', 'Charm', 'Neon Fang', 'charm', 'rare', 2.5],
-  ['s3', 'Hornet SMG', 'Acid Bloom', 'smg', 'rare', 3.4],
-  ['p4', 'Duke .50', 'Circuit', 'pistol', 'rare', 4.8],
-  ['r3', 'Vanguard AR', 'Redline', 'rifle', 'rare', 7.5],
-  ['n2', 'Longshot R8', 'Tidebreaker', 'sniper', 'rare', 9.9],
-  ['c2', 'Charm', 'Crystal Skull', 'charm', 'epic', 14],
-  ['p5', 'Duke .50', 'Prism', 'pistol', 'epic', 18],
-  ['r4', 'Vanguard AR', 'Solar Flare', 'rifle', 'epic', 24],
-  ['n3', 'Longshot R8', 'Thunderhead', 'sniper', 'epic', 38],
-  ['r5', 'Ranger AR', 'Voidwalker', 'rifle', 'legendary', 95],
-  ['k1', 'Talon Knife', 'Rust Edge', 'knife', 'legendary', 140],
-  ['n4', 'Phantom AWR', 'Dragon Coil', 'sniper', 'legendary', 180],
-  ['k2', 'Crescent Knife', 'Night Bloom', 'knife', 'legendary', 260],
-  ['r6', 'Vanguard AR', 'Aurora', 'rifle', 'mythic', 520],
-  ['k3', 'Talon Knife', 'Molten Gold', 'knife', 'mythic', 890],
-  ['k4', 'Crescent Knife', 'Galaxy Fade', 'knife', 'mythic', 1650],
-  ['n5', 'Phantom AWR', 'Starforged', 'sniper', 'mythic', 2400],
-  // ---- expansion pack (48 items, art in assets/items/web/x01..x48.png) ----
-  ['x44', "Explorer Sleeping Bag", "Moonlit Meadow", 'sleeping bag', 'common', 0.11],
-  ['x43', "Expedition Backpack", "Moss Lantern", 'backpack', 'common', 0.14],
-  ['x41', "Ranger Jacket", "Cinder Scout", 'jacket', 'common', 0.17],
-  ['x40', "Drifter Hoodie", "Midnight Arcade", 'hoodie', 'common', 0.2],
-  ['x42', "Mechanic Gloves", "Copper Pulse", 'gloves', 'common', 0.24],
-  ['x08', "Trail Boots", "Copper Canyon", 'boots', 'common', 0.28],
-  ['x09', "Scout Goggles", "Bubble Riot", 'goggles', 'common', 0.35],
-  ['x34', "Nomad Camp Stove", "Patchwork Parade", 'camp stove', 'common', 0.42],
-  ['x45', "Salvage Crate", "Coral Vault", 'storage crate', 'uncommon', 0.6],
-  ['x12', "Traveler Canteen", "Koi Undertow", 'canteen', 'uncommon', 0.75],
-  ['x21', "Salvage Wrench", "Scrapyard Carnival", 'wrench', 'uncommon', 0.95],
-  ['x35', "Outpost Radio", "Rust Circuit", 'radio', 'uncommon', 1.3],
-  ['x24', "Mechanist Toolbox", "Clockwork Fern", 'toolbox', 'uncommon', 1.7],
-  ['x06', "Miner Helmet", "Hazard Current", 'helmet', 'uncommon', 2.1],
-  ['x30', "Survey Compass", "Glacier Forge", 'compass', 'uncommon', 2.6],
-  ['x03', "Nomad Rifle", "Desert Relay", 'rifle', 'uncommon', 3],
-  ['x11', "Cricket SMG", "Honeycomb Drift", 'smg', 'rare', 3.8],
-  ['x10', "Comet SMG", "Violet Velocity", 'smg', 'rare', 4.6],
-  ['x13', "Condor Pistol", "Sunken Treasure", 'pistol', 'rare', 5.5],
-  ['x14', "Lynx Pistol", "Sugar Quartz", 'pistol', 'rare', 6.8],
-  ['x15', "Basilisk Pistol", "Carbon Mirage", 'pistol', 'rare', 8.5],
-  ['x29', "Trail Hatchet", "Amber Fossil", 'hatchet', 'rare', 10.5],
-  ['x36', "Outrider Rifle", "Tape Deck", 'rifle', 'rare', 12],
-  ['x05', "Sanctum Lantern", "Jade Cathedral", 'lantern', 'rare', 13.5],
-  ['x02', "Jackal Rifle", "Petrol Mosaic", 'rifle', 'epic', 16],
-  ['x04', "Warden Rifle", "Sakura Static", 'rifle', 'epic', 20],
-  ['x31', "Prospector Pickaxe", "Meteor Rust", 'pickaxe', 'epic', 24],
-  ['x32', "Artisan Hammer", "Kintsugi Signal", 'hammer', 'epic', 29],
-  ['x38', "Wasteland Helmet", "Deep Diver", 'helmet', 'epic', 34],
-  ['x33', "Dune Bow", "Sandglass", 'bow', 'epic', 41],
-  ['x28', "Origami Fox Charm", "Neon Origami", 'charm', 'epic', 48],
-  ['x47', "Trophy Charm", "Mecha Acorn", 'charm', 'epic', 56],
-  ['x46', "Reliquary Charm", "Astral Moth", 'charm', 'epic', 66],
-  ['x48', "Beacon Charm", "Prism Jelly", 'charm', 'epic', 78],
-  ['x37', "Sentinel Mask", "Oni Foundry", 'metal facemask', 'legendary', 95],
-  ['x39', "Bastion Chestplate", "Lotus Alloy", 'chest armor', 'legendary', 120],
-  ['x22', "Mammoth Shotgun", "Obsidian Bloom", 'shotgun', 'legendary', 150],
-  ['x23', "Bison Machine Gun", "Foundry Spirit", 'machine gun', 'legendary', 190],
-  ['x16', "Monarch Revolver", "Royal Patina", 'revolver', 'legendary', 240],
-  ['x07', "Vesper Rifle", "Ink Serpent", 'rifle', 'legendary', 310],
-  ['x01', "Kestrel Rifle", "Porcelain Storm", 'rifle', 'legendary', 400],
-  ['x26', "Tide Knife", "Pearl Undertow", 'knife', 'mythic', 560],
-  ['x27', "Scarab Knife", "Verdigris Relic", 'knife', 'mythic', 720],
-  ['x17', "Osprey Scoped Rifle", "Polar Oracle", 'sniper', 'mythic', 950],
-  ['x20', "Boreal Scoped Rifle", "Emerald Monsoon", 'sniper', 'mythic', 1250],
-  ['x19', "Orion Scoped Rifle", "Sunset Ronin", 'sniper', 'mythic', 1600],
-  ['x25', "Rift Knife", "Opal Fracture", 'knife', 'mythic', 2100],
-  ['x18', "Harrier Scoped Rifle", "Cosmic Cartographer", 'sniper', 'mythic', 3200],
-];
+/** Where the pictures live: Valve's community CDN (the key is the part after /economy/image/). Items from newer drops use another host and carry the whole URL. */
+const IMG_BASE = 'https://community.akamai.steamstatic.com/economy/image/';
+export const itemImage = (key: string, size = '256fx192f'): string => (/^https?:/.test(key) ? key : `${IMG_BASE}${key}/${size}`);
 
-const WEARS = ['FN', 'MW', 'FT', 'WW', 'BS'];
-// Items with a rendered image (assets/items/web/<id>.png); the rest use the drawn SVG art from art.js.
-// Pack items (x01–x48) all have art. Gear/tools/charms have no wear; only guns and knives do.
-const WEAPON_TYPES = new Set(['pistol', 'smg', 'rifle', 'sniper', 'knife', 'revolver', 'shotgun', 'machine gun']);
-const IMAGES = new Set(['p1', 'p2', 'p3', 'p4', 'p5', 's1', 's2', 's3', 'r2', 'r3', 'r4', 'r5', 'r6', 'n1', 'n2', 'n3', 'n4', 'n5', 'k1', 'k2', 'k3', 'k4', 'c1', 'c2']);
-export const ITEMS: Item[] = RAW.map(([id, weapon, skin, type, rarity, value], i): Item => ({
-  id, weapon, skin, type, rarity, value,
-  img: IMAGES.has(id) || /^x[0-9]+$/.test(id) ? `assets/items/web/${id}.png` : undefined,
-  wear: WEAPON_TYPES.has(type) ? WEARS[(i * 7) % 5] : '',
-  st: WEAPON_TYPES.has(type) && i % 4 === 1,           // StatTrak-style counter variant
-}));
-export const ITEM: Record<string, Item> = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+/** The wear label for a "Factory New (FN) … Battle-Scarred (BS)" code. */
+export const WEAR_NAME: Record<string, string> = { FN: 'Factory New', MW: 'Minimal Wear', FT: 'Field-Tested', WW: 'Well-Worn', BS: 'Battle-Scarred' };
 
-// `odds` (optional) fixes each item's chance; otherwise drop weight falls with value.
-const CASE_DEFS: CaseDef[] = [
-  { id: 'starter', name: 'Starter Crate', hue: 200, tag: 'official', items: ['p1', 'p2', 's1', 'r1', 's2', 'p3', 'r2', 'c1', 's3', 'r4'] },
-  { id: 'flip', name: 'Coinflip Crate', hue: 95, tag: '50%', odds: { r2: 0.5, p1: 0.5 } },
-  { id: 'neon', name: 'Neon Nights', hue: 300, tag: 'official', items: ['s2', 'p3', 'n1', 's3', 'c1', 'p4', 'r3', 'c2', 'p5', 'r5', 'k1'] },
-  { id: 'charmed', name: 'Charmed', hue: 160, tag: 'official', items: ['c1', 'p3', 's3', 'c2', 'p5', 'r5', 'k2'] },
-  { id: 'sniper', name: "Sniper's Den", hue: 30, tag: 'official', items: ['n1', 'r2', 'n2', 'p4', 'r3', 'n3', 'n4', 'n5'] },
-  { id: 'phantom10', name: '10% Phantom', hue: 260, tag: '10%', odds: { n4: 0.1, n1: 0.3, r1: 0.6 } },
-  { id: 'blade', name: 'Blade Vault', hue: 350, tag: 'official', items: ['p4', 'r3', 'n2', 'c2', 'r4', 'p5', 'k1', 'k2', 'k3', 'k4'] },
-  { id: 'high', name: 'Highroller', hue: 48, tag: 'official', items: ['r4', 'n3', 'r5', 'n4', 'k2', 'r6', 'k3', 'k4', 'n5'] },
-  // ---- expansion cases ----
-  { id: 'wasteland', name: 'Wasteland Supply', hue: 28, tag: 'official', items: ['x44', 'x43', 'x41', 'x40', 'x42', 'x08', 'x34', 'x45', 'x35', 'x21', 'x38', 'x06'] },
-  { id: 'gearup', name: 'Gear Up', hue: 125, tag: 'official', items: ['x44', 'x43', 'x41', 'x40', 'x42', 'x08', 'x09', 'x34', 'x06', 'x38'] },
-  { id: 'canyon', name: 'Copper Canyon', hue: 22, tag: 'official', items: ['x08', 'x42', 'x03', 'x30', 'x29', 'x31', 'x33', 'x15', 'x36'] },
-  { id: 'arcade', name: 'Midnight Arcade', hue: 275, tag: 'official', items: ['x40', 'x09', 'x35', 'x11', 'x10', 'x36', 'x04', 'x28', 'x47', 'x48'] },
-  { id: 'foundry', name: 'Foundry Forge', hue: 15, tag: 'official', items: ['x21', 'x24', 'x35', 'x42', 'x29', 'x31', 'x32', 'x37', 'x22', 'x23', 'x39'] },
-  { id: 'deeptide', name: 'Deep Tide', hue: 190, tag: 'official', items: ['x44', 'x12', 'x09', 'x13', 'x38', 'x48', 'x14', 'x05'] },
-  { id: 'blossom', name: 'Sakura Bloom', hue: 335, tag: 'official', items: ['x40', 'x12', 'x14', 'x04', 'x28', 'x46', 'x48', 'x07'] },
-  { id: 'relic', name: 'Relic Hunter', hue: 82, tag: 'official', items: ['x30', 'x24', 'x29', 'x31', 'x33', 'x46', 'x27', 'x25'] },
-  { id: 'scopes', name: 'Long Range', hue: 205, tag: 'official', items: ['x30', 'x13', 'x14', 'x17', 'x20', 'x19', 'x18'] },
-  { id: 'charmparade', name: 'Charm Parade', hue: 312, tag: 'official', items: ['c1', 'x28', 'c2', 'x47', 'x46', 'x48'] },
-  { id: 'heavy', name: 'Heavy Metal', hue: 220, tag: 'official', items: ['x35', 'x15', 'x02', 'x36', 'x39', 'x37', 'x22', 'x23', 'x16', 'x01'] },
-  { id: 'gilded', name: 'Gilded Armory', hue: 60, tag: 'official', items: ['x13', 'x14', 'x32', 'x05', 'x16', 'x07', 'x01', 'x17', 'x25'] },
-  { id: 'aurora', name: 'Aurora Vault', hue: 168, tag: 'official', items: ['x30', 'x14', 'x13', 'x28', 'x48', 'x46', 'r6', 'x17', 'x20', 'x25'] },
-  { id: 'knifeedge', name: 'Knife Edge', hue: 355, tag: 'official', items: ['x26', 'k1', 'x27', 'k2', 'x25', 'k3'] },
-  { id: 'fox33', name: '33% Origami Fox', hue: 18, tag: '33%', odds: { x28: 0.33, x44: 0.34, x43: 0.33 } },
-  { id: 'blade20', name: '20% Tide Knife', hue: 195, tag: '20%', odds: { x26: 0.2, x42: 0.5, x08: 0.3 } },
-  { id: 'cosmic5', name: '5% Cosmic', hue: 250, tag: '5%', odds: { x18: 0.05, x13: 0.25, x09: 0.7 } },
-];
+/** Every item the page knows right now: the ones inside the cases, plus whatever src/catalogue.ts has loaded since. */
+export const ITEM: Record<string, Item> = {};
+export const ITEMS: Item[] = [];                                  // the items inside the cases, cheapest first
+/** Add an item to the registry (a no-op if it is already there). Returns the registered item. */
+export function registerItem(it: Item): Item {
+  const have = ITEM[it.id];
+  if (have) return have;
+  ITEM[it.id] = it;
+  return it;
+}
+for (const r of cat.items as any[]) ITEMS.push(registerItem({ id: r.id, weapon: r.weapon, skin: r.skin, type: r.type, rarity: r.rarity as Rarity, value: r.value, img: itemImage(r.img), wear: r.wear, st: !!r.st, souv: !!r.souv }));
+ITEMS.sort((a, b) => a.value - b.value || (a.id < b.id ? -1 : 1));
 
+/** How many priced items the full catalogue has (the page can search all of them on the Upgrade page). */
+export const CATALOGUE_TOTAL: number = (cat as any).total;
+/** The version of the catalogue and prices this page was built with. */
+export const CATALOGUE_VERSION: string = (cat as any).v;
 
-// Reward-only cases (opened for free from the Rewards hub, never bought).
-const REWARD_DEFS: CaseDef[] = [
-  { id: 'daily', name: 'Daily Crate', hue: 140, reward: true, items: ['p1', 's1', 'r1', 's2', 'p3', 'n1', 'c1', 'r3', 'r5'] },
-  { id: 'welcome', name: 'Welcome Crate', hue: 75, reward: true, items: ['p2', 'r1', 's2', 'p3', 'r2', 'c1', 'p4', 'k1'] },
-];
+/** An item for an id the page has not loaded yet: shown greyed out until src/catalogue.ts has fetched it. Never has a value, so nothing is ever sold or staked on it. */
+export const missingItem = (id: string): Item => ({ id, weapon: 'Loading…', skin: '', type: 'rifle', rarity: 'consumer', value: 0, wear: '', st: false });
+/** The item for an id, or a greyed-out stand-in while it is still being fetched. */
+export const itemOf = (id: string): Item => ITEM[id] ?? missingItem(id);
+/** "AK-47 | Redline (Field-Tested)" */
+export const itemName = (i: Item): string => `${i.st ? 'StatTrak™ ' : ''}${i.weapon}${i.skin ? ` | ${i.skin}` : ''}${i.wear ? ` (${WEAR_NAME[i.wear] ?? i.wear})` : ''}`;
 
 // Case box art (assets/cases/<id>.webp). Cases without a file fall back to the drawn crate in ui.js.
 const CASE_IMG = new Map<string, string>([...['starter', 'flip', 'neon', 'charmed', 'sniper', 'blade', 'high', 'wasteland', 'gearup', 'canyon', 'arcade', 'foundry', 'deeptide', 'blossom', 'relic', 'scopes', 'charmparade', 'heavy', 'gilded', 'knifeedge', 'fox33', 'daily', 'aurora'].map((id): [string, string] => [id, id]),
   // no dedicated art yet: borrow the closest crate
   ['phantom10', 'arcade'], ['blade20', 'deeptide'], ['cosmic5', 'aurora'], ['welcome', 'daily']]);
 
-const item = (id: string): Item => {
-  const it = ITEM[id];
-  if (!it) throw new Error(`Unknown item id: ${id}`);
-  return it;
-};
-
-// Prices are set so the expected value is HOUSE.cases (90%) of the price.
-function buildCase(def: CaseDef): Case {
-  const entries = def.odds
-    ? Object.entries(def.odds).map(([id, chance]) => ({ item: item(id), weight: chance } as CaseEntry))
-    : (def.items ?? []).map(id => ({ item: item(id), weight: 1 / Math.pow(item(id).value, 1.25) } as CaseEntry));
-  const total = entries.reduce((s, e) => s + e.weight, 0);
-  entries.forEach(e => { e.chance = e.weight / total; });
-  entries.sort((a, b) => b.item.value - a.item.value);
-  // Ticket ranges out of 100,000 (like the reference sites); the roll picks a ticket.
-  let t = 0;
-  entries.forEach((e, i) => { const n = i === entries.length - 1 ? 100000 - t : Math.max(1, Math.round(e.chance * 100000)); e.from = t; e.to = t + n - 1; t += n; });
-  const ev = entries.reduce((s, e) => s + e.chance * e.item.value, 0);
-  return { ...def, img: CASE_IMG.has(def.id) ? `assets/cases/${CASE_IMG.get(def.id)}.webp` : undefined, entries, ev, price: Math.round((ev / HOUSE.cases) * 100) / 100 };
-}
-
-export const CASES = CASE_DEFS.map(buildCase);
-export const REWARD_CASES = REWARD_DEFS.map(buildCase);
-export const CASE: Record<string, Case> = Object.fromEntries([...CASES, ...REWARD_CASES].map(c => [c.id, c]));
+// The cases, with their drop tables, prices and expected values, are generated (see the top of this file). A price keeps the 90% return: price = expected value / 0.9.
+const build = (c: any): Case => ({
+  id: c.id, name: c.name, hue: c.hue, tag: c.tag, reward: c.reward || undefined,
+  img: CASE_IMG.has(c.id) ? `assets/cases/${CASE_IMG.get(c.id)}.webp` : undefined,
+  entries: c.entries.map((e: any): CaseEntry => ({ item: ITEM[e.id] as Item, weight: e.chance, chance: e.chance, from: e.from, to: e.to })),
+  ev: c.ev, price: c.price,
+});
+const ALL = (cat.cases as any[]).map(build);
+export const CASES: Case[] = ALL.filter(c => !c.reward);
+export const REWARD_CASES: Case[] = ALL.filter(c => c.reward);
+export const CASE: Record<string, Case> = Object.fromEntries(ALL.map(c => [c.id, c]));
 
 /** Ticket number (0–99,999) for a roll, and the entry that owns it. */
 export const ticketOf = (f: number): number => Math.floor(f * 100000);

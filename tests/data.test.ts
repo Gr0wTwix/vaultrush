@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CASE, CASES, ITEM, ITEMS, REWARD_CASES, RARITY, entryForTicket, ticketOf } from '../src/data.js';
+import { CASE, CASES, ITEM, ITEMS, REWARD_CASES, RARITY, RARITY_ORDER, CATALOGUE_TOTAL, entryForTicket, ticketOf, isBigDrop, isHugeDrop, itemImage, itemOf, itemName } from '../src/data.js';
 import { HOUSE } from '../src/fair.js';
 
-describe('item catalog', () => {
-  it('has unique ids, positive values and a known rarity for every item', () => {
+describe('item catalog (the items inside the cases)', () => {
+  it('has unique ids, positive values and a known grade for every item', () => {
     expect(new Set(ITEMS.map(i => i.id)).size).toBe(ITEMS.length);
     for (const i of ITEMS) {
       expect(i.value).toBeGreaterThan(0);
@@ -11,8 +11,30 @@ describe('item catalog', () => {
       expect(ITEM[i.id]).toBe(i);
     }
   });
-  it('only gives wear to weapons and knives', () => {
-    for (const i of ITEMS) if (['charm', 'gear', 'tool'].includes(i.type)) expect(i.wear).toBe('');
+  it('is the real thing: every item has a weapon, a skin, a wear and a picture on the Steam CDN', () => {
+    for (const i of ITEMS) {
+      expect(i.id, i.id).toMatch(/^skin-/);
+      expect(i.weapon.length, i.id).toBeGreaterThan(0); expect(i.skin.length, i.id).toBeGreaterThan(0);
+      expect(i.img, i.id).toMatch(/^https:\/\/community\.akamai\.steamstatic\.com\/economy\/image\/.+\/256fx192f$/);
+      expect(['', 'FN', 'MW', 'FT', 'WW', 'BS']).toContain(i.wear);
+    }
+  });
+  it('is listed cheapest first and every item of every case is in it', () => {
+    for (let k = 1; k < ITEMS.length; k++) expect(ITEMS[k]!.value).toBeGreaterThanOrEqual(ITEMS[k - 1]!.value);
+    for (const c of [...CASES, ...REWARD_CASES]) for (const e of c.entries) expect(ITEMS).toContain(e.item);
+  });
+  it('knows how big the full catalogue is', () => { expect(CATALOGUE_TOTAL).toBeGreaterThan(10000); });
+  it('has the real item grades and colours in order', () => {
+    expect(RARITY_ORDER).toHaveLength(8);
+    for (const r of RARITY_ORDER) expect(RARITY[r].color).toMatch(/^#[0-9a-f]{6}$/);
+    expect(isBigDrop('covert')).toBe(true); expect(isBigDrop('milspec')).toBe(false); expect(isHugeDrop('covert')).toBe(false); expect(isHugeDrop('contraband')).toBe(true);
+  });
+  it('builds picture addresses, and a stand-in for an item that is not loaded yet', () => {
+    expect(itemImage('abc')).toBe('https://community.akamai.steamstatic.com/economy/image/abc/256fx192f');
+    expect(itemImage('https://example.com/x.png')).toBe('https://example.com/x.png');
+    const m = itemOf('skin-nope'); expect(m.value).toBe(0); expect(m.id).toBe('skin-nope');
+    expect(itemOf(ITEMS[0]!.id)).toBe(ITEMS[0]);
+    expect(itemName({ ...ITEMS[0]!, st: true, wear: 'FT', weapon: 'AK-47', skin: 'Redline' })).toBe('StatTrak\u2122 AK-47 | Redline (Field-Tested)');
   });
 });
 
@@ -39,9 +61,10 @@ describe('cases', () => {
 
   it('fixed-odds cases hit their advertised chances', () => {
     const fox = CASE.fox33!;
-    const chance = (id: string) => fox.entries.find(e => e.item.id === id)!.chance;
-    expect(chance('x28')).toBeCloseTo(0.33, 2);
-    expect(chance('x44')).toBeCloseTo(0.34, 2);
+    expect(fox.entries.map(e => e.chance).sort()).toEqual([0.33, 0.33, 0.34]);
+    expect(fox.entries.find(e => e.item.skin === 'Redline')!.chance).toBeCloseTo(0.33, 10);
+    const p10 = CASE.phantom10!.entries.map(e => e.chance).sort((x, y) => x - y);
+    expect(p10[0]).toBeCloseTo(0.1, 10); expect(p10[2]).toBeCloseTo(0.6, 10);
   });
 
   it('maps a roll to the entry that owns its ticket, at both ends', () => {

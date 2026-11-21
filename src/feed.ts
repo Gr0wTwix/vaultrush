@@ -1,5 +1,6 @@
 // Live drops + live bets. Simulated bots stand in for the WebSocket feed a real backend would push.
 import { CASES, ITEM, randomBot } from './data.js';
+import { ensureItems } from './catalogue.js';
 import { listenFeed, shareBet, shareDrop } from './live.js';
 import { emit, recordBet, save, state } from './state.js';
 import type { Drop, Item, LiveBet } from './types.js';
@@ -51,7 +52,10 @@ function simBet(): void {
 
 export function startFeed(): void {
   // Real players' bets and drops (live games only): shown like any other, never re-shared and never counted as mine.
-  listenFeed(b => pushBet({ ...b, mine: false }), d => { const item = ITEM[d.itemId]; if (item) pushDrop({ user: d.user, item, source: d.source }); });
+  listenFeed(b => pushBet({ ...b, mine: false }), d => {
+    const show = (): void => { const item = ITEM[d.itemId]; if (item) pushDrop({ user: d.user, item, source: d.source }); };
+    if (ITEM[d.itemId]) show(); else void ensureItems([d.itemId]).then(show);       // an item from an upgrade is not bundled: fetch it first
+  });
   for (let i = 0; i < 16; i++) simDrop();
   for (let i = 0; i < 14; i++) simBet();
   setInterval(simDrop, 2300);

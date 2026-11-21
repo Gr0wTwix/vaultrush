@@ -20,10 +20,12 @@ describe('the lightning button on the case page', () => {
   let el: HTMLElement, leave: (() => void) | void;
   const demo = async (ms: number): Promise<boolean> => { (el.querySelector('#demoBtn') as HTMLElement).click(); await vi.advanceTimersByTimeAsync(ms); return !!el.querySelector('.reel-won'); };
   beforeEach(() => {
+    // the test browser loads no pictures: stand in for one that has them in its cache (the page waits for the pictures before a reel spins)
+    vi.stubGlobal('Image', class { onload: (() => void) | null = null; onerror: (() => void) | null = null; decoding = ''; referrerPolicy = ''; set src(_v: string) { queueMicrotask(() => this.onload?.()); } });
     vi.useFakeTimers(); document.body.innerHTML = '<div id="toasts"></div>'; resetAccount();
     el = document.createElement('div'); document.body.append(el); leave = renderCase(el, 'starter');
   });
-  afterEach(() => { if (typeof leave === 'function') leave(); vi.useRealTimers(); document.body.innerHTML = ''; });
+  afterEach(() => { if (typeof leave === 'function') leave(); vi.useRealTimers(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
   it('sits right after Demo spin, is off by default, and there is no speed selector any more', () => {
     const demoBtn = el.querySelector('#demoBtn') as HTMLElement, fast = el.querySelector('#fastBtn') as HTMLElement;

@@ -220,7 +220,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .reel-cell.bare::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: 5px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--rc), transparent); opacity: .65; pointer-events: none; }
 .reel-x .reel-cell.bare { height: 150px; }
 .bare-glow { position: absolute; left: 50%; top: 46%; width: min(70%, 150px); height: min(56%, 76px); transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(ellipse at center, color-mix(in srgb, var(--rc) 24%, transparent), transparent 72%); pointer-events: none; }
-.reel-cell.bare .item-art { position: relative; width: 82%; max-width: 120px; height: 56px; filter: drop-shadow(0 8px 12px rgba(0,0,0,.55)); }
+.reel-cell.bare .item-art { position: relative; width: 92%; max-width: 150px; height: 88px; filter: drop-shadow(0 8px 12px rgba(0,0,0,.55)); }
 .bare-meta { position: relative; display: flex; flex-direction: column; align-items: center; font-size: 11px; line-height: 1.2; opacity: 0; transform: translateY(4px); transition: .3s; max-width: 100%; }
 .bare-meta b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .reel-bare.settled .reel-cell.bare:not(.reel-won) { opacity: .28; transform: scale(.9); }
@@ -230,6 +230,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .reel-bare .reel-won .item-art { animation: won 1s ease; }
 @keyframes glowPulse { 50% { opacity: .7; } }
 .reel-bare.reel-y .reel-cell.bare { height: 118px; }
+.reel-bare.reel-y .reel-cell.bare .item-art { height: 62px; }
 .reel-bare { background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.04), transparent 70%), var(--bg2); }
 
 /* battle: reels on top, player bar, separators */
@@ -336,7 +337,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .lu-user, .lu-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lu-name { color: var(--muted); }
 .lu-item { display: grid; place-items: center; height: 30px; border-radius: 8px; background: radial-gradient(circle, color-mix(in srgb, var(--rc) 30%, transparent), transparent 70%); }
-.lu-item .item-art { width: 50px; height: 22px; }
+.lu-item .item-art { width: 50px; height: 34px; }
 .lu-arrow { color: var(--dim); }
 .lu-mult { font-family: var(--display); }
 .lu-res { font: 800 11px var(--display); text-align: right; }
@@ -450,7 +451,7 @@ button.mini-case:hover { box-shadow: 0 0 0 2px var(--line2); }
 .slot.active { border-color: rgba(198,255,61,.4); }
 .slot.active > b { color: var(--muted); }
 .slot.filled { background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 14%, var(--panel2)), var(--panel2)); border-bottom: 3px solid var(--rc); animation: popIn .3s cubic-bezier(.2,.9,.3,1.4); }
-.slot.filled .item-art { width: 84%; height: 48px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+.slot.filled .item-art { width: 84%; height: 56px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
 .slot .slot-n { position: absolute; top: 6px; left: 8px; font: 800 13px var(--display); color: var(--muted); letter-spacing: 0; text-transform: none; }
 .slot .slot-name { font: 700 11px var(--body); color: var(--text); max-width: 92%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slot .money { font-size: 12px; }
@@ -473,8 +474,8 @@ button.mini-case:hover { box-shadow: 0 0 0 2px var(--line2); }
 
 /* item images (AI renders): keep aspect, centred, with a soft drop shadow like the SVG art */
 img.item-art { object-fit: contain; display: block; margin: 0 auto; filter: drop-shadow(0 8px 12px rgba(0,0,0,.55)); }
-.slot.filled img.item-art { height: 52px; }
-.lu-item img.item-art { width: 50px; height: 24px; }
+.slot.filled img.item-art { height: 60px; }
+.lu-item img.item-art { width: 50px; height: 34px; }
 
 /* ===== Double v2 (header card, square tiles, bet bar, lanes) ===== */
 .dbl-head { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 18px; padding: 16px 20px; }
@@ -752,3 +753,8 @@ img.item-art { object-fit: contain; display: block; margin: 0 auto; filter: drop
 .pf-rtp td:nth-child(3) { min-width: 130px; }
 
 .cf-livetag { color: var(--accent); font-weight: 700; }
+
+/* Upgrade: filters above the target list, and the "show more" row at its end */
+.target-filters { gap: 8px; margin-bottom: 10px; }
+.target-filters select { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
+.contents .more-row { grid-column: 1 / -1; display: flex; justify-content: center; padding: 6px 0 2px; }
