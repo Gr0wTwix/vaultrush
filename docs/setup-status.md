@@ -13,7 +13,7 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 | **Real CS2 catalogue and case art** | Deployed; the database holds all 14,411 items and the 27 cases | Owner ran `0014`/`0015` and confirmed; pictures and files checked on the live site |
 | **Steam sign-in functions** | `steam-login` and `close-login` are deployed and answer | Checked: they respond (400 without Steam's parameters, 401 without a signed-in user) |
 | **Site controls** | Maintenance is **off**, no notice, no game switched off, sign-ups open | Checked: the public status function of the live database |
-| **GitHub CI** | Runs the type-check, tests and build on pushes to **every branch** and on pull requests (widened on 2026-11-21; before that only `main` and pull requests, so nothing since PR #2 had been checked) | The first run on the `compliance` branch is being verified (see the next update of this page) |
+| **GitHub CI** | Runs the type-check, tests and build on pushes to **every branch** and on pull requests (widened on 2026-11-21; before that only `main` and pull requests, so nothing since PR #2 had been checked) | Checked: the first run on the `compliance` branch (commit `34412dc`, 2026-11-21) passed on GitHub's servers: type-check, all 664 tests and the build, in about 40 seconds (`gh run list`) |
 | **n8n alerts and the daily report** | On. Alerts reach the owner's Discord; the report works. n8n runs on the owner's PC (Docker, a gate, an ngrok tunnel) | Owner confirmed both messages arrived |
 | **Operator alerts in the database** | Switched on (`ops_settings.enabled`) with the webhook address and secret | Owner confirmed the test message |
 
