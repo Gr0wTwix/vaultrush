@@ -1,7 +1,7 @@
 // The balance / inventory chip in the top bar glows green only when something was ADDED. Before, any saved state made it glow, whatever the animation speed.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QUIET_MS, bumps, initBarFx } from '../src/barfx.js';
-import { emit, resetAccount, state } from '../src/state.js';
+import { emit, on, resetAccount, setServerWallet, state, xpForLevel } from '../src/state.js';
 
 describe('which changes deserve the glow', () => {
   const p = { bal: 100, inv: 2 };
@@ -24,11 +24,11 @@ describe('the chip in the page', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    document.body.innerHTML = '<a class="balance"><span id="bal">100.00</span><span class="inv-count" id="invCount"><i></i><b>0</b></span></a>';
+    document.body.innerHTML = '<a class="balance"><span id="bal">100.00</span><span class="inv-count" id="invCount"><i></i><b>0</b></span></a><button class="me"><span class="me-lvl" id="meLvl">0</span></button>';
     resetAccount(); state.balance = 100; state.ui.fx = false; items = 0;
     stop = initBarFx(document, () => items);
   });
-  afterEach(() => { stop(); vi.useRealTimers(); document.body.innerHTML = ''; });
+  afterEach(() => { stop(); setServerWallet(false); vi.useRealTimers(); document.body.innerHTML = ''; });
 
   it('does not glow when the state is saved but nothing changed (a speed setting, a bet that took nothing, any page saving)', async () => {
     for (let i = 0; i < 5; i++) { emit('state', state); await tick(); }
@@ -83,5 +83,39 @@ describe('the chip in the page', () => {
       await change(state.balance + 10);
       expect(pill().classList.contains('bump-up'), speed).toBe(true);
     }
+  });
+});
+
+describe('the level badge on the avatar', () => {
+  let stop: () => void;
+  const badge = (): string => document.getElementById('meLvl')!.textContent ?? '';
+  const sync = async (): Promise<void> => { emit('state', state); await vi.advanceTimersByTimeAsync(5); };
+  beforeEach(() => {
+    vi.useFakeTimers(); resetAccount(); state.xp = 0; state.ui.fx = false;
+    document.body.innerHTML = '<a class="balance"><span id="bal">0.00</span><span class="inv-count" id="invCount"><b>0</b></span></a><button class="me"><span class="me-lvl" id="meLvl">0</span></button>';
+    stop = initBarFx(document, () => 0);
+  });
+  afterEach(() => { stop(); setServerWallet(false); vi.useRealTimers(); document.body.innerHTML = ''; });
+
+  it('shows the account\'s real level when its XP arrives from the server (it stayed at the old level before)', async () => {
+    setServerWallet(true); emit('auth', true);
+    state.xp = 234_187; await sync();                                          // level 153, as the account window says
+    expect(badge()).toBe('153');
+  });
+  it('announces a level-up that happens while playing (server wallet), once, and never for a freshly loaded account', async () => {
+    setServerWallet(true);
+    const seen: number[] = []; const off = on<number>('levelup', l => seen.push(l));
+    emit('auth', true); state.xp = 234_187; await sync();                      // loading the account: no announcement
+    expect(seen).toEqual([]);
+    await vi.advanceTimersByTimeAsync(3000);
+    state.xp = xpForLevel(154) + 5; await sync(); await sync();
+    expect(seen).toEqual([154]); expect(badge()).toBe('154');
+    off();
+  });
+  it('without the server wallet debit() announces level-ups itself, so the bar only keeps the badge right', async () => {
+    const seen: number[] = []; const off = on<number>('levelup', l => seen.push(l));
+    state.xp = xpForLevel(5); await sync();
+    expect(seen).toEqual([]); expect(badge()).toBe('5');
+    off();
   });
 });

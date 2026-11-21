@@ -1,7 +1,7 @@
 // The balance and inventory chip in the top bar. It glows green only when something was ADDED: coins (a sale, a win, a reward) or an item. Nothing else
 // makes it glow: not a bet, not a setting, not a page that merely saved the player's state. Loading an account (signing in, the first sync with the server)
 // is not a gain either, so it is quiet. One animation length for everything, so it never depends on the animation speed of a game.
-import { on, state } from './state.js';
+import { emit, isServerWallet, level, on, state } from './state.js';
 import { fmt } from './ui.js';
 
 /** Whether a change deserves the green glow. Only an increase does, and only when it is not just an account being loaded. */
@@ -16,7 +16,7 @@ export const QUIET_MS = 2500, COUNT_MS = 450;
  * inventory glow arrives when the reel stops, not when the server answers).
  */
 export function initBarFx(root: ParentNode, invCount: () => number): () => void {
-  let shown = state.balance, shownInv = invCount(), quietUntil = 0, animId = 0, timer: ReturnType<typeof setTimeout> | undefined;
+  let shown = state.balance, shownInv = invCount(), shownLevel = level(), quietUntil = 0, animId = 0, timer: ReturnType<typeof setTimeout> | undefined;
   const quiet = (): void => { quietUntil = Date.now() + QUIET_MS; };
 
   const apply = (): void => {
@@ -40,6 +40,13 @@ export function initBarFx(root: ParentNode, invCount: () => number): () => void 
         };
         requestAnimationFrame(step);
       }
+    }
+    // The level badge on the avatar always shows the account's real level (XP comes from the server now, so nothing else tells the bar it changed).
+    const lvl = level();
+    if (lvl !== shownLevel) {
+      const was = shownLevel; shownLevel = lvl;
+      const badge = root.querySelector('#meLvl'); if (badge) badge.textContent = String(lvl);
+      if (loud && lvl > was && isServerWallet()) emit('levelup', lvl);          // (without the server wallet, debit() announces level-ups itself)
     }
     if (inv !== shownInv) {
       shownInv = inv;

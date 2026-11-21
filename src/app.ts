@@ -183,7 +183,7 @@ function renderTopbar() {
   };
   tickFree(); setInterval(tickFree, 1000);
 
-  initBarFx(document, visibleInventoryCount);      // the balance and inventory chip: green glow only when coins or an item were added
+  initBarFx(document, visibleInventoryCount);      // the balance and inventory chip (green glow only for gains) and the level badge
 }
 
 const CASE_BY_NAME = new Map([...CASES, ...REWARD_CASES].map(c => [c.name, c]));
