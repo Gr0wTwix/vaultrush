@@ -1,6 +1,6 @@
 # Vaultrush backend (Supabase)
 
-Optional. Without it the site runs entirely in the browser. With it, a signed-in player's wallet, bets and seeds live in Postgres.
+The live site uses it (the two Supabase variables are set; see [../docs/setup-status.md](../docs/setup-status.md)). Without it (a fresh clone with no `.env`) the site runs entirely in the browser. With it, a signed-in player's wallet, items, rewards, bets and seeds live in Postgres.
 
 ## What is implemented
 
@@ -17,8 +17,12 @@ Optional. Without it the site runs entirely in the browser. With it, a signed-in
 | Real leaderboard | view `daily_race` |
 | Realtime chat (database side) | `chat_messages` and the `supabase_realtime` publication |
 | **Live multiplayer** (case battles and coinflip between real players, secret seed revealed at the start) | `migrations/0002_live.sql`: `live_battles`, `live_coinflips`, `create_/join_/leave_live_battle()`, `call_live_bot()`, `create_/join_/cancel_live_coinflip()`; tested in `tests/live-db.test.ts`. See `../docs/live-multiplayer.md` |
+| **Server wallet**: coins, items and rewards in the database; every game (cases, upgrade, plinko, mines, coinflip, battles, crash, double) and every reward is drawn and paid by the database | `migrations/0008` to `0013` (see `../docs/server-wallet.md`) |
+| **Real CS2 catalogue**: all priced items, the cases and their drop tickets | `migrations/0014_real_items_*.sql`, `0015_real_cases.sql` (generated, see `../docs/real-catalogue.md`) |
+| **Admin and site controls**: roles, permissions, audit log, maintenance, notice, game switches, sign-ups, countries | `migrations/0006_admin.sql`, `0007_site_controls.sql` (see `../docs/admin-site.md`) |
+| **Operator alerts and a daily report** for n8n (off until switched on, and now switched on in the live project; the settings table is readable by nobody but the owner) | `migrations/0016_ops_events.sql`: `ops_settings`, `ops_notify()`, `ops_daily_report()` (see `../docs/n8n.md`) |
 
-Only **Crash** runs on the server so far. Other games, the full limit set (weekly/monthly loss, time limits), KYC and AML on the server, and wiring the chat UI to the realtime table are the next steps.
+Every game and reward now runs on the server (migrations 0008 to 0012, see ../docs/server-wallet.md). Still to come: the full limit set (weekly/monthly loss, time limits), KYC and AML on the server, and wiring the chat UI to the realtime table are the next steps.
 
 ## Set it up
 

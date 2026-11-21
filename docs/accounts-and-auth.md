@@ -26,18 +26,20 @@ The top-right **Log in** button opens the popup. Signing out is in the avatar me
 
 ## Two modes
 
-### 1. No backend (default): browser accounts
+The mode is chosen when the site is built, by two variables. **The live site and the owner's local setup run in Supabase mode (cloud accounts):** `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set in `.env` and in Vercel Production (checked 2026-11-21, see [setup-status.md](setup-status.md)). The browser-only mode is the fallback for when they are **not** set: a fresh clone with no `.env`, and the test run (which blanks them on purpose).
+
+### 1. With Supabase: cloud accounts (what the live site uses)
+
+Email and password, Google and Steam all go through Supabase Auth. With the server wallet (migrations 0008 to 0012) the wallet, items, rewards, bets and seeds live in Postgres and every game runs on the server (see [server-wallet.md](server-wallet.md)). Setup is in [deploy-and-workflow.md](deploy-and-workflow.md) and [../supabase/README.md](../supabase/README.md).
+
+### 2. No backend: browser accounts (the fallback)
 
 Used when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are not set.
 
 - `accounts.ts` stores accounts in `localStorage`: username, email, a PBKDF2-SHA256 hash (200,000 iterations, per-account salt). After 5 wrong attempts a 30-second lockout applies. The same generic error is shown for an unknown user and a wrong password.
-- Each account has its own state and fairness keys. Registering starts a fresh account (100 play coins); old guest progress is not carried over.
+- Each account has its own state and fairness keys. Registering starts a fresh browser account (100 play coins; cloud accounts start with 0); old guest progress is not carried over.
 - Google and Steam say they need a backend.
 - This is a demonstration. Anyone with access to the browser can edit its storage, so it protects nothing.
-
-### 2. With Supabase: cloud accounts
-
-Used when the two Supabase variables are set. Email and password, Google and Steam all go through Supabase Auth. Wallet, bets and seeds can live in Postgres (only Crash runs server-side so far). Setup is in [deploy-and-workflow.md](deploy-and-workflow.md) and [../supabase/README.md](../supabase/README.md).
 
 ## After the first cloud login
 

@@ -52,7 +52,9 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 ## One-time setup (you do this)
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql` (done), then `0007_site_controls.sql` (new).
+**Status (2026-11-21):** the SQL in step 1 is run. That the Owner role has been created (step 2) and that `http://localhost:5174` is allowed for sign-in (step 3) is **not confirmed**; the admin site has not been deployed and runs only on the owner's PC. See [setup-status.md](setup-status.md).
+
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -90,3 +92,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 ## Not built yet
 
 The wallet tools of step D (owner adjustments, ledger and bets viewers; the server wallet they sit on is built, see [server-wallet.md](server-wallet.md)). Everything else in the plan: dashboard, players, account actions, chat moderation, live rooms, round control (the rest of step B); the catalogue editor (C); the full server wallet (D); rewards and operations (E); compliance, fairness, economy, risk signals and analytics (F); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
+
+## Alerts to the owner
+
+If the operator alerts are on (`0016_ops_events.sql`, see [n8n.md](n8n.md)), every row written to the audit log also sends an "admin action" alert (what, who, their role, the target and the reason; never the before and after values), and switching maintenance mode on or off sends a "maintenance" alert, whether it was done from the Site controls page or by SQL. Nothing is sent until the owner switches the alerts on.

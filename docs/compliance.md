@@ -77,4 +77,6 @@ Rules for editing these pages:
 - Every sentence must match the app. If a feature changes (what is stored, who can see it, what is deleted), update the page and bump `TERMS_VERSION` in `signup.ts` (now `2026-11-21`).
 - `tests/legal.test.ts` checks that each page renders, every footer link has a route, the company stays fictional, and the key honest statements are present.
 
+The Privacy Policy lists the automation service (n8n) among the service providers: when the owner switches the operator alerts on, it receives only a player name, a game and amounts, never e-mail addresses or IP addresses (see [n8n.md](n8n.md)). Keep that sentence true.
+
 Account deletion and live games: `0003_live_erasure.sql` makes `delete_account()` also replace the player's name in live coinflips and battle seats, so the Privacy Policy's claim is true. It must be run once in the Supabase SQL editor after `0002_live.sql`.

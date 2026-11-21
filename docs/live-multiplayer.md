@@ -16,6 +16,8 @@ Added 2026-11-21. Signed-in cloud players can now play **case battles** and **co
 
 Simulated opponents, lobbies, chat lines and coin rain are shown only when live games are **off** (signed out, no cloud backend, or `0002_live.sql` not applied yet).
 
+**Status (2026-11-21):** on the live project `0002` and `0005` (and everything up to `0016`) are applied, so signed-in players get the real lobbies and shared rounds. A test with two real people at once has **not** been confirmed (see [setup-status.md](setup-status.md)).
+
 ## Turning it on
 
 1. Cloud accounts must already work (see [deploy-and-workflow.md](deploy-and-workflow.md)).

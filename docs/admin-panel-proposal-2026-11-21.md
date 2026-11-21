@@ -273,6 +273,8 @@ Each module lists: **Shows**, **Actions**, **Data**, **Today**, **Size**, **Note
 - **Data:** names are in code; new `bots` table and counters. **Today:** New tables. **Size:** S.
 
 #### 23. Announcements and notifications
+> **Update 2026-11-21:** owner-facing alerts and a daily report now exist, through n8n and a chat channel (see [n8n.md](n8n.md)). Player-facing notifications are unchanged: in-app only, as decided.
+
 - **Shows:** scheduled and past announcements.
 - **Actions:** banner, toast to everyone online, targeted message to one player (for example a warning), e-mail digest (needs an e-mail provider), web push (needs a provider; the references use OneSignal and Klaviyo).
 - **Data:** `announcements` table plus realtime. **Today:** New tables. **Size:** M for in-app; L if e-mail and push are added.

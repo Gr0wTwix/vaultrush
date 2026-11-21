@@ -2,6 +2,8 @@
 
 The items in the cases, the Upgrade page, the inventory and the live feed are the real Counter-Strike 2 weapon skins, knives and gloves: real names, grades, wear levels and pictures, with a price in coins. They replace the invented items the site started with. The coins are still play money.
 
+**Status (2026-11-21):** deployed. `0014_real_items_1..5.sql` and `0015_real_cases.sql` have been run on the live project (owner confirmed) and the page is live; the case pictures and the home tile are in too. Open points: pictures are hotlinked from Valve's servers and the free-coin amounts were not rescaled (see [setup-status.md](setup-status.md)).
+
 ## Where the data comes from
 
 | What | Source | Notes |
@@ -50,3 +52,4 @@ Then commit, deploy the site, and run the new SQL files in order. The page and t
 - **Rarity.** Grades are CS2's (Consumer ... Contraband) with the game's colours. A big celebration on a drop needs Covert or higher and a win of at least 5x the price, or Extraordinary / Contraband.
 - **Prices move.** Values are a snapshot (`manifest.json` has the time). A 5-minute-old Skinport price is as fresh as the API gives.
 - **Lowest listing is not "worth".** Rare or low-volume items can have a thin or odd lowest listing; the loader keeps it as is and an item with no listing has no price.
+- **Pictures of the cases** are separate from the item pictures: `public/assets/cases/<case id>.webp` (one per case, 640 x 640, transparent) and the home page tiles in `public/assets/home/`; see [architecture.md](architecture.md) (Assets).

@@ -2,13 +2,15 @@
 
 An original skin-game site prototype. **Play money only**: coins can't be bought or withdrawn.
 
-- **Games**: case opening (1–6 at once, 3 speeds, ticket ranges), case battles (6 formats incl. 2v2/3v3, 7 modes), crash (partial cash-outs), double (Triple Green pool), plinko, mines (4×4–8×8), multi-coin flip, upgrade (under/over).
+- **Games**: case opening (1–6 at once, a normal and a fast open, ticket ranges), case battles (6 formats incl. 2v2/3v3, 7 modes), crash (partial cash-outs), double (Triple Green pool), plinko, mines (4×4–8×8), multi-coin flip, upgrade (under/over).
 - **Rewards**: levels/XP, instant/daily/weekly rakeback, welcome and daily free cases, level cases every 10 levels, promo codes, 7-day login streak, daily race leaderboard.
 - **Platform**: live drops and bets, chat with coin rain, an account window (profile, history, transactions, settings, self-exclusion), and a provably fair seed system with a verifier for every game.
+- **Items**: 14,411 real Counter-Strike 2 skins with pictures and prices (Skinport, at 1.64 coins per dollar); the Upgrade page searches them all (see [docs/real-catalogue.md](docs/real-catalogue.md)).
+- **Operations**: for cloud accounts the coins, items and every game run on the server (Supabase); an admin site (on localhost for now); operator alerts and a daily report through n8n, switched on and running on the owner's PC ([docs/n8n.md](docs/n8n.md)). What is set up and what is not: [docs/setup-status.md](docs/setup-status.md).
 
 ## Stack
 
-TypeScript, [Vite](https://vite.dev) and [Vitest](https://vitest.dev). No framework: views are plain modules that render into the page, and state is kept in `localStorage`.
+TypeScript, [Vite](https://vite.dev) and [Vitest](https://vitest.dev). No framework: views are plain modules that render into the page, and state is kept in `localStorage` for browser accounts and in the database for cloud accounts.
 
 ## Run it
 
@@ -23,7 +25,8 @@ npm run dev        # http://localhost:5173
 | `npm run build` | Type-checks, then builds the site into `dist/` |
 | `npm run preview` | Serves the production build locally |
 | `npm run typecheck` | `tsc` with the loose config (whole app) and the strict config (game core) |
-| `npm test` | Unit tests for the fairness maths, odds tables, wallet rules and verifier |
+| `npm test` | About 660 tests: the fairness maths, odds tables, wallet rules and verifier, plus in-process Postgres tests of every migration |
+| `npm run build:catalogue` | Refreshes the CS2 items, prices and cases (see [docs/real-catalogue.md](docs/real-catalogue.md)) |
 
 Node 22.12 or newer is required.
 
@@ -33,7 +36,9 @@ Node 22.12 or newer is required.
 index.html            app shell (Vite entry)
 public/assets/        images served as-is: cases, home
 public/catalogue/     the whole CS2 item catalogue (search index and item files), loaded on demand; generated
-n8n/                  importable n8n workflows: operator alerts and a daily report (docs/n8n.md)
+n8n/                  importable n8n workflows and the Docker setup: operator alerts and a daily report (docs/n8n.md)
+scripts/              build-catalogue.mjs: downloads the CS2 items and prices and writes the catalogue, cases and SQL
+supabase/             SQL migrations 0001 to 0016 and the Edge Functions (docs/architecture.md)
 src/app.ts            router, sidebar, top bar, live-drop ticker, chat button
 src/types.ts          shared domain types
 src/fair.ts           provably fair (HMAC-SHA256) + every game's maths and payout tables   [strict]
@@ -45,7 +50,7 @@ src/race.ts           daily race standings (simulated rivals) and prize payout  
 src/feed.ts           simulated live drops and bets (stand-in for a WebSocket feed)         [strict]
 src/account.ts        account window; src/chat.ts simulated chat and coin rain
 src/fx.ts, sfx.ts     canvas particle effects and generated Web Audio sounds
-src/ui.ts, art.ts     shared UI helpers, item and case art
+src/ui.ts, art.ts     shared UI helpers and case pictures; item pictures
 src/views/*.ts        one file per page
 src/css/*.css         styles, bundled by Vite
 tests/                Vitest suites
@@ -59,7 +64,7 @@ Files marked **[strict]** are checked with `strict: true` (`tsconfig.strict.json
 
 ## Deploying
 
-`vercel.json` runs `npm ci` and `npm run build` and serves `dist/`. The repository also has a GitHub Actions workflow (`.github/workflows/ci.yml`) that type-checks, tests and builds every push.
+`vercel.json` runs `npm ci` and `npm run build` and serves `dist/`. The repository also has a GitHub Actions workflow (`.github/workflows/ci.yml`) that type-checks, tests and builds every push to any branch and every pull request (see [docs/setup-status.md](docs/setup-status.md)).
 
 ## Going to production
 
@@ -67,4 +72,4 @@ Move every outcome and the server seed to a backend (Node + Postgres + Redis + W
 
 ## Documentation
 
-How it is built, how accounts and Google/Steam sign-in work, the compliance tooling, deployment steps and the project history are in [docs/](docs/README.md).
+What is set up and what is not ([docs/setup-status.md](docs/setup-status.md)), how it is built, how accounts and Google/Steam sign-in work, the compliance tooling, deployment steps and the project history are in [docs/](docs/README.md).

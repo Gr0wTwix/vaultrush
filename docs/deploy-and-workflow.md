@@ -1,18 +1,20 @@
 # Deploy and workflow
 
+What is actually set up on this project (and what is not) is listed in [setup-status.md](setup-status.md); this page explains how to do each step.
+
 ## Everyday commands
 
 | Command | Use |
 |---|---|
 | `npm run dev` | Dev server at http://localhost:5173 (restart it after changing `.env`) |
-| `npm test` | All tests (about 250) |
+| `npm test` | All tests (about 660) |
 | `npm run typecheck` | Loose and strict TypeScript |
 | `npm run build` | Type-check, then build to `dist/` |
 | `npm run build:catalogue` | Download the CS2 item list and Skinport prices and regenerate `public/catalogue/`, `src/catalogue/cases.generated.json` and `supabase/migrations/0014_*` and `0015_*` (see [real-catalogue.md](real-catalogue.md)) |
 | `npm run dev:admin` | The separate admin site at http://localhost:5174 |
 | `npm run build:admin` | Build the admin site to `dist-admin/` |
 
-CI (`.github/workflows/ci.yml`) runs the tests, type-checks and build on every push and pull request.
+CI (`.github/workflows/ci.yml`) runs the type-check, tests and build on pushes to **every branch** and on pull requests; a newer push to the same branch cancels the run still going. Until 2026-11-21 it ran only on pushes to `main` and on pull requests, so nothing between PR #2 and that date had been checked by CI (the tests were run locally each time). Look at the results with `gh run list`.
 
 Tests always run **without** a backend, whatever is in `.env`: `vite.config.ts` blanks the three variables for the test run.
 
@@ -24,13 +26,15 @@ Tests always run **without** a backend, whatever is in `.env`: `vite.config.ts` 
 | `VITE_SUPABASE_ANON_KEY` | The **publishable** key (`sb_publishable_...`) or the legacy anon key. Both are safe in the browser |
 | `VITE_STEAM_LOGIN` | `on` once the `steam-login` function is deployed |
 
-Locally they go in `.env` (gitignored). On Vercel they are project environment variables for Production. Vite reads them at build time, so changing them needs a rebuild or redeploy.
+On this project all three are set both locally and in Vercel Production. Locally they go in `.env` (gitignored). On Vercel they are project environment variables for Production. Vite reads them at build time, so changing them needs a rebuild or redeploy.
 
 **Never put the `service_role` key or a `sb_secret_...` key in the site, in `.env`, or in the repository.** Only Edge Functions use the service role, and Supabase injects it for them.
 
 ## Supabase setup (once per project)
 
 1. Create a project. In the create form, leave "Enable Data API" on and turn **off** "Automatically expose new tables" (the migration sets its own grants and row-level security).
+On this project's database migrations `0001` to `0016` have all been run; the notes under each step say what a database that has **not** run it would do.
+
 2. SQL editor: run `supabase/migrations/0001_core.sql`. A "destructive operations" warning is expected because the script revokes default grants.
    Then run `supabase/migrations/0002_live.sql` (live battles, coinflip and the realtime tables; see [live-multiplayer.md](live-multiplayer.md)). The site works without it and keeps the simulated lobbies.
    Then run `supabase/migrations/0003_live_erasure.sql` (account deletion also removes the name from live games; the Privacy Policy relies on it).
@@ -67,6 +71,23 @@ Check afterwards: the deployment is Ready and aliased to the production domain; 
 
 Vercel environment variables can be listed with `npx vercel env ls production` and added with `vercel env add NAME production`.
 
+## n8n (operator alerts and the daily report)
+
+The database file is `supabase/migrations/0016_ops_events.sql`; the setup, security and what is sent are in [n8n.md](n8n.md). To run n8n on your own PC (Docker Desktop):
+
+| Command (from the `n8n` folder) | Use |
+|---|---|
+| `docker compose --profile tunnel up -d` | Start n8n, the gate and the ngrok tunnel (needs `n8n/.env`, copied from `n8n/.env.example`) |
+| `docker compose --profile tunnel down` | Stop them (workflows and credentials stay in a Docker volume) |
+| `docker compose logs n8n --tail 50` | See what n8n is doing |
+| `docker compose pull` then `up -d` | Update n8n (after changing the pinned version in `docker-compose.yml` and testing the workflows) |
+
+`n8n/.env` holds the n8n encryption key and the ngrok token: it is gitignored, never commit it, and keep a copy somewhere safe (without the key n8n cannot read its saved credentials). Alerts only arrive while the PC and Docker are running.
+
+## Replacing pictures
+
+Case pictures: `public/assets/cases/<case id>.webp`, 640 x 640, transparent. Home game tiles: `public/assets/home/<name>.webp`, 480 x 340. Replace the file (same name), run the tests, deploy. Details in [architecture.md](architecture.md) (Assets).
+
 ## Git and GitHub
 
 - Branch per piece of work, pull request into `main`, CI must pass.
@@ -87,3 +108,8 @@ Before installing any skill, plugin, slash command, hook or MCP server, review i
 - `crypto.getRandomValues` accepts at most 65,536 bytes per call; the RNG helpers chunk.
 - Fake toggles are not allowed: every setting in the UI must change real behaviour.
 - A signed-out preview tab can show "page navigated" errors if the page reloads inside a script; re-run the check on the new page instead.
+- A test that counts real animation frames or waits on the real clock fails on a busy machine: use fake timers (`tests/reel.test.ts` does). Run the suite several times in a row after touching a timing-based test.
+- Floating-point sums (`cp + 1`) can be 6.3500000000000005, which the database rightly refuses: round to cents before sending.
+- Sorting a JSON field by its text sorts "5" after "100": sort by the number (the daily report once did).
+- When n8n imports a workflow it may pick a credential by itself, sometimes the wrong one: open each node and check.
+- `pg_net` does not retry: an alert sent while n8n is unreachable is lost.

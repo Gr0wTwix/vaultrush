@@ -5,6 +5,8 @@
 1. **Alerts.** The database sends a short message when something happens that you want to know about, and n8n posts it in a chat channel (Discord by default).
 2. **A daily report.** Every morning n8n asks the database for the last 24 hours (players, bets, coins wagered and paid, biggest win, coins in circulation, free coins issued, coins added by hand) and posts a summary.
 
+**Status (2026-11-21):** set up and live. `0016` is run, the alerts are switched on in the live database, n8n runs on the owner's PC (Docker, a gate, an ngrok tunnel) and both workflows were confirmed end to end (a test alert and a real daily report reached Discord). Alerts arrive only while that PC and Docker are running; whether the 09:00 schedule is published is not confirmed (see [setup-status.md](setup-status.md)).
+
 Nothing about coins, items, bets or payouts goes through n8n. Those stay in database functions where every change is one transaction. If n8n is down, the site is unaffected.
 
 ```
@@ -32,6 +34,8 @@ Messages carry only what is already public on the site (a player's name, a game,
 | `supabase/migrations/0016_ops_events.sql` | The settings table, the sending function, five triggers and `ops_daily_report()`. Safe to run again. Sends nothing until you switch it on |
 | `n8n/vaultrush-alerts.json` | n8n workflow: webhook (secret checked) -> writes the message -> posts to Discord |
 | `n8n/vaultrush-daily-report.json` | n8n workflow: every morning (and a "test it now" button) -> asks the database -> writes the message -> posts to Discord |
+| `n8n/docker-compose.yml`, `n8n/Caddyfile.gate`, `n8n/.env.example` | Run n8n on your own PC: n8n 2.48.7, a gate that lets only `/webhook/*` through, an optional ngrok tunnel. `n8n/.env` (your secrets) is ignored by git |
+| `n8n/docker-compose.server.yml`, `n8n/Caddyfile.server` | The same for an always-on server with automatic https (not tested) |
 | `tests/ops-db.test.ts` | 16 database tests for 0016 |
 
 The workflow files contain **placeholders in capitals** (`PASTE-YOUR-DISCORD-WEBHOOK-URL`, `YOUR-PROJECT-REF`, `PASTE-THE-PUBLISHABLE-KEY`) and no secrets. **Never export a workflow with your values filled in and commit it**: this repository is public.
@@ -99,7 +103,8 @@ update public.ops_settings set webhook_secret = encode(gen_random_bytes(24), 'he
 
 - `tests/ops-db.test.ts` (16 tests): off by default, each event's message and fields, the threshold and the event list, never breaking anything, browsers cannot read or call, the report's secret check and its numbers.
 - Both workflows were imported into a real n8n (2.48.7, in Docker) and run against a stand-in server: missing or wrong secret -> 403; all seven message types formatted; the report call carried the key and the secret; the summary came out as expected.
-- **Not tested:** the real hop from Supabase's pg_net to a real n8n over the internet (the tests use a stand-in for pg_net), and real Discord. Run step 7's test message to check it once.
+- **Confirmed live (2026-11-21):** with n8n on the owner's PC behind the gate and an ngrok tunnel, the test alert (`select public.ops_notify('test', '{}')`) and the daily report both reached a real Discord channel, so the real hop from Supabase's pg_net to n8n works. A real report showed live numbers.
+- **Not tested:** the always-on server variant (`docker-compose.server.yml`), and n8n Cloud.
 
 ## Later ideas
 

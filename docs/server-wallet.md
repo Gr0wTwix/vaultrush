@@ -39,6 +39,8 @@ Provable fairness is unchanged in principle: the seed's hash is committed first,
 
 **Revealing a payout at the right moment.** When a result is known before its animation ends (a plinko ball, a coinflip, a battle), the shown balance leaves the payout out until the animation is over: `holdPayout` / `freezeBalance`, released by `credit()` or when the reels stop. A hold that is never released ends by itself after two minutes.
 
+**Status (2026-11-21):** migrations `0008` to `0013` are run on the live project and the page uses the wallet; the owner has been playing with it. Not tested by me signed in on the live site (see [setup-status.md](setup-status.md)).
+
 **Fallback.** The page uses the server wallet only when `wallet_ready()` answers true, which migration 0012 creates last. Browser-only accounts and a database that has not been migrated keep the old browser-side behaviour.
 
 ## Setting it up (you do this)
@@ -56,6 +58,8 @@ Run these in the Supabase SQL editor, in order, after 0007 (each is one paste):
 Then redeploy the game site. Existing browser coins are **not** migrated (your decision). Existing cloud accounts keep the server balance they had (100 from sign-up); new accounts start at 0 and earn from the faucet, crates, rewards and promo codes. To change a balance, use SQL for now: the owner wallet adjustment and the ledger viewer are part of the admin plan (step D, admin side) and are not built yet.
 
 ### Giving coins to an account (until the admin wallet tool exists)
+
+If the operator alerts are switched on ([n8n.md](n8n.md)), adding coins this way sends a "coins added by hand" alert to your chat channel (a positive `adjustment` ledger line triggers it; big wins are reported the same way from the `bets` table).
 
 Players cannot change a balance; the owner can, in the Supabase SQL editor (it runs with full rights). Replace `YOUR_NAME` with the player's name on the site (not case sensitive). Both statements write an `adjustment` line to the ledger, so the ledger still adds up to the wallet. They are tested in `tests/wallet-db.test.ts`.
 

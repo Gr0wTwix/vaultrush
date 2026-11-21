@@ -4,6 +4,7 @@ Vaultrush is an original **play-money** skin-game demo. Coins cannot be bought, 
 
 | Document | Read it for |
 |---|---|
+| [setup-status.md](setup-status.md) | What is set up and what is not: variables, migrations, services, sign-in, n8n, CI; what is confirmed and what is not; how to re-check |
 | [architecture.md](architecture.md) | Folder layout, how state and views work, the single gates for bets and claims |
 | [accounts-and-auth.md](accounts-and-auth.md) | Browser accounts, Supabase cloud accounts, Google and Steam sign-in, the signed-out rules |
 | [server-wallet.md](server-wallet.md) | Where coins and items live now (the database): what each game does there, how the page mirrors it, setup steps, what is still simplified |
@@ -22,6 +23,7 @@ The top-level [README](../README.md) has the feature list and quick start. Backe
 
 ## Ground rules that apply everywhere
 
+- **Keep the docs current.** Whenever something is added, changed or removed, update the relevant doc, `history.md` (its numbered timeline and its "Status and open items") and any index that lists it, in the same piece of work. A removed feature must disappear from the docs too.
 - **Play money only.** Nothing here is a real gambling service and no licence is held. Do not add real-money flows.
 - **Be honest about what is simulated.** KYC, AML and the in-browser fairness seeds are demonstrations. Say so in the UI and the docs.
 - **The repository is public.** No personal data, keys, project IDs or machine paths in files or history. Commits use the GitHub noreply address.

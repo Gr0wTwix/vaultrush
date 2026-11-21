@@ -2,8 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']        # every branch (it used to be main only, so work on other branches was never checked)
   pull_request:
+
+# a newer push to the same branch or pull request cancels the run that is still going
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
