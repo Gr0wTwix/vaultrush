@@ -52,12 +52,12 @@ describe('wallet', () => {
 
 describe('verification cap and responsible-gambling gate', () => {
   it('explains a bet that is above the unverified cap, and lifts it with verification', () => {
-    state.balance = 10_000;
-    expect(debit(1000)).toBe(true);                       // up to 1000 needs no verification
-    expect(debit(1001)).toBe(false);
-    expect(debitError(1001)).toMatch(/higher verification level/);
+    state.balance = 100_000;
+    expect(debit(10_000)).toBe(true);                     // up to 10,000 needs no verification
+    expect(debit(10_001)).toBe(false);
+    expect(debitError(10_001)).toMatch(/higher verification level/);
     state.kyc.tier = 1;
-    expect(debit(1001)).toBe(true);
+    expect(debit(10_001)).toBe(true);
   });
   it('blocks all bets until the player confirms they are 18+', () => {
     resetAccount();

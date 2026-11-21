@@ -26,7 +26,7 @@ Free coins (the 10-minute faucet, calendar, promo codes, rakeback) were not chan
 
 ## What is bundled and what is loaded on demand
 
-- **Bundled with the page** (`src/catalogue/cases.generated.json`, about 90 KB): the 27 cases, their drop tables (tickets out of 100,000, price, expected value) and the 166 items inside them.
+- **Bundled with the page** (`src/catalogue/cases.generated.json`, about 180 KB): the 52 cases, their drop tables (tickets out of 100,000, price, expected value) and the 166 items inside them.
 - **Loaded on demand** (`public/catalogue/`, about 6 MB of static files, none of it fetched until needed): `index.json` (one short row per item: id, name, value, grade, file, flags, weapon type; searched in the browser) and `s/<n>.json` (the items themselves, 50 per file, cheapest first, so a page of "items worth a bit more than your stake" needs one or two files). `manifest.json` records the build time, the price time, the rate and the sources.
 - `src/catalogue.ts` is the loader: `loadIndex`, `queryItems` (search, grade and weapon filters, min and max value, sort, paging), `ensureItems` (fetch the items an inventory holds that are not bundled, never throws), `cheapestAtLeast` (the 2x / 5x / 10x buttons).
 - The Upgrade page searches all 14,411 skins; inventory items that came from an upgrade are fetched when the inventory loads. Until an item arrives it is shown as a greyed-out "Loading..." card with no value.
@@ -53,3 +53,12 @@ Then commit, deploy the site, and run the new SQL files in order. The page and t
 - **Prices move.** Values are a snapshot (`manifest.json` has the time). A 5-minute-old Skinport price is as fresh as the API gives.
 - **Lowest listing is not "worth".** Rare or low-volume items can have a thin or odd lowest listing; the loader keeps it as is and an item with no listing has no price.
 - **Pictures of the cases** are separate from the item pictures: `public/assets/cases/<case id>.webp` (one per case, 640 x 640, transparent) and the home page tiles in `public/assets/home/`; see [architecture.md](architecture.md) (Assets).
+
+## The 25 high-stakes cases (added 2026-11-21)
+
+The owner asked for 25 more cases priced from 20 to 1,000 coins. They are in `scripts/build-catalogue.mjs` (the `MORE` list): 25 real-item themes, from "Desert Duel" (21.36) and "Glock Gallery" (24.71) up to "Black Market" (611), "Karambit Lounge" (718), "Butterfly Garden" (844) and "Millionaire's Vault" (973), spread evenly in price. Each case is fitted to its target price: the generator picks 10 real items of the theme, spread from a cheap one to a high one, and searches for the spread whose expected value gives the target (price = expected value / 0.9, tickets out of 100,000, as for every case), preferring a top drop worth at least 6 times the price. The themes are in price order on purpose: real prices decide where a theme can sit (the cheapest real Karambit is already worth 508 coins, so knife-only cases are near the top).
+
+- The original 27 cases are unchanged (checked item by item) and the new ones are appended, so nothing about the old cases moves.
+- The case pictures of the new cases are **placeholders**: recoloured, partly mirrored copies of the existing crates (`scripts` do not paint). The 1024 px versions and a ready ChatGPT prompt with a theme for each are in `source-art/new-case-art-for-chatgpt/` (not in git); replace `public/assets/cases/<case id>.webp` when new art exists.
+- The database needs `0015_real_cases.sql` run again (it rebuilds the cases; items are unchanged, so no `0014` part is needed) before the site that shows the new cases is deployed.
+- The Cases page price filter now has the bands Under 5, 5 to 50, 50 to 250 and 250+.

@@ -4,6 +4,7 @@ import {
   netLoss, realityDue, recordSettled, recordStake, scorePgsi, sessionSummary, setLimit, startCoolOff, startSession, PGSI_QUESTIONS,
 } from '../src/rg.js';
 import { newGameState } from '../src/state.js';
+import { TIER_MAX_BET } from '../src/kyc.js';
 
 const T0 = Date.UTC(2026, 5, 15, 12, 0, 0);
 function player() { const s = newGameState(); confirmAge(s.rg, T0); return s; }
@@ -83,14 +84,16 @@ describe('the bet gate enforces limits', () => {
     setLimit(s.rg, 'maxBet', 10, T0);
     expect(betBlockReason(s, 10, T0)).toBeNull();
     expect(betBlockReason(s, 11, T0)).toMatch(/maximum bet/);
-    const t = player();                                     // tier 0 cap is 1000 coins
-    expect(betBlockReason(t, 1000, T0)).toBeNull();
-    expect(betBlockReason(t, 1001, T0)).toMatch(/verification/);
+    const t = player();                                     // a new account may stake up to 10,000 coins; more needs verification
+    expect([TIER_MAX_BET[0], TIER_MAX_BET[1], TIER_MAX_BET[2]]).toEqual([10_000, 25_000, 50_000]);
+    expect(betBlockReason(t, 10_000, T0)).toBeNull();
+    expect(betBlockReason(t, 10_001, T0)).toMatch(/verification/);
     t.kyc.tier = 1;
-    expect(betBlockReason(t, 1001, T0)).toBeNull();
-    expect(betBlockReason(t, 2501, T0)).toMatch(/verification/);
+    expect(betBlockReason(t, 10_001, T0)).toBeNull();
+    expect(betBlockReason(t, 25_001, T0)).toMatch(/verification/);
     t.kyc.tier = 2;
-    expect(betBlockReason(t, 2501, T0)).toBeNull();
+    expect(betBlockReason(t, 25_001, T0)).toBeNull();
+    expect(betBlockReason(t, 50_001, T0)).toMatch(/verification|maximum/);
   });
   it('enforces the daily wager limit using stakes placed today', () => {
     const s = player();

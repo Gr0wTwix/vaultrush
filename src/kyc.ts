@@ -4,7 +4,8 @@
 import type { KycState, KycTier } from './types.js';
 
 /** Highest single bet allowed per verification tier (coins). */
-export const TIER_MAX_BET: Record<KycTier, number> = { 0: 1000, 1: 2500, 2: 5000 };
+/** The most one stake (a bet, a case opening, an upgrade stake, a battle or a coinflip) may cost at each verification level. The database enforces the same numbers (supabase/migrations/0017_bet_caps.sql). Above 10,000 a player has to verify. */
+export const TIER_MAX_BET: Record<KycTier, number> = { 0: 10000, 1: 25000, 2: 50000 };
 export const tierMaxBet = (tier: KycTier): number => TIER_MAX_BET[tier];
 export const TIER_NAMES: Record<KycTier, string> = { 0: 'Unverified', 1: 'Basic (email and age)', 2: 'Full (identity checked)' };
 

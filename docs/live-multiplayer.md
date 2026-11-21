@@ -60,7 +60,7 @@ Tested in `tests/live-db.test.ts` (runs the real SQL in PGlite):
 
 - Only signed-in players with a profile can call the live functions; helpers are private; the tables cannot be written directly; the secrets tables and seeds are unreadable until the game starts.
 - Battle: 1 to 20 case ids, a known format and mode (team formats allow only normal, crazy, terminal), at most 3 open battles per player, a seat can be taken once, only the creator may call bots, the creator leaving cancels the battle, a joiner leaving frees the seat, nobody can leave after the start, and a lobby older than 30 minutes cannot be joined.
-- Coinflip: bolt or star, 0.10 to 5,000, at most 5 open games, you cannot join your own game, only the creator can cancel and only while nobody joined, 30-minute expiry.
+- Coinflip: bolt or star, 0.10 to 50,000 (the verification cap decides: 10,000 for a new account, see [compliance.md](compliance.md)), at most 5 open games, you cannot join your own game, only the creator can cancel and only while nobody joined, 30-minute expiry.
 - Coinflip bot (`0004`): the creator of a waiting game can call a house bot (`call_live_coinflip_bot`). The server draws the result with the same seed maths; if the bot's side wins, `winner` stays empty and nobody is paid (the house keeps the pot). Only the creator can call it, only while the game is waiting.
 
 ## Client files

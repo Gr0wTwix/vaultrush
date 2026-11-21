@@ -75,7 +75,7 @@ This table decides what is possible. "Server" means in the Supabase database. "B
 | **Inventory (items), history, XP and level, rakeback, calendar, promo use** | **Browser** | **No** | **No** |
 | **Responsible-gambling limits, cool-off, self-exclusion for normal play** | **Browser** (`state.rg`) | **No** | **No** (a determined player can edit them) |
 | **Sandbox KYC and AML state** | **Browser** (`state.kyc`, `state.aml`) | **No** | **No** |
-| Case and item catalogue (25 cases, 2 reward cases, 166 case items out of 14,411 real CS2 items), odds, prices | **Code** (`src/data.ts`) | Only by reading the code | Only by deploying new code |
+| Case and item catalogue (50 cases, 2 reward cases and more than 340 case items out of 14,411 real CS2 items), odds, prices | **Code** (`src/data.ts`) | Only by reading the code | Only by deploying new code |
 | Economy numbers (house edges, free coins, rakeback, tiers, promo codes, timings) | **Code** (constants) | Only by reading the code | Only by deploying new code |
 | Bot names | Code | n/a | Deploy |
 | Page views, sessions, errors | Nowhere (no analytics by design) | No | n/a |

@@ -24,7 +24,7 @@ Leaving never traps coins: cancelling a coinflip, leaving a battle that has not 
 
 ## How a game works inside the database
 
-Every game function runs in **one transaction**: site switch (`site_guard`), responsible-play gate (`wallet_gate`: age, self-exclusion, cool-off, maximum bet, verification-tier cap 1,000 / 2,500 / 5,000, daily loss limit), draw the result from the secret seed (`fair_draw`), write the bet, move the coins and items. If anything fails, everything is undone: a stake is never taken without a result and a result is never given without a stake. Players have no write access to any money table; the helper functions (`wallet_debit`, `wallet_credit`, `inventory_add`, `bet_record`, `fair_draw`) cannot be called by clients at all.
+Every game function runs in **one transaction**: site switch (`site_guard`), responsible-play gate (`wallet_gate`: age, self-exclusion, cool-off, maximum bet, verification-tier cap 10,000 / 25,000 / 50,000 (since `0017`; it was 1,000 / 2,500 / 5,000), daily loss limit), draw the result from the secret seed (`fair_draw`), write the bet, move the coins and items. If anything fails, everything is undone: a stake is never taken without a result and a result is never given without a stake. Players have no write access to any money table; the helper functions (`wallet_debit`, `wallet_credit`, `inventory_add`, `bet_record`, `fair_draw`) cannot be called by clients at all.
 
 Provable fairness is unchanged in principle: the seed's hash is committed first, `rotate_seed` reveals it, and each result is `HMAC-SHA256(serverSeed, "clientSeed:nonce:round")`. The Account window's **Cloud account** tab lists the latest bets of every game and re-checks the ones made from the player's own seed (Cases, Upgrade, Plinko, Mines, the Crash demo) with the same code as the Fairness page. Battles, Coinflip, Crash and Double rounds use the game's own seed, shown on that game.
 
@@ -54,6 +54,7 @@ Run these in the Supabase SQL editor, in order, after 0007 (each is one paste):
 5. `0012_rewards.sql` (rewards, race, and the switch)
 6. `0013_crash_pace.sql` (a slower Crash: 2x after 8.7 s instead of 5.8 s; deploy the site right after, the page and the database must share the pace)
 7. `0014_real_items_1.sql` ... `0014_real_items_5.sql`, then `0015_real_cases.sql` (the real Counter-Strike 2 items and the new cases; old inventory items are swapped for the closest real item; see [real-catalogue.md](real-catalogue.md))
+8. `0017_bet_caps.sql` (verification is only needed above 10,000 coins: the stake caps become 10,000 / 25,000 / 50,000, and the live games' hard 5,000 limit becomes 50,000; run it together with the site deploy, the page uses the same numbers)
 
 Then redeploy the game site. Existing browser coins are **not** migrated (your decision). Existing cloud accounts keep the server balance they had (100 from sign-up); new accounts start at 0 and earn from the faucet, crates, rewards and promo codes. To change a balance, use SQL for now: the owner wallet adjustment and the ledger viewer are part of the admin plan (step D, admin side) and are not built yet.
 
@@ -80,7 +81,7 @@ with me as (select id from public.profiles where lower(display_name) = lower('YO
 insert into public.ledger (user_id, kind, amount, balance_after) select user_id, 'adjustment', balance - before, balance from upd;
 ```
 
-The page shows the new balance within moments (realtime) or at the next 20-second sync. A name that does not exist changes nothing. A single bet is still limited by the verification tier (1,000 / 2,500 / 5,000), whatever the balance. The other way is a promo code of any size: `insert into public.promo_codes (code, amount) values ('MYCODE', 100000);`, then redeem it on the Rewards page (once per player).
+The page shows the new balance within moments (realtime) or at the next 20-second sync. A name that does not exist changes nothing. A single bet is still limited by the verification tier (10,000 / 25,000 / 50,000), whatever the balance. The other way is a promo code of any size: `insert into public.promo_codes (code, amount) values ('MYCODE', 100000);`, then redeem it on the Rewards page (once per player).
 
 ### The catalogue
 

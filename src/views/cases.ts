@@ -7,7 +7,7 @@ import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
 import { serverWallet, openCases, releaseItems } from '../wallet.js';
 
-const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50+', 50, Infinity]] as [string, string, number, number][];
+const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50 – 250', 50, 250], ['vip', '250+', 250, Infinity]] as [string, string, number, number][];
 
 export function renderList(el) {
   let sort = 'price-asc', band = 'all', tag = 'all', q = '';

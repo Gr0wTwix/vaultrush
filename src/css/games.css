@@ -758,3 +758,9 @@ img.item-art { object-fit: contain; display: block; margin: 0 auto; filter: drop
 .target-filters { gap: 8px; margin-bottom: 10px; }
 .target-filters select { flex: 1; min-width: 0; width: auto; padding: 8px 10px; }
 .contents .more-row { grid-column: 1 / -1; display: flex; justify-content: center; padding: 6px 0 2px; }
+
+/* Double: a bait result in the history shows the hook and, as a small dot, the colour of its tile (it also wins that colour lane) */
+.hdot { position: relative; }
+.hdot .hd-c { position: absolute; right: 2px; bottom: 2px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(4, 30, 28, .9); }
+.hdot.bait.c-purple .hd-c { background: #9d7bff; }
+.hdot.bait.c-gray .hd-c { background: #8b97b3; }

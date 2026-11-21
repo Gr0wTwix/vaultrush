@@ -53,9 +53,13 @@ export async function roundBets(roundId: number): Promise<RoundBet[]> {
   return ((data as RoundBet[] | null) ?? []).map(norm);
 }
 /** The latest finished rounds' results (newest first), for the history strip. */
+/** The last finished rounds, newest first, with their round ids (so a page can tell which ones it has already shown). */
+export async function recentRounds(game: 'crash' | 'double', n: number): Promise<{ id: number; v: number }[]> {
+  const { data } = await (await getClient()).from('game_rounds').select('id, result').eq('game', game).eq('status', 'finished').order('id', { ascending: false }).limit(n);
+  return ((data as { id: number; result: { point?: number; n?: number } | null }[] | null) ?? []).map(r => ({ id: r.id, v: game === 'crash' ? r.result?.point : r.result?.n })).filter((r): r is { id: number; v: number } => typeof r.v === 'number');
+}
 export async function recentResults(game: 'crash' | 'double', n: number): Promise<number[]> {
-  const { data } = await (await getClient()).from('game_rounds').select('result').eq('game', game).eq('status', 'finished').order('id', { ascending: false }).limit(n);
-  return ((data as { result: { point?: number; n?: number } | null }[] | null) ?? []).map(r => (game === 'crash' ? r.result?.point : r.result?.n)).filter((v): v is number => typeof v === 'number');
+  return (await recentRounds(game, n)).map(r => r.v);
 }
 export async function roundSeed(roundId: number): Promise<string | null> {
   const { data } = await (await getClient()).from('game_round_seeds').select('server_seed').eq('round_id', roundId).maybeSingle();

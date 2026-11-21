@@ -15,9 +15,11 @@ Everything here is a **demonstration** for a play-money site. No gambling licenc
 
 | Tier | How to reach it | Bet cap |
 |---|---|---|
-| 0 | New account | 1,000 |
-| 1 | Verify email and date of birth | 2,500 |
-| 2 | Full identity check (simulated document step plus mock sanctions and PEP screening) | 5,000 |
+| 0 | New account | 10,000 |
+| 1 | Verify email and date of birth | 25,000 |
+| 2 | Full identity check (simulated document step plus mock sanctions and PEP screening) | 50,000 |
+
+The cap applies to one stake: a bet, a case opening, an upgrade stake, a coinflip, a Crash or Double bet, or the whole cost of a case battle. So **verification is only needed above 10,000 coins**. Until 2026-11-21 the caps were 1,000 / 2,500 / 5,000; migration `0017_bet_caps.sql` and `TIER_MAX_BET` in `src/kyc.ts` hold the numbers (a test checks they agree).
 
 The date of birth is collected only here, when a player chooses to verify. It is not asked at sign-up. Screening is a local mock list; a match puts the account on a compliance hold.
 

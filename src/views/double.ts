@@ -8,7 +8,8 @@ import { $, $$, fmt, money, icon, toast, avatar, esc, confetti, coin } from '../
 import { sfx } from '../sfx.js';
 import { serverWallet } from '../wallet.js';
 import { roundsOn, liveMe } from '../live.js';
-import { advanceRound, serverNow, doubleBet, roundBets, recentResults, roundSeed, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
+import { addRound, mergeRecent, laneCounts, chipOf, isBait } from '../double-history.js';
+import { advanceRound, serverNow, doubleBet, roundBets, recentRounds, roundSeed, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
 
 const BET_MS = 12000, ROLL_MS = 5200, SHOW_MS = 2600;
 const LANES = [['purple', 'Purple', '1'], ['bait', 'Bait', '2'], ['green', 'Green', '3'], ['gray', 'Gray', '4']];
@@ -34,7 +35,6 @@ const GLYPH = {
   // Bait: fishing hook
   bait: `<circle cx="13" cy="4" r="2.2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M13 6.2v9.6a4.6 4.6 0 0 1-9.2 0v-2.6l3.4 3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`,
 };
-const isBait = n => n === 1 || n === 14;
 const tile = n => isBait(n)
   ? `<div class="dtile sq-tile ${doubleColor(n)} baity"><svg viewBox="0 0 24 24" aria-hidden="true">${GLYPH.bait}</svg><em>Bait 7×</em></div>`
   : `<div class="dtile sq-tile ${doubleColor(n)}"><svg viewBox="0 0 24 24" aria-hidden="true">${GLYPH[doubleColor(n)]}</svg></div>`;
@@ -100,10 +100,10 @@ export function render(el) {
   const drawTop = () => {
     $('#pool', el).innerHTML = money(pool);
     $('#streak', el).innerHTML = [0, 1, 2].map(i => `<i class="${i < greenStreak.length ? 'on' : ''}"></i>`).join('');
-    $('#hist', el).innerHTML = history.slice(0, 10).map(n => `<span class="hdot ${doubleColor(n)}" title="${n}">${glyph(doubleColor(n))}</span>`).join('') || '<span class="muted small">No rounds yet</span>';
-    const last = history.slice(0, 100);
-    const c: Record<string, number> = { purple: 0, gray: 0, green: 0, bait: 0 };
-    last.forEach(n => { c[doubleColor(n)]++; if (n === 1 || n === 14) c.bait++; });
+    // a bait result shows the hook (with its colour as a small dot); every other result shows its colour
+    $('#hist', el).innerHTML = history.slice(0, 10).map(n => { const ch = chipOf(n); return `<span class="hdot ${ch.kind}${ch.kind === 'bait' ? ` c-${ch.color}` : ''}" title="${ch.title}">${glyph(ch.kind)}${ch.kind === 'bait' ? '<i class="hd-c"></i>' : ''}</span>`; }).join('') || '<span class="muted small">No rounds yet</span>';
+    const c = laneCounts(history.slice(0, 100));
+    $('#counts', el).title = 'How many times each lane won in the last 100 rounds (a bait tile also wins its colour)';
     $('#counts', el).innerHTML = ['purple', 'gray', 'green'].map(k => `<span class="hdot ${k}">${glyph(k)}</span><b>${c[k]}</b>`).join('') + `<span class="hdot bait">${LANE_GLYPH.bait}</span><b>${c.bait}</b>`;
   };
 
@@ -288,7 +288,7 @@ export function render(el) {
     strip.children[landIndex]?.classList.add('landed');
     reel.classList.add('settled');
     phase = 'result'; phaseStart = performance.now();
-    if (!seenRounds.has(rid)) { seenRounds.add(rid); history.unshift(n); history.length = Math.min(history.length, 100); }
+    addRound(history, seenRounds, rid, n);                                 // once per round, however the page and the saved results arrive
     LANES.forEach(([k]) => { $(`.lane-${k}`, el).classList.add(doubleWins(k as DoubleLane, n) ? 'won' : 'lost'); });
     drawLanes(); drawTop();
     void roundBets(rid).then(rows => {
@@ -341,7 +341,7 @@ export function render(el) {
     } else schedule(120);                                                   // the roll time has passed; the server is about to finish the round
   };
   const startLive = (): void => {
-    void recentResults('double', 100).then(rs => { if (alive && !history.length) { history.push(...rs); drawTop(); } }).catch(() => {});
+    void recentRounds('double', 100).then(rows => { if (alive) { mergeRecent(history, seenRounds, rows); drawTop(); } }).catch(() => {});
     void watchRounds((_ev, r) => { if (r.game === 'double') applyRound(r); }).then(stop => { if (alive) stops.push(stop); else stop(); }).catch(() => {});
     void watchRoundBets((ev, b) => {
       if (!round || (b.round_id !== round.id && ev !== 'DELETE')) return;

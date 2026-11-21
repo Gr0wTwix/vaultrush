@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CASE, CASES, ITEM, ITEMS, REWARD_CASES, RARITY, RARITY_ORDER, CATALOGUE_TOTAL, entryForTicket, ticketOf, isBigDrop, isHugeDrop, itemImage, itemOf, itemName } from '../src/data.js';
 import { HOUSE } from '../src/fair.js';
@@ -75,4 +76,29 @@ describe('cases', () => {
     expect(entryForTicket(c, 99999).to).toBe(99999);
     for (const e of c.entries) expect(entryForTicket(c, e.from)).toBe(e);
   });
+});
+
+describe('the cases and their pictures', () => {
+  const all = [...CASES, ...REWARD_CASES];
+  const NEW = ['duel', 'glockgal', 'silentclub', 'heavyduty', 'smgstorm', 'riflerush', 'fadeneon', 'dragons', 'akdynasty', 'm4legends', 'awpacademy', 'wrappedup', 'flipgut', 'hunters', 'driverseat', 'specialist', 'sportsclub',
+    'bayonetclub', 'dopplerhall', 'crimsoncrown', 'legends', 'blackmarket', 'karambit', 'butterfly', 'millionaire'];
+  it('has a picture file for every case, one each', () => {
+    for (const c of all) { expect(c.img, c.id).toBe(`assets/cases/${c.id}.webp`); expect(existsSync(`public/assets/cases/${c.id}.webp`), c.id).toBe(true); }
+  });
+  it('has the 25 high-stakes cases, each priced from 20 to 1,000 coins, cheapest to dearest in the order they are made', () => {
+    expect(NEW).toHaveLength(25);
+    const prices = NEW.map(id => CASE[id]!.price);
+    for (const p of prices) { expect(p).toBeGreaterThanOrEqual(20); expect(p).toBeLessThanOrEqual(1000); }
+    for (let i = 1; i < prices.length; i++) expect(prices[i]!).toBeGreaterThan(prices[i - 1]!);
+    expect(CASES.filter(c => c.price >= 20 && c.price <= 1000).length).toBeGreaterThanOrEqual(33);   // the 25 plus the 8 older cases in that range
+  });
+  it('gives each high-stakes case 10 real items, an exciting top drop and no item twice', () => {
+    for (const id of NEW) {
+      const c = CASE[id]!;
+      expect(c.entries, id).toHaveLength(10);
+      expect(new Set(c.entries.map(e => e.item.id)).size, id).toBe(10);
+      expect(c.entries[0]!.item.value, id).toBeGreaterThan(c.price);                         // the best item is worth more than the case costs
+    }
+  });
+  it('keeps the case ids unique', () => { expect(new Set(all.map(c => c.id)).size).toBe(all.length); });
 });

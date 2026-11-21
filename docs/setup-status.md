@@ -10,7 +10,7 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 | **Supabase variables** | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_STEAM_LOGIN` are **set** in the owner's local `.env` and in Vercel Production. So the live site runs in **cloud mode** (Supabase accounts), not the browser-only fallback | Checked: names listed from `.env` and from `vercel env ls production`; the live bundle contains the project address and the publishable key |
 | **Database migrations** | `0001` to `0016` have all been run | Owner confirmed `0007` to `0016`; `0001` to `0006` are in place because everything built on them works (not each confirmed one by one) |
 | **Server wallet** | On: coins, items and every game and reward are handled by the database | Owner has used it; the migration tests pass. Not tested by me signed in on the live site |
-| **Real CS2 catalogue and case art** | Deployed; the database holds all 14,411 items and the 27 cases | Owner ran `0014`/`0015` and confirmed; pictures and files checked on the live site |
+| **Real CS2 catalogue and case art** | Deployed; the database holds all 14,411 items and the first 27 cases (the 25 high-stakes cases are built but not live yet, see below) | Owner ran `0014`/`0015` and confirmed; pictures and files checked on the live site |
 | **Steam sign-in functions** | `steam-login` and `close-login` are deployed and answer | Checked: they respond (400 without Steam's parameters, 401 without a signed-in user) |
 | **Site controls** | Maintenance is **off**, no notice, no game switched off, sign-ups open | Checked: the public status function of the live database |
 | **GitHub CI** | Runs the type-check, tests and build on pushes to **every branch** and on pull requests (widened on 2026-11-21; before that only `main` and pull requests, so nothing since PR #2 had been checked) | Checked: the first run on the `compliance` branch (commit `34412dc`, 2026-11-21) passed on GitHub's servers: type-check, all 664 tests and the build, in about 40 seconds (`gh run list`) |
@@ -31,6 +31,7 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 
 | Part | State |
 |---|---|
+| **25 high-stakes cases, the 10,000 verification limit, the Double history fix** | Built and tested locally (738 tests), but **not live**: not yet committed or deployed, and the SQL (`0015` re-run for the new cases, `0017` for the caps) has not been run. The pictures of the 25 new cases are recoloured placeholders |
 | **Admin site** | Built (sign-in chain, roles, audit log, explorer, site controls) but it runs **only on localhost** and is not deployed. That the Owner role has been created and that `http://localhost:5174` is allowed for sign-in is not confirmed ([admin-site.md](admin-site.md)) |
 | **Pull request into `main`** | Not opened; `main` has PR #2 but none of the later work |
 | **Always-on n8n** | n8n runs on the owner's PC, so alerts arrive only while the PC and Docker are on (the database does not retry). The server version (`n8n/docker-compose.server.yml`) is written but not tested or set up |

@@ -198,9 +198,9 @@ export const DOCS: Record<string, Doc> = {
         'Real gambling operators must prevent money laundering. Vaultrush is a demonstration of how such controls look and behave. It has no real funds, so there is nothing to launder, and it is not a regulated business.',
       ]],
       ['2. Verification levels (simulated)', [
-        ['Level 0: new account. Bets are capped at 1,000 coins and payouts cannot be requested.',
-          'Level 1: confirm your email and enter your date of birth (adults only). Bets are capped at 2,500 coins.',
-          'Level 2: a simulated document step plus mock sanctions and politically-exposed-person screening. Bets are capped at 5,000 coins.'],
+        ['Level 0: new account. Bets are capped at 10,000 coins and payouts cannot be requested.',
+          'Level 1: confirm your email and enter your date of birth (adults only). Bets are capped at 25,000 coins.',
+          'Level 2: a simulated document step plus mock sanctions and politically-exposed-person screening. Bets are capped at 50,000 coins.'],
         'No documents or photos are collected or uploaded. A match against the mock screening list places the account on a simulated compliance hold.',
       ]],
       ['3. Transaction monitoring (simulated)', [
