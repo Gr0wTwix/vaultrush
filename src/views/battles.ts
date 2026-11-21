@@ -1,12 +1,13 @@
 import { CASES, CASE, RARITY, randomBot, entryForTicket, ticketOf } from '../data.js';
 import { state, save, debit, credit, round2, debitError, handoff } from '../state.js';
 import { bet, annotate, pickWeighted, floatsFor } from '../fair.js';
-import { isLive, liveMe, createLiveBattle, joinLiveBattle, callLiveBot, leaveLiveBattle, getLiveBattle, openLiveBattles, myLiveBattles, liveBattleSeed, watchBattles, refundOnce, settleOnce, isSettled, onReconcile, type LiveBattle } from '../live.js';
+import { tellBalance, isLive, liveMe, createLiveBattle, joinLiveBattle, callLiveBot, leaveLiveBattle, getLiveBattle, openLiveBattles, myLiveBattles, liveBattleSeed, watchBattles, refundOnce, settleOnce, isSettled, onReconcile, type LiveBattle } from '../live.js';
 import { pushBet, pushDrop } from '../feed.js';
 import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, avatar, sleep, SPEEDS, reelMs, speedSeg, modal, itemArt } from '../ui.js';
 import { sfx } from '../sfx.js';
 
-import { FORMATS, decide } from '../battle-math.js';
+import { FORMATS, decide, shareOf } from '../battle-math.js';
+import { serverWallet, freezeBalance, unfreezeBalance } from '../wallet.js';
 export { FORMATS };
 export const MODES = {
   normal: { label: 'Normal', desc: 'Highest total wins everything.' },
@@ -73,9 +74,10 @@ function settle(b) {
   if (mi < 0) return;                                 // watching a live battle: nothing to pay
   b.credited = true;
   const mine = b.winners.includes(mi);
-  const payout = mine ? round2(b.pot / b.winners.length) : 0;
-  if (b.live && !settleOnce(`b:${b.id}`)) { b.payout = payout; return; }   // already paid (a reload, or another tab)
-  if (payout) credit(payout);
+  const payout = mine ? shareOf(b.pot, b.winners.length) : 0;      // the database pays exactly this
+  if (b.live && !settleOnce(`b:${b.id}`)) { b.payout = payout; if (serverWallet()) unfreezeBalance(); return; }   // already paid (a reload, or another tab)
+  if (serverWallet()) unfreezeBalance();                           // the server paid when the last seat filled; now the animation is over, show it
+  else if (payout) credit(payout);
   pushBet({ user: state.name, game: 'Battles', amount: b.cost, multi: round2(payout / b.cost), payout, mine: true });
   b.payout = payout;
 }
@@ -121,7 +123,7 @@ onReconcile(async () => {
       const seed = await liveBattleSeed(r.id); if (!seed) continue;
       const b = toBattle(r); await resolveLive(b, seed);
       if (b.me < 0 || !settleOnce(key)) continue;
-      const payout = b.winners.includes(b.me) ? round2(b.pot / b.winners.length) : 0;
+      const payout = b.winners.includes(b.me) ? shareOf(b.pot, b.winners.length) : 0;
       if (payout) { credit(payout); toast(`Battle won while you were away: +${fmt(payout)}`, 'win'); }
     }
   }
@@ -343,7 +345,11 @@ export function renderList(el) {
         if (l.mine) { location.hash = `#/battle/${l.uid}`; return; }
         const cost = costOf(l.ids);
         if (!debit(cost)) return toast(debitError(cost), 'error');
-        try { await joinLiveBattle(l.uid); location.hash = `#/battle/${l.uid}`; }
+        try {
+          const r = await joinLiveBattle(l.uid);
+          if (r.status === 'running') freezeBalance(cost);          // I filled the last seat: the database may have paid me already; the page shows it when the battle ends
+          tellBalance(r); location.hash = `#/battle/${l.uid}`;
+        }
         catch (e) { credit(cost); toast(e instanceof Error ? e.message : 'Could not join', 'error'); void loadLive(); }
         return;
       }
@@ -502,7 +508,11 @@ function drawBattle(el, b) {
   async function joinLiveSeat(i) {
     if (b.me >= 0 || b.started) return;
     if (!debit(b.cost)) return toast(debitError(b.cost), 'error');
-    try { const r = await joinLiveBattle(b.id, i); await b.onRow(r); sfx.click(); }
+    try {
+      const r = await joinLiveBattle(b.id, i);
+      if (r.status === 'running') freezeBalance(b.cost);
+      await b.onRow(r); tellBalance(r); sfx.click();
+    }
     catch (e) { credit(b.cost); toast(e instanceof Error ? e.message : 'Could not join', 'error'); }
   }
   el.addEventListener('click', e => {
@@ -558,6 +568,7 @@ function drawBattle(el, b) {
     refreshCtl();
     if (r.status === 'running' && !b.running) {
       b.running = true;
+      if (serverWallet() && b.me >= 0) freezeBalance(0);       // the database pays the winners now; keep my balance as it was until the reels stop
       const seed = await seedWithRetry(b.id);
       if (!seed) { toast('Could not load the battle result. Reload the page.', 'error'); return; }
       await resolveLive(b, seed);

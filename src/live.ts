@@ -5,14 +5,17 @@
 // Trust model (play money): the server seats players and draws the shared random result from a secret seed. Stakes are not held
 // by the server: each browser takes its own stake and pays itself out, once per game (state.liveSettled remembers which).
 import { backendEnabled, call, getClient } from './backend.js';
-import { emit, state, save, credit } from './state.js';
+import { emit, state, save, credit, isServerWallet } from './state.js';
 
 export interface LiveSeat { uid: string | null; name: string; bot: boolean }
-export interface LiveBattle {
+/** With the server wallet every call that moves coins answers with the new balance. */
+export interface WithBalance { balance?: number }
+export interface LiveBattle extends WithBalance {
   id: string; creator: string; case_ids: string[]; format: string; mode: string; seats: (LiveSeat | null)[]; player_ids: string[];
   status: 'waiting' | 'running' | 'cancelled'; server_hash: string; client_seed: string; created_at: string; started_at: string | null;
+  outcome?: { winners: number[]; totals: number[]; pot: number; points?: number[] } | null;      // set by the server when the battle has run (it pays the winners at that moment)
 }
-export interface LiveFlip {
+export interface LiveFlip extends WithBalance {
   id: number; creator: string; creator_name: string; side: 'bolt' | 'star'; amount: number; joiner: string | null; joiner_name: string | null; joiner_bot?: boolean;
   status: 'waiting' | 'done' | 'cancelled'; result: 'bolt' | 'star' | null; winner: string | null; server_hash: string; created_at: string; finished_at: string | null;
 }
@@ -64,7 +67,7 @@ export function settleOnce(key: string): boolean {
   return true;
 }
 /** Give a stake back exactly once. */
-export function refundOnce(key: string, amount: number): boolean { if (!settleOnce(key)) return false; credit(amount); return true; }
+export function refundOnce(key: string, amount: number): boolean { if (!settleOnce(key)) return false; if (!isServerWallet()) credit(amount); return true; }       // with the server wallet the server already refunded it
 
 // ---- free claims: the welcome crate (once per account) and the daily crate (once per 24 h), enforced by the server ------------------
 // The browser alone cannot enforce "once per player": the same account on two browsers, or on localhost and the live site, has two
@@ -116,10 +119,12 @@ async function watch<T>(table: string, cb: Change<T>): Promise<() => void> {
 
 // ---- case battles -------------------------------------------------------------------------------------------------
 const SINCE = (): string => new Date(Date.now() - 30 * 60_000).toISOString();
-export const createLiveBattle = (cases: string[], format: string, mode: string) => call<LiveBattle>('create_live_battle', { p_cases: cases, p_format: format, p_mode: mode });
+/** Tell the wallet the balance the server just answered with (only when the server wallet is on). */
+export const tellBalance = <T extends WithBalance>(r: T): T => { if (isServerWallet() && typeof r?.balance === 'number') emit('wallet:balance', r.balance); return r; };
+export const createLiveBattle = (cases: string[], format: string, mode: string) => call<LiveBattle>('create_live_battle', { p_cases: cases, p_format: format, p_mode: mode }).then(tellBalance);
 export const joinLiveBattle = (id: string, seat: number | null = null) => call<LiveBattle>('join_live_battle', { p_id: id, p_seat: seat });
 export const callLiveBot = (id: string, seat: number, name: string) => call<LiveBattle>('call_live_bot', { p_id: id, p_seat: seat, p_name: name });
-export const leaveLiveBattle = (id: string) => call<LiveBattle>('leave_live_battle', { p_id: id });
+export const leaveLiveBattle = (id: string) => call<LiveBattle>('leave_live_battle', { p_id: id }).then(tellBalance);
 export async function getLiveBattle(id: string): Promise<LiveBattle | null> {
   const { data } = await (await getClient()).from('live_battles').select('*').eq('id', id).maybeSingle();
   return (data as LiveBattle | null) ?? null;
@@ -141,9 +146,9 @@ export async function liveBattleSeed(id: string): Promise<string | null> {
 export const watchBattles = (cb: Change<LiveBattle>): Promise<() => void> => watch<LiveBattle>('live_battles', cb);
 
 // ---- coinflip -----------------------------------------------------------------------------------------------------
-export const createLiveFlip = (side: string, amount: number) => call<LiveFlip>('create_live_coinflip', { p_side: side, p_amount: amount });
+export const createLiveFlip = (side: string, amount: number) => call<LiveFlip>('create_live_coinflip', { p_side: side, p_amount: amount }).then(tellBalance);
 export const joinLiveFlip = (id: number) => call<LiveFlip>('join_live_coinflip', { p_id: id });
-export const cancelLiveFlip = (id: number) => call<LiveFlip>('cancel_live_coinflip', { p_id: id });
+export const cancelLiveFlip = (id: number) => call<LiveFlip>('cancel_live_coinflip', { p_id: id }).then(tellBalance);
 /** The creator fills the other seat with a house bot; if the bot's side wins, nobody is paid. */
 export const callLiveFlipBot = (id: number, name: string) => call<LiveFlip>('call_live_coinflip_bot', { p_id: id, p_name: name });
 export async function openLiveFlips(): Promise<LiveFlip[]> {

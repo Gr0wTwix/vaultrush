@@ -3,6 +3,8 @@ import { getFair, setClientSeed, rotate, sha256, floatsFor, crashPoint, minePosi
 import { verifyAll, rtpTest, uniformityTest, SNIPPET } from '../verify.js';
 import { $, $$, esc, fmt, icon, toast } from '../ui.js';
 import { isAuthed, requireLogin } from '../state.js';
+import { serverWallet } from '../wallet.js';
+import { openAccount } from '../account.js';
 
 const GAMES = [['crash', 'Crash'], ['double', 'Double'], ['cases', 'Case opening'], ['battles', 'Case battles'], ['mines', 'Mines'], ['plinko', 'Plinko'], ['coinflip', 'Coinflip'], ['upgrade', 'Upgrade roll']];
 const pct = x => `${(x * 100).toFixed(2)}%`;
@@ -40,7 +42,7 @@ export function render(el) {
       </div>
 
       <div class="fair-grid">
-        ${isAuthed() ? `        <div class="panel">
+        ${isAuthed() && serverWallet() ? `<div class="panel"><div class="panel-head"><h2>Your seeds</h2></div><p class="muted">Your account runs on the server wallet: every bet is drawn by the database from a secret seed that never leaves it. Its hash is committed first; <b>Rotate seed</b> in <b>Account &rarr; Cloud account</b> reveals it, and each bet there is re-checked here in your browser with the verifier below.</p><button class="btn btn-primary" id="openCloud">Open my seeds and bets</button></div>` : isAuthed() ? `        <div class="panel">
           <div class="panel-head"><h2>Your seeds</h2></div>
           <div class="field"><label>Active server seed hash (SHA-256)</label><div class="mono box">${f.serverHash}</div></div>
           <div class="field"><label>Next server seed hash <span class="tag">committed</span></label><div class="mono box">${f.next.serverHash}</div><span class="muted small">This seed is already fixed. It becomes active when you rotate, so it cannot be chosen after seeing your bets.</span></div>
@@ -96,8 +98,11 @@ export function render(el) {
 
     // ---- seeds
     if (!isAuthed()) $('#seedLogin', el).onclick = () => requireLogin('Log in or create a free account to get your own seeds.');
-    else $('#csSave', el).onclick = () => { setClientSeed($('#cs', el).value.trim()); toast('Client seed saved'); draw(); };
-    if (isAuthed()) $('#rot', el).onclick = async () => { await rotate(); toast('Server seed revealed and rotated'); draw(); };
+    else if (serverWallet()) $('#openCloud', el).onclick = () => openAccount('cloud');
+    else {
+      $('#csSave', el).onclick = () => { setClientSeed($('#cs', el).value.trim()); toast('Client seed saved'); draw(); };
+      $('#rot', el).onclick = async () => { await rotate(); toast('Server seed revealed and rotated'); draw(); };
+    }
     $$('.use', el).forEach(b => b.onclick = () => { $('#vs', el).value = b.dataset.s; $('#vc', el).value = b.dataset.c; $('#vs', el).scrollIntoView({ block: 'center' }); });
     $('#copyCode', el).onclick = () => { navigator.clipboard?.writeText(SNIPPET).then(() => toast('Code copied'), () => toast('Select the code and copy it', 'error')); };
     $('#exp', el).onclick = () => {

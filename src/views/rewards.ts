@@ -6,6 +6,7 @@ import { pushDrop } from '../feed.js';
 import { takeFreeClaim } from '../live.js';
 import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, SPEEDS, reelMs, guestCard } from '../ui.js';
 import { sfx } from '../sfx.js';
+import { serverWallet, openFreeCase as openFree, sellItems, claimRakeback, claimCalendar, redeemPromo } from '../wallet.js';
 
 export const LEVEL_CASES: [number, string][] = [[10, 'starter'], [20, 'neon'], [30, 'charmed'], [40, 'sniper'], [50, 'blade'], [60, 'high']];
 const CALENDAR = [1, 2, 3, 5, 8, 12, 25];
@@ -15,21 +16,35 @@ const WEEK = 7 * DAY;
 const left = ms => { const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h ${m}m`; };
 
 /** Open a free case in a modal with the reel. Resolves when the item is granted. */
-export async function openFreeCase(c, label) {
+/** `kind` ('welcome', 'daily_case', 'level_10' ...) is the server's name for the crate; with the server wallet the database checks the claim, draws the item and gives it. */
+export async function openFreeCase(c, label, kind?: string) {
   const m = modal(`<h2>${esc(label)}: ${esc(c.name)}</h2><div class="reel-host" id="freeReel"></div><div id="freeRes" class="free-res"></div>`, { wide: true });
-  const { floats, entry } = await bet('cases', 1, { case: c.id });
-  const ticket = ticketOf(floats[0]);
-  const item = entryForTicket(c, ticket).item;
-  annotate(entry, `${label} ${c.name}: ticket #${ticket} → ${item.weapon} | ${item.skin}`, `${ticket}:${item.id}`);
-  const [added] = addItems([item]);       // granted before the animation
-  logTx(label, item.value, `${item.weapon} | ${item.skin}`);
+  let item, added;
+  if (serverWallet() && kind) {
+    let r;
+    try { r = await openFree(kind); } catch (e) { m.close(); toast(e instanceof Error ? e.message : 'Could not open the crate', 'error'); return false; }
+    if (!r.claimed) { m.close(); toast(kind === 'welcome' ? 'You already opened your welcome crate.' : kind === 'daily_case' ? 'You already opened today\'s crate on this account.' : 'That crate was already opened.', 'error'); return false; }
+    item = ITEM[r.item as string]; added = { uid: r.uid as string, id: item.id };
+  } else {
+    const { floats, entry } = await bet('cases', 1, { case: c.id });
+    const ticket = ticketOf(floats[0]);
+    item = entryForTicket(c, ticket).item;
+    annotate(entry, `${label} ${c.name}: ticket #${ticket} → ${item.weapon} | ${item.skin}`, `${ticket}:${item.id}`);
+    [added] = addItems([item]);       // granted before the animation
+    logTx(label, item.value, `${item.weapon} | ${item.skin}`);
+  }
   await spinReel($('#freeReel', m.el), c.entries, item, { duration: reelMs() });
   pushDrop({ user: state.name, item, source: c.name });
   if (['legendary', 'mythic', 'epic'].includes(item.rarity)) { sfx.big(); confetti(RARITY[item.rarity].color); } else sfx.win();
   const res = $('#freeRes', m.el);
   res.innerHTML = `${itemCard(item)}<div class="row"><button class="btn btn-ghost" id="keep">Keep in inventory</button><button class="btn btn-primary" id="sell">Sell for ${money(item.value)}</button></div>`;
   $('#keep', res).onclick = m.close;
-  $('#sell', res).onclick = () => { removeItems([added.uid]); credit(item.value); sfx.click(); m.close(); };
+  $('#sell', res).onclick = async () => {
+    if (serverWallet() && kind) { try { await sellItems([added.uid]); } catch (e) { return toast(e instanceof Error ? e.message : 'Could not sell', 'error'); } }
+    else { removeItems([added.uid]); credit(item.value); }
+    sfx.click(); m.close();
+  };
+  return true;
 }
 
 export function render(el) {
@@ -89,9 +104,17 @@ export function render(el) {
         </section>
       </div>`;
 
-    $$('[data-rb]', el).forEach(b => b.onclick = () => {
+    $$('[data-rb]', el).forEach(b => b.onclick = async () => {
       const k = b.dataset.rb, amount = round2(state.rakeback[k]);
       if (amount < 0.01) return;
+      if (serverWallet()) {
+        if (busy) return; busy = true;
+        try { const r = await claimRakeback(k); sfx.win(); toast(`Rakeback +${fmt(r.amount)}`, 'win'); }
+        catch (e) { toast(e instanceof Error ? e.message : 'Could not claim', 'error'); }
+        finally { busy = false; }
+        if (alive) draw();
+        return;
+      }
       state.rakeback[k] = 0;
       if (k === 'daily') state.rakeback.lastDaily = Date.now();
       if (k === 'weekly') state.rakeback.lastWeekly = Date.now();
@@ -108,9 +131,12 @@ export function render(el) {
       if (busy || state.welcomeLeft <= 0) return;
       busy = true;
       try {
-        if (!(await allowed('welcome'))) return;
-        state.welcomeLeft = 0; save();
-        await openFreeCase(CASE.welcome, 'Welcome gift');
+        if (serverWallet()) await openFreeCase(CASE.welcome, 'Welcome gift', 'welcome');
+        else {
+          if (!(await allowed('welcome'))) return;
+          state.welcomeLeft = 0; save();
+          await openFreeCase(CASE.welcome, 'Welcome gift');
+        }
       } finally { busy = false; }
       if (alive) draw();
     };
@@ -118,26 +144,50 @@ export function render(el) {
       if (busy || Date.now() - state.lastDailyCase < DAY) return;
       busy = true;
       try {
-        if (!(await allowed('daily_case'))) return;
-        state.lastDailyCase = Date.now(); save();
-        await openFreeCase(CASE.daily, 'Daily case');
+        if (serverWallet()) await openFreeCase(CASE.daily, 'Daily case', 'daily_case');
+        else {
+          if (!(await allowed('daily_case'))) return;
+          state.lastDailyCase = Date.now(); save();
+          await openFreeCase(CASE.daily, 'Daily case');
+        }
       } finally { busy = false; }
       if (alive) draw();
     };
     $$('[data-lvl]', el).forEach(b => b.onclick = async () => {
       const req = +b.dataset.lvl;
       if (level() < req || state.keysUsed.includes(req)) return;
-      state.keysUsed.push(req); save();
-      await openFreeCase(CASE[LEVEL_CASES.find(l => l[0] === req)[1]], `Level ${req} key`); if (alive) draw();
+      if (busy) return; busy = true;
+      const c = CASE[LEVEL_CASES.find(l => l[0] === req)[1]];
+      try {
+        if (serverWallet()) await openFreeCase(c, `Level ${req} key`, `level_${req}`);
+        else { state.keysUsed.push(req); save(); await openFreeCase(c, `Level ${req} key`); }
+      } finally { busy = false; }
+      if (alive) draw();
     });
-    $$('.cal-day.next', el).forEach(b => b.onclick = () => {
+    $$('.cal-day.next', el).forEach(b => b.onclick = async () => {
       const i = +b.dataset.day;
+      if (serverWallet()) {
+        if (busy) return; busy = true;
+        try { const r = await claimCalendar(); sfx.win(); toast(`Day ${r.day} reward +${fmt(r.amount)}`, 'win'); }
+        catch (e) { toast(e instanceof Error ? e.message : 'Could not claim', 'error'); }
+        finally { busy = false; }
+        if (alive) draw();
+        return;
+      }
       state.calendar = { streak: i + 1, last: todayKey() };
       grant(CALENDAR[i], `Login calendar, day ${i + 1}`); sfx.win(); toast(`Day ${i + 1} reward +${fmt(CALENDAR[i])}`, 'win'); draw();
     });
-    $('#promoForm', el).onsubmit = e => {
+    $('#promoForm', el).onsubmit = async e => {
       e.preventDefault();
       const code = $('#promo', el).value.trim().toUpperCase();
+      if (serverWallet()) {
+        if (busy || !code) return; busy = true;
+        try { const r = await redeemPromo(code); sfx.win(); toast(`Code ${r.code}: +${fmt(r.amount)}`, 'win'); }
+        catch (er) { toast(er instanceof Error ? er.message : 'That code is not valid', 'error'); }
+        finally { busy = false; }
+        if (alive) draw();
+        return;
+      }
       if (!PROMOS[code]) return toast('That code is not valid', 'error');
       if (state.promos.includes(code)) return toast('You already used that code', 'error');
       state.promos.push(code); grant(PROMOS[code], `Promo code ${code}`); sfx.win();

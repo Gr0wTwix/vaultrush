@@ -8,6 +8,7 @@
 | `npm test` | All tests (about 250) |
 | `npm run typecheck` | Loose and strict TypeScript |
 | `npm run build` | Type-check, then build to `dist/` |
+| `npm run gen:catalogue` | Regenerate `supabase/migrations/0009_catalogue.sql` from `src/data.ts` |
 | `npm run dev:admin` | The separate admin site at http://localhost:5174 |
 | `npm run build:admin` | Build the admin site to `dist-admin/` |
 
@@ -37,6 +38,7 @@ Locally they go in `.env` (gitignored). On Vercel they are project environment v
    Then run `supabase/migrations/0005_rounds.sql` (shared Crash and Double rounds). Without it those two games stay solo with simulated players.
    Then run `supabase/migrations/0006_admin.sql`, and make yourself the Owner with the one statement at the end of that file (see [admin-site.md](admin-site.md)).
    Then run `supabase/migrations/0007_site_controls.sql` (maintenance, notice, game switches, sign-ups and country restrictions that the admin site flips; the game site checks them). Without it nothing breaks: the game site simply finds no controls.
+   Then run `0008_wallet.sql`, `0009_catalogue.sql`, `0010_solo_games.sql`, `0011_live_wallet.sql` and `0012_rewards.sql` in that order: the **server wallet** (coins and items in the database, every game on the server). 0011 closes waiting games without refunds. See [server-wallet.md](server-wallet.md). After changing `src/data.ts`, run `npm run gen:catalogue` and run the new 0009 file again.
 3. Authentication, URL configuration: Site URL `http://localhost:5173`; Redirect URLs `http://localhost:5173/**` and the production site with `/**`.
 4. **Google:** create an OAuth client (Web application) in Google Cloud Console with redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`; paste client ID and secret into Authentication, Providers, Google; turn it on.
 5. **Steam (CLI, run in a terminal):**

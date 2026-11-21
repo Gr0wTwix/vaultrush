@@ -42,6 +42,8 @@ Fairness: the seed hash is public from the round's creation; `float = HMAC-SHA25
 
 **What is still simulated here:** the Triple Green pool in Double (it still creeps up locally) and the history of rounds before you arrived (loaded from the database when available). Without `0005`, or when signed out, Crash and Double fall back to the earlier solo rounds with simulated players.
 
+> **Update 2026-11-21:** with migrations 0008 to 0012 the server now holds the stakes and pays the winners for every game, so the browser-side payout bookkeeping described in this section no longer applies once the server wallet is on. See [server-wallet.md](server-wallet.md). The text below describes the earlier play-money design that the page still falls back to without the wallet migrations.
+
 ## Trust model (read this before relying on it)
 
 - **The server decides the shared random result.** Each battle or coinflip gets a secret seed when it is created; only its SHA-256 hash is public. The seed is revealed when the game starts (battle full, coinflip joined), and anyone can recompute the result: `HMAC-SHA256(seed, "<clientSeed>:0:<round>")` for battles (same as `src/fair.ts`), `HMAC-SHA256(seed, "<id>:0:0")` for coinflip. The creator cannot see the seed, and it exists before anyone joins, so nobody can choose it.

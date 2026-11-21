@@ -1,6 +1,6 @@
 # Admin panel: what it could hold (proposal for approval)
 
-> **Status 2026-11-21:** the owner approved the plan (sections 13 to 19). **Step A is built** (admin site shell, roles, permissions, audit log, explorer) and **step B has started: site controls are built** (maintenance, notice, game switches, sign-ups, country restrictions). See [admin-site.md](admin-site.md). The rest of B and steps C to G are not built.
+> **Status 2026-11-21:** the owner approved the plan (sections 13 to 19). **Step A is built** (admin site shell, roles, permissions, audit log, explorer) and **step B has started: site controls are built** (maintenance, notice, game switches, sign-ups, country restrictions). See [admin-site.md](admin-site.md). The rest of B and steps C to G are not built. **The server wallet itself (the core of step D) has since been built:** see [server-wallet.md](server-wallet.md). What is left of D is the admin side: owner wallet adjustments, the ledger and bets viewers.
 
 Written 2026-11-21. **Nothing in this document is built.** It is the analysis you asked for: everything an admin panel for Vaultrush could contain, grounded in what the site really stores today, with example screens, effort sizes, risks and a list of decisions for you to approve or reject. When you answer the questions in section 11, I build exactly that and nothing else.
 

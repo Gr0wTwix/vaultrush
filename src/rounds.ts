@@ -2,8 +2,9 @@
 // every player bets into it; this file wraps the calls, keeps a clock that agrees with the server, watches changes in real time, and
 // pays this browser what the server says its bets are worth, once. Stakes and payouts stay in the browser (play money).
 import { call, getClient } from './backend.js';
-import { state, save, credit, round2 } from './state.js';
-import { liveMe, onReconcile, settleOnce, watchTable } from './live.js';
+import { state, save, credit, round2, isServerWallet } from './state.js';
+import { liveMe, onReconcile, settleOnce, tellBalance, watchTable } from './live.js';
+import { emit } from './state.js';
 import { pushBet } from './feed.js';
 import { fmt, toast } from './ui.js';
 
@@ -31,10 +32,10 @@ export async function advanceRound(game: 'crash' | 'double'): Promise<Round> {
 
 // ---- bets --------------------------------------------------------------------------------------------------------------------
 const anon = (): boolean => !!state.ui.anonymous;
-export const crashBet = (round: number, amount: number, auto: number | null) => call<RoundBet>('crash_place_bet', { p_round: round, p_amount: amount, p_auto: auto, p_anon: anon() });
-export const crashCancel = (round: number) => call<number>('crash_cancel_bet', { p_round: round });
-export const crashCashout = (round: number, frac: number) => call<CashoutResult>('crash_cashout', { p_round: round, p_frac: frac });
-export const doubleBet = (round: number, lane: string, amount: number) => call<RoundBet>('double_place_bet', { p_round: round, p_lane: lane, p_amount: amount, p_anon: anon() });
+export const crashBet = (round: number, amount: number, auto: number | null) => call<RoundBet & { balance?: number }>('crash_place_bet', { p_round: round, p_amount: amount, p_auto: auto, p_anon: anon() }).then(tellBalance);
+export const crashCancel = (round: number) => call<number>('crash_cancel_bet', { p_round: round }).then(a => { emit('wallet:refresh'); return a; });
+export const crashCashout = (round: number, frac: number) => call<CashoutResult & { balance?: number }>('crash_cashout', { p_round: round, p_frac: frac }).then(tellBalance);
+export const doubleBet = (round: number, lane: string, amount: number) => call<RoundBet & { balance?: number }>('double_place_bet', { p_round: round, p_lane: lane, p_amount: amount, p_anon: anon() }).then(tellBalance);
 
 export async function roundBets(roundId: number): Promise<RoundBet[]> {
   const { data } = await (await getClient()).from('round_bets').select('*').eq('round_id', roundId).order('id');
@@ -62,6 +63,7 @@ export function payBet(b: RoundBet): number {
   const key = String(b.id), paid = state.liveCredit[key] ?? 0, owed = round2(b.locked);
   const delta = round2(owed - paid);
   if (delta <= 0) return 0;
+  if (isServerWallet()) { state.liveCredit[key] = owed; return 0; }    // the server pays the bets itself; nothing to credit here
   state.liveCredit[key] = owed;
   const keys = Object.keys(state.liveCredit);
   if (keys.length > 300) for (const k of keys.map(Number).sort((a, c) => a - c).slice(0, keys.length - 300)) delete state.liveCredit[String(k)];

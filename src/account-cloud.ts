@@ -6,6 +6,7 @@ import {
 import { openAuth, openFinishProfile } from './auth.js';
 import { validatePassword } from './signup.js';
 import { recompute } from './verify.js';
+import { checkable, resultText } from './server-bets.js';
 import type { PaneCtx } from './account-rg.js';
 import { $, esc, fmt, money, toast } from './ui.js';
 import { sfx } from './sfx.js';
@@ -41,7 +42,7 @@ export async function renderCloud(pane: HTMLElement, ctx: PaneCtx): Promise<void
     $('#cFin', pane).onclick = () => { ctx.close(); openFinishProfile(); };
     return;
   }
-  const [seeds, bets, race] = await Promise.all([mySeeds().catch(() => []), myBets(10).catch(() => []), dailyRace().catch(() => [])]);
+  const [seeds, bets, race] = await Promise.all([mySeeds().catch(() => []), myBets(30).catch(() => []), dailyRace().catch(() => [])]);
   pane.insertAdjacentHTML('beforeend', `
     <div class="ac-card kyc-tier"><div><span class="muted small">Signed in as</span><b class="kyc-tier-n">${esc(user.email?.replace(/@steam\.vaultrush\.invalid$/, ' (Steam)') ?? 'player')}</b></div>
       <div class="kyc-lim"><button class="btn btn-ghost" id="cOut">Sign out</button></div><div class="kyc-lim"><button class="btn btn-ghost" id="cOutAll">Sign out everywhere</button></div></div>
@@ -50,7 +51,7 @@ export async function renderCloud(pane: HTMLElement, ctx: PaneCtx): Promise<void
     <div class="ac-card"><h3>Seeds</h3>${hint('The hash of the next seed is committed before it is used. Rotating reveals the current seed so every bet made with it can be re-checked below.')}
       <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Status</th><th>Hash</th><th>Nonces</th><th>Seed</th></tr></thead><tbody>${seeds.slice(0, 6).map(s => `<tr><td>${s.status}</td><td><code>${esc(s.server_hash.slice(0, 16))}…</code></td><td>${s.nonce}</td><td>${s.server_seed ? `<code>${esc(s.server_seed.slice(0, 16))}…</code>` : '<span class="muted">hidden</span>'}</td></tr>`).join('')}</tbody></table></div>
       <div class="ac-links"><button class="btn btn-ghost" id="cRot">Rotate seed</button></div></div>
-    <div class="ac-card"><h3>Recent server bets</h3>${bets.length ? `<div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Amount</th><th>Target</th><th>Crash point</th><th>Payout</th><th>Check</th></tr></thead><tbody>${bets.map(b => `<tr><td>${money(b.amount)}</td><td>${b.result.target}×</td><td>${b.result.crash_point}×</td><td class="${b.payout > 0 ? 'pos' : 'neg'}">${b.payout > 0 ? `+${fmt(b.payout)}` : '0.00'}</td><td data-chk="${b.id}" class="muted">after rotation</td></tr>`).join('')}</tbody></table></div>` : '<div class="ac-empty">No server bets yet.</div>'}</div>
+    <div class="ac-card"><h3>Recent bets (made by the database)</h3>${hint('Every game now runs on the server. Cases, Upgrade, Plinko, Mines and the Crash demo are drawn from your own secret seed: after you rotate it, each one is re-checked here with the same code as the Fairness page. Battles, Coinflip, Crash and Double rounds use the game\'s own seed (shown on that game).')}${bets.length ? `<div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Game</th><th>Amount</th><th>Result</th><th>Payout</th><th>Check</th></tr></thead><tbody>${bets.map(b => `<tr><td>${esc(b.game)}</td><td>${money(b.amount)}</td><td class="muted small">${esc(resultText(b))}</td><td class="${b.payout > 0 ? 'pos' : 'neg'}">${b.payout > 0 ? `+${fmt(b.payout)}` : '0.00'}</td><td data-chk="${b.id}" class="muted">${checkable(b) ? 'after rotation' : 'game seed'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="ac-empty">No bets yet.</div>'}</div>
     <div class="ac-card"><h3>Today's race (real players)</h3>${race.length ? `<div class="table-wrap"><table class="bets ac-table"><thead><tr><th>#</th><th>Player</th><th>Wagered</th><th class="r">Bets</th></tr></thead><tbody>${race.slice(0, 10).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.display_name)}</td><td>${money(r.wagered)}</td><td class="r muted">${r.bets}</td></tr>`).join('')}</tbody></table></div>` : '<div class="ac-empty">Nobody has wagered today.</div>'}</div>
     <div class="ac-card"><h3>Your data</h3>${hint('Download everything the server holds about you, or delete your account. Deleting anonymises your profile, removes your chat messages, closes the login and zeroes your balance. Bets and ledger entries stay, without your name, as financial records.')}
       <div class="ac-links"><button class="btn btn-ghost" id="cExport">Download my data</button></div></div>
@@ -58,10 +59,11 @@ export async function renderCloud(pane: HTMLElement, ctx: PaneCtx): Promise<void
       <div class="ac-inline"><input id="cDelWord" placeholder="DELETE" aria-label="Type DELETE" style="max-width:130px"><button class="btn btn-ghost" id="cDel" disabled>Delete</button></div></div>`);
 
   for (const b of bets) {                                      // re-check bets made with a revealed seed, locally, with the Fairness page's code
-    const s = seeds.find(x => x.server_hash === b.server_hash && x.server_seed), cell = pane.querySelector(`[data-chk="${b.id}"]`);
-    if (!s || !cell) continue;
-    const again = await recompute('crash', undefined, s.server_seed as string, b.client_seed, b.nonce).catch(() => null);
-    cell.innerHTML = again && Number(again.key) === Number(b.result.crash_point) ? '<span class="sev sev-ok">verified</span>' : '<span class="sev sev-high">mismatch</span>';
+    const chk = checkable(b);
+    const s = chk && seeds.find(x => x.server_hash === b.server_hash && x.server_seed), cell = pane.querySelector(`[data-chk="${b.id}"]`);
+    if (!chk || !s || !cell) continue;
+    const again = await recompute(chk.game, chk.params, s.server_seed as string, b.client_seed as string, b.nonce as number).catch(() => null);
+    cell.innerHTML = again && again.key === chk.key ? '<span class="sev sev-ok">verified</span>' : '<span class="sev sev-high">mismatch</span>';
   }
   $('#cOut', pane).onclick = async () => { await signOut(); ctx.rerender(); };
   $('#cOutAll', pane).onclick = async () => { try { await signOutEverywhere(); toast('Signed out on every device'); ctx.rerender(); } catch (e) { fail(e); } };

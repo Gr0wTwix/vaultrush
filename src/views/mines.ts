@@ -5,6 +5,7 @@ import { $, $$, fmt, money, icon, coin, toast, avatar, esc } from '../ui.js';
 import { randomBot } from '../data.js';
 import { sfx } from '../sfx.js';
 import { createFx } from '../fx.js';
+import { serverWallet, minesStart, minesPick, minesCashout, minesCancel, minesActive, type MinesEnd } from '../wallet.js';
 
 const GEM = `<svg class="gem-svg" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gemA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4ffd0"/><stop offset=".45" stop-color="#c6ff3d"/><stop offset="1" stop-color="#5fa800"/></linearGradient></defs>
   <path d="M14 8h20l9 11-19 23L5 19z" fill="url(#gemA)"/>
@@ -52,7 +53,7 @@ const gameCard = g => `<div class="lg-card ${g.mine ? 'mine' : ''}">${miniBoard(
   <div><span class="muted small">Profit</span><b class="${g.multi ? 'pos' : 'neg'}">${g.multi ? '+' : '-'}${fmt(g.multi ? round2(g.amount * g.multi - g.amount) : g.amount)}</b></div></div></div>`;
 
 export function render(el) {
-  let game = null; // { amount, bombs:Set, revealed:Set, over, busy, entry, last }
+  let game = null; // { amount, bombs:Set, revealed:Set, over, busy, entry, last }; with the server wallet also { server, sid, final } and the bombs stay unknown until the game ends
   let mineCount = 3, N = 25, cols = 5;
   let timers = [];
   const later = (fn, ms) => { const id = setTimeout(() => { timers = timers.filter(t => t !== id); fn(); }, ms); timers.push(id); return id; };
@@ -163,10 +164,11 @@ export function render(el) {
   const settle = won => {
     game.over = true;
     const picks = game.revealed.size;
-    const m = won ? minesMultiplier(mineCount, picks, N) : 0;
-    const payout = round2(game.amount * m);
+    // With the server wallet the database has already paid; the multiplier and payout shown are the ones it returned.
+    const m = won ? (game.server ? Number(game.final?.mult ?? minesMultiplier(mineCount, picks, N)) : minesMultiplier(mineCount, picks, N)) : 0;
+    const payout = game.server ? (won ? Number(game.final?.payout ?? 0) : 0) : round2(game.amount * m);
     if (won) credit(payout);
-    annotate(game.entry, `${cols}×${cols} grid, ${mineCount} mines at ${[...game.bombs].map(b => b + 1).sort((a, b) => a - b).join(', ')}, ${picks} gems, ${won ? `cashed ${fmt(m)}×` : 'hit a bomb'}`, [...game.bombs].map(b => b + 1).sort((a, b) => a - b).join(','));
+    if (game.entry) annotate(game.entry, `${cols}×${cols} grid, ${mineCount} mines at ${[...game.bombs].map(b => b + 1).sort((a, b) => a - b).join(', ')}, ${picks} gems, ${won ? `cashed ${fmt(m)}×` : 'hit a bomb'}`, [...game.bombs].map(b => b + 1).sort((a, b) => a - b).join(','));
     pushBet({ user: state.name, game: 'Mines', amount: game.amount, multi: m, payout, mine: true });
     pushLive({ user: state.name, mine: true, N, bombs: game.bombs, revealed: new Set(game.revealed), hit: won ? null : game.exploded, amount: game.amount, multi: m });
     return { m, payout };
@@ -205,6 +207,11 @@ export function render(el) {
   };
 
   const win = async () => {
+    if (game.server && !game.final) {
+      game.busy = true; stats();
+      try { const r = await minesCashout(game.sid); game.final = r; game.bombs = new Set(r.bombs); }
+      catch (e) { game.busy = false; stats(); return toast(e instanceof Error ? e.message : 'Could not cash out', 'error'); }
+    }
     const { m, payout } = settle(true);
     sfx.win();
     toast(`Cashed out ${fmt(m)}×: +${fmt(payout)}`, 'win');
@@ -226,7 +233,17 @@ export function render(el) {
     restart(t, 'press');
     later(async () => {
       t.classList.remove('press');
-      if (game.bombs.has(i)) return lose(i);
+      let bomb: boolean;
+      if (game.server) {
+        // The bombs are secret: the database says whether this tile is one (and reveals them all when the game ends).
+        let r;
+        try { r = await minesPick(game.sid, i); }
+        catch (e) { toast(e instanceof Error ? e.message : 'Could not pick that tile', 'error'); game.busy = false; t.disabled = false; stats(); return; }
+        bomb = r.bomb;
+        if (r.bombs) game.bombs = new Set(r.bombs);
+        if (r.done) game.final = r;                       // the last safe tile was revealed: the database cashed out by itself
+      } else bomb = game.bombs.has(i);
+      if (bomb) return lose(i);
       game.revealed.add(i);
       game.last = i;
       const step = game.revealed.size;
@@ -257,8 +274,21 @@ export function render(el) {
     if (!debit(amount)) return toast(debitError(amount), 'error');
     clearTimers();
     act.disabled = true;
-    const { floats, entry } = await bet('mines', N - 1, { grid: N, mines: mineCount });
-    game = { amount, bombs: new Set(minePositions(floats, mineCount, N)), revealed: new Set(), over: false, busy: false, entry, last: null, exploded: null };
+    if (serverWallet()) {
+      try {
+        const s = await minesStart(amount, N, mineCount);
+        game = { amount, bombs: new Set(), revealed: new Set(), over: false, busy: false, entry: null, last: null, exploded: null, server: true, sid: s.game, final: null };
+      } catch (e) {
+        act.disabled = false; stats();
+        const again = e instanceof Error && /current game/.test(e.message);
+        toast(e instanceof Error ? e.message : 'Could not start the game', 'error');
+        if (again) void resume();
+        return;
+      }
+    } else {
+      const { floats, entry } = await bet('mines', N - 1, { grid: N, mines: mineCount });
+      game = { amount, bombs: new Set(minePositions(floats, mineCount, N)), revealed: new Set(), over: false, busy: false, entry, last: null, exploded: null };
+    }
     $('#banner', el).className = 'board-banner';
     wrap.classList.remove('quake', 'hit');
     tiles.forEach((t, i) => {
@@ -271,13 +301,36 @@ export function render(el) {
     sfx.click(); stats();
   };
 
+  /** A game was left open (page closed, another device): carry on where it stopped. The database never tells us where the bombs are. */
+  async function resume(): Promise<void> {
+    let a;
+    try { a = await minesActive(); } catch { return; }
+    if (!a || !el.isConnected || locked()) return;
+    N = a.grid; cols = Math.sqrt(N); mineCount = a.mines; amt.value = a.amount;
+    $$('#grid button', el).forEach(x => x.classList.toggle('active', +x.dataset.g === N));
+    $('#banner', el).className = 'board-banner';
+    buildBoard(); setMines(a.mines);
+    game = { amount: a.amount, bombs: new Set(), revealed: new Set(a.picks), over: false, busy: false, entry: null, last: a.picks[a.picks.length - 1] ?? null, exploded: null, server: true, sid: a.game, final: null };
+    tiles.forEach((t, i) => {
+      if (game.revealed.has(i)) { t.innerHTML = GEM; t.classList.add('gem', 'found'); t.disabled = true; } else t.disabled = false;
+    });
+    stats();
+    toast('Your game in progress was restored');
+  }
+  if (serverWallet()) void resume();
+
   stats();
   // Leaving mid-game: cash out what's revealed, or refund if no tile was picked yet.
   return () => {
     clearInterval(liveTimer);
     clearTimers();
     if (game && !game.over) {
-      if (game.revealed.size) settle(true); else { game.over = true; credit(game.amount); }
+      if (game.server) {
+        // The database settles it for us: cash out what is revealed, or give the stake back when nothing was picked.
+        game.over = true;
+        if (game.revealed.size) void minesCashout(game.sid).then((r: MinesEnd) => pushBet({ user: state.name, game: 'Mines', amount: game.amount, multi: Number(r.mult ?? 0), payout: Number(r.payout), mine: true })).catch(() => {});
+        else void minesCancel(game.sid).catch(() => {});
+      } else if (game.revealed.size) settle(true); else { game.over = true; credit(game.amount); }
     }
     fx.destroy();
   };

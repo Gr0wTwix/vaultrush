@@ -20,6 +20,7 @@ import * as responsible from './views/responsible.js';
 import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
 import { initSite, gameOff, pausedPanel, GAME_OF_NAV } from './site.js';
+import { serverWallet, claimFaucet } from './wallet.js';
 import * as home from './views/home.js';
 import * as cases from './views/cases.js';
 import * as battles from './views/battles.js';
@@ -158,9 +159,17 @@ function renderTopbar() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !meMenu.hidden) { setMenu(false); meBtn.focus(); } });
   $('#muteBtn').onclick = () => { state.muted = !state.muted; save(); $('#muteBtn').innerHTML = icon(state.muted ? 'mute' : 'sound'); };
   $('#chatBtn').onclick = () => document.body.classList.toggle('chat-open');
-  $('#freeBtn').onclick = () => {
+  $('#freeBtn').onclick = async () => {
     const wait = state.lastClaim + FREE_COINS_EVERY_MS - Date.now();
     if (wait > 0) return toast(`Next free coins in ${Math.ceil(wait / 60000)} min`, 'error');
+    if (serverWallet()) {                      // the database decides whether it is time, and pays
+      try {
+        const r = await claimFaucet();
+        if (r.claimed) { sfx.win(); toast(`+${fmt(r.amount ?? FREE_COINS)} free coins claimed`, 'win'); }
+        else toast(`Next free coins in ${Math.max(1, Math.ceil((r.next_at - Date.now()) / 60000))} min`, 'error');
+      } catch (e) { toast(e instanceof Error ? e.message : 'Could not claim free coins', 'error'); }
+      return;
+    }
     state.lastClaim = Date.now();
     credit(FREE_COINS); logTx('Free coins', FREE_COINS); sfx.win();
     toast(`+${fmt(FREE_COINS)} free coins claimed`, 'win');
@@ -251,7 +260,8 @@ async function boot() {
   void initAuth();
   await Promise.race([initSite(), new Promise(r => setTimeout(r, 1500))]);      // maintenance, notice, paused games: known before the first page is drawn
   on('auth', () => route());
-  on('live', () => route());                 // lobbies change from simulated to real the moment the server confirms live games
+  on('live', () => route());
+  on('wallet', () => route());               // the server wallet switched on or off: pages that show coins and items redraw                 // lobbies change from simulated to real the moment the server confirms live games
   initChatDock();
   startFeed();
   renderTicker();

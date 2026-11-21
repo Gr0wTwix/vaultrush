@@ -164,8 +164,23 @@ begin
   return jsonb_build_object('paid', true, 'rank', rnk, 'prize', prize, 'balance', bal, 'wagered', wag);
 end $$;
 
+-- The race boards: today's (top 50) counts only real stakes, and yesterday's top 10 shows who just shared the prizes.
+create or replace view public.daily_race with (security_invoker = false) as
+  select p.display_name, sum(b.amount)::numeric(16, 2) as wagered, count(*)::int as bets
+  from public.bets b join public.profiles p on p.id = b.user_id
+  where b.amount > 0 and b.created_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
+  group by p.id, p.display_name order by wagered desc limit 50;
+create view public.daily_race_prev with (security_invoker = false) as
+  select p.display_name, sum(b.amount)::numeric(16, 2) as wagered, count(*)::int as bets
+  from public.bets b join public.profiles p on p.id = b.user_id
+  where b.amount > 0 and b.created_at >= ((date_trunc('day', now() at time zone 'utc') - interval '1 day') at time zone 'utc')
+    and b.created_at < (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
+  group by p.id, p.display_name order by wagered desc limit 10;
+revoke all on public.daily_race_prev from anon, authenticated;
+grant select on public.daily_race_prev to authenticated;
+
 -- ============================ the snapshot grows: claims, and old lobbies are reaped ============================================
-create or replace function public.wallet_me() returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+create or replace function public.wallet_me(p_inventory boolean default true) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare uid uuid := auth.uid(); w public.wallets; pr public.player_rewards;
 begin
   perform public.live_player(uid);
@@ -181,8 +196,8 @@ begin
       'keys_used', to_jsonb(coalesce(pr.keys_used, '{}')), 'faucet_at', (extract(epoch from pr.faucet_at) * 1000)::bigint,
       'welcome_at', (select (extract(epoch from claimed_at) * 1000)::bigint from public.free_claims where user_id = uid and kind = 'welcome'),
       'daily_case_at', (select (extract(epoch from claimed_at) * 1000)::bigint from public.free_claims where user_id = uid and kind = 'daily_case')),
-    'inventory', coalesce((select jsonb_agg(jsonb_build_object('uid', i.id, 'id', i.item_id, 'at', (extract(epoch from i.created_at) * 1000)::bigint) order by i.created_at desc, i.id)
-                             from public.inventory i where i.user_id = uid), '[]'::jsonb),
+    'inventory', case when p_inventory then coalesce((select jsonb_agg(jsonb_build_object('uid', i.id, 'id', i.item_id, 'at', (extract(epoch from i.created_at) * 1000)::bigint) order by i.created_at desc, i.id)
+                             from public.inventory i where i.user_id = uid), '[]'::jsonb) end,
     'now', (extract(epoch from now()) * 1000)::bigint);
 end $$;
 

@@ -6,6 +6,7 @@ import type { DoubleLane } from '../types.js';
 import { pushBet } from '../feed.js';
 import { $, $$, fmt, money, icon, toast, avatar, esc, confetti, coin } from '../ui.js';
 import { sfx } from '../sfx.js';
+import { serverWallet } from '../wallet.js';
 import { roundsOn, liveMe } from '../live.js';
 import { advanceRound, serverNow, doubleBet, roundBets, recentResults, roundSeed, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
 
@@ -224,7 +225,8 @@ export function render(el) {
       if (greenStreak.length >= 3) {
         const mine = greenStreak.reduce((s, g) => s + g.mine, 0), total = greenStreak.reduce((s, g) => s + g.total, 0);
         const share = total ? round2((pool * mine) / total) : 0;
-        if (share > 0) { credit(share); toast(`Triple Green! Pool share +${fmt(share)}`, 'win'); confetti('#3dffa0'); }
+        if (share > 0 && serverWallet()) toast('Triple Green! The pot is a demo and pays nothing yet.');
+        else if (share > 0) { credit(share); toast(`Triple Green! Pool share +${fmt(share)}`, 'win'); confetti('#3dffa0'); }
         else toast(`Triple Green! ${fmt(pool)} paid to green players`);
         pool = 150; greenStreak = [];
       }
@@ -301,7 +303,8 @@ export function render(el) {
         if (greenStreak.length >= 3) {
           const mine = greenStreak.reduce((a, g) => a + g.mine, 0), total = greenStreak.reduce((a, g) => a + g.total, 0);
           const share = total ? round2((pool * mine) / total) : 0;
-          if (share > 0) { credit(share); toast(`Triple Green! Pool share +${fmt(share)}`, 'win'); confetti('#3dffa0'); } else toast(`Triple Green! ${fmt(pool)} paid to green players`);
+          if (share > 0 && serverWallet()) toast('Triple Green! The pot is a demo and pays nothing yet.');
+          else if (share > 0) { credit(share); toast(`Triple Green! Pool share +${fmt(share)}`, 'win'); confetti('#3dffa0'); } else toast(`Triple Green! ${fmt(pool)} paid to green players`);
           pool = 150; greenStreak = [];
         }
       } else greenStreak = [];

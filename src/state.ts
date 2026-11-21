@@ -74,6 +74,15 @@ export const level = (): number => levelFromXp(state.xp);
 
 export function isExcluded(): boolean { return state.excludedUntil > Date.now(); }
 
+// ---- the server wallet --------------------------------------------------------------------------------------------------
+// With a cloud account on a database that has the server wallet (supabase/migrations/0008 to 0012), the balance and the items live in the database and
+// state.balance / state.inv are only a mirror of it (src/wallet.ts keeps it fresh). While it is on, the functions below that used to change coins and
+// items in the browser change NOTHING: the server does it, so nothing can be minted by editing the page or its storage. debit() only refuses what the
+// server would certainly refuse. credit() announces 'wallet:credit' so the page can reveal a payout it was holding back until the animation ended.
+let walletServer = false;
+export const isServerWallet = (): boolean => walletServer;
+export function setServerWallet(on: boolean): void { walletServer = on; }
+
 // Visitors can browse without an account but cannot wager or claim anything. auth.ts sets the real value at start-up and runs the hook
 // that opens the login/register popup. The default is "signed in" so code that never starts the UI (the tests) is unaffected.
 let authed = true;
@@ -96,6 +105,7 @@ export function requireLogin(reason: string = LOGIN_REASON): boolean { if (!auth
 export function debit(amount: number): boolean {
   amount = round2(amount);
   if (!requireLogin()) return false;
+  if (walletServer) return amount > 0 && canAfford(amount);        // the server takes the stake (and runs the limits) when the game is played
   if (!(amount > 0) || !canAfford(amount) || betBlockReason(state, amount)) return false;
   const before = level();
   state.balance = round2(state.balance - amount);
@@ -117,10 +127,11 @@ export function debit(amount: number): boolean {
 }
 
 /** Why a bet was refused, for the toast. */
-export const debitError = (amount: number): string => (!authed ? LOGIN_REASON : !(amount > 0) ? 'Invalid amount' : betBlockReason(state, amount) ?? (!canAfford(amount) ? 'Not enough coins. Claim free coins at the top.' : 'Invalid amount'));
+export const debitError = (amount: number): string => (!authed ? LOGIN_REASON : !(amount > 0) ? 'Invalid amount' : (walletServer ? null : betBlockReason(state, amount)) ?? (!canAfford(amount) ? 'Not enough coins. Claim free coins at the top.' : 'Invalid amount'));
 
 export function credit(amount: number): void {
   if (!(amount > 0)) return;
+  if (walletServer) { emit('wallet:credit', amount); return; }     // the server already paid it; this only reveals it
   state.balance = round2(state.balance + amount);
   state.stats.won = round2(state.stats.won + amount);
   save();
@@ -129,6 +140,7 @@ export function credit(amount: number): void {
 /** Bonus money (rewards, promo codes) doesn't count as winnings. */
 export function grant(amount: number, type = 'Bonus'): void {
   if (!(amount > 0) || !requireLogin('Log in or create a free account to claim rewards.')) return;
+  if (walletServer) return;                                        // rewards are claimed from the server (src/wallet.ts)
   state.balance = round2(state.balance + amount);
   logTx(type, amount);
   save();
@@ -143,6 +155,7 @@ export function logTx(type: string, amount: number, note = ''): void {
 const uid = (): string => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
 
 export function addItems(items: Pick<Item, 'id'>[]): InvEntry[] {
+  if (walletServer) return [];                                     // items are given by the server only
   const entries = items.map(it => ({ uid: uid(), id: it.id, at: Date.now() }));
   state.inv.unshift(...entries);
   save();
@@ -150,6 +163,7 @@ export function addItems(items: Pick<Item, 'id'>[]): InvEntry[] {
 }
 
 export function removeItems(uids: string[]): void {
+  if (walletServer) return;
   const set = new Set(uids);
   state.inv = state.inv.filter(e => !set.has(e.uid));
   save();

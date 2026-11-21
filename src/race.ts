@@ -1,6 +1,6 @@
 // Daily race: simulated rivals with deterministic totals per day, so standings are stable on reload.
 import { BOTS } from './data.js';
-import { state, grant, save, todayKey, DAY, isAuthed } from './state.js';
+import { state, grant, save, todayKey, DAY, isAuthed, isServerWallet } from './state.js';
 
 export interface RaceRow { name: string; wagered: number; me?: boolean }
 export interface RankedRow extends RaceRow { rank: number; prize: number }
@@ -25,7 +25,18 @@ export function rivals(key: string, progress: number): RaceRow[] {
   });
 }
 
+/** With the server wallet the board is made of real players: today's and yesterday's standings as the database counts them (wagered coins of every game). */
+let real: { today: { name: string; wagered: number }[]; prev: { name: string; wagered: number }[] } | null = null;
+export const setRealRace = (r: typeof real): void => { real = r; };
+
 export function standings(key: string = todayKey(), now: number = Date.now()): RankedRow[] {
+  if (real && isServerWallet()) {
+    const rows = key === todayKey() ? real.today : key === todayKey(Date.parse(`${todayKey()}T00:00:00Z`) - DAY) ? real.prev : [];
+    const list: RaceRow[] = rows.map(r => ({ name: r.name, wagered: r.wagered, me: isAuthed() && r.name === state.name }));
+    if (key === todayKey() && isAuthed() && !list.some(p => p.me)) list.push({ name: state.name, wagered: 0, me: true });
+    list.sort((a, b) => b.wagered - a.wagered);
+    return list.map((p, i) => ({ ...p, rank: i + 1, prize: PRIZES[i] ?? 0 }));
+  }
   const progress = Math.min(1, Math.max(0, (now - dayStart(key)) / DAY));
   const mine = state.race.date === key ? state.race.wagered : 0;
   const list: RaceRow[] = [...rivals(key, progress), ...(isAuthed() ? [{ name: state.name, wagered: mine, me: true }] : [])];

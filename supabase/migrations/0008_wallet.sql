@@ -199,7 +199,7 @@ begin
 end $$;
 
 -- ============================ the player's own view of everything =========================================================
-create function public.wallet_me() returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+create function public.wallet_me(p_inventory boolean default true) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare uid uuid := auth.uid(); w public.wallets; pr public.player_rewards;
 begin
   perform public.live_player(uid);
@@ -212,8 +212,8 @@ begin
       'last_daily', (extract(epoch from pr.last_daily) * 1000)::bigint, 'last_weekly', (extract(epoch from pr.last_weekly) * 1000)::bigint,
       'calendar_streak', coalesce(pr.calendar_streak, 0), 'calendar_last', pr.calendar_last, 'promos', to_jsonb(coalesce(pr.promos, '{}')),
       'keys_used', to_jsonb(coalesce(pr.keys_used, '{}')), 'faucet_at', (extract(epoch from pr.faucet_at) * 1000)::bigint),
-    'inventory', coalesce((select jsonb_agg(jsonb_build_object('uid', i.id, 'id', i.item_id, 'at', (extract(epoch from i.created_at) * 1000)::bigint) order by i.created_at desc, i.id)
-                             from public.inventory i where i.user_id = uid), '[]'::jsonb),
+    'inventory', case when p_inventory then coalesce((select jsonb_agg(jsonb_build_object('uid', i.id, 'id', i.item_id, 'at', (extract(epoch from i.created_at) * 1000)::bigint) order by i.created_at desc, i.id)
+                             from public.inventory i where i.user_id = uid), '[]'::jsonb) end,
     'now', (extract(epoch from now()) * 1000)::bigint);
 end $$;
 
@@ -255,5 +255,5 @@ select pg_temp.patch_fn('delete_account', 'delete from public.chat_messages wher
 -- ============================ privileges ==================================================================================
 revoke execute on function public.fair_floats(text, text, integer, integer), public.fair_draw(uuid, integer), public.wallet_gate(uuid, numeric), public.rewards_accrue(uuid, numeric),
   public.wallet_debit(uuid, numeric, text, bigint, boolean), public.wallet_credit(uuid, numeric, text, bigint, boolean), public.inventory_add(uuid, text, text),
-  public.bet_record(uuid, text, numeric, numeric, public.fair_t, jsonb, jsonb, text), public.wallet_me(), public.sell_items(uuid[]) from public, anon, authenticated;
-grant execute on function public.wallet_me(), public.sell_items(uuid[]) to authenticated;
+  public.bet_record(uuid, text, numeric, numeric, public.fair_t, jsonb, jsonb, text), public.wallet_me(boolean), public.sell_items(uuid[]) from public, anon, authenticated;
+grant execute on function public.wallet_me(boolean), public.sell_items(uuid[]) to authenticated;

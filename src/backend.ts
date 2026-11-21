@@ -2,6 +2,7 @@
 // local. When configured, the player signs in with an email link and bets run on the server (see supabase/migrations).
 // supabase-js is imported lazily so it is a separate chunk that only downloads when the backend is actually used.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ServerBetRow } from './server-bets.js';
 
 export const BACKEND_URL: string = import.meta.env?.VITE_SUPABASE_URL ?? '';
 const KEY: string = import.meta.env?.VITE_SUPABASE_ANON_KEY ?? '';
@@ -28,7 +29,12 @@ export const ERROR_TEXT: Record<string, string> = {
   too_many_open: 'You already have the maximum number of open games. Finish or cancel one first.', already_started: 'The battle has already started.', not_in_battle: 'You are not in that battle.',
   not_creator: 'Only the creator can do that.', invalid_format: 'Unknown battle format.', invalid_mode: 'That mode is not allowed for this format.', invalid_cases: 'Pick between 1 and 20 cases.',
   flip_not_found: 'That coinflip no longer exists.', flip_not_open: 'Someone already joined that coinflip, or it was cancelled.', flip_expired: 'That coinflip has been waiting too long.', own_flip: 'You cannot join your own coinflip.', invalid_side: 'Pick bolt or star.', invalid_claim: 'That reward cannot be claimed.', betting_closed: 'Betting is closed for this round.', already_bet: 'You already have a bet in this round.', no_bet: 'You have no bet in this round.',
-  not_started: 'The round has not started yet.', too_late: 'Too late: the round is over.', round_over: 'That round is over.', invalid_game: 'Unknown game.', invalid_lane: 'Pick a lane.', both_sides: "You can't back both Purple and Gray.",
+  not_started: 'The round has not started yet.',
+  item_not_found: 'One of those items is no longer in your inventory.', invalid_count: 'Open between 1 and 10 cases at once.', case_not_found: 'That case is not available.', too_many_items: 'Stake at most 4 items.',
+  unknown_item: 'That item does not exist.', target_too_low: 'Pick a target worth more than your stake.', game_in_progress: 'Finish your current game first.', game_over: 'That game is already over.',
+  game_not_found: 'That game was not found.', invalid_tile: 'That tile cannot be picked.', no_picks: 'Reveal a tile before cashing out.', has_picks: 'You already revealed a tile: cash out instead.',
+  duplicate_request: 'That request was already handled.', nothing_to_claim: 'Nothing to claim yet.', not_ready: 'Not ready yet. Come back later.', already_claimed: 'Already claimed today.',
+  invalid_code: 'That code is not valid.', code_used: 'You already used that code.', code_used_up: 'That code has been used up.', level_too_low: 'Reach the level first.', catalogue_gap: 'Something is wrong with that case. Try another.', too_late: 'Too late: the round is over.', round_over: 'That round is over.', invalid_game: 'Unknown game.', invalid_lane: 'Pick a lane.', both_sides: "You can't back both Purple and Gray.",
   maintenance: 'Vaultrush is under maintenance. Please try again soon.', country_blocked: 'Vaultrush is not available in your country.', game_off: 'This game is paused right now.', signups_closed: 'Sign-ups are closed for now. Existing players can still log in.',
 };
 /** Turn a Postgres/PostgREST error into plain language. */
@@ -173,10 +179,16 @@ export async function dailyRace(): Promise<RaceRow[]> {
   if (error) throw new Error(explain(error));
   return (data as RaceRow[]).map(r => ({ ...r, wagered: Number(r.wagered) }));
 }
-export async function myBets(limit = 20): Promise<{ id: number; amount: number; payout: number; nonce: number; client_seed: string; server_hash: string; result: ServerBet }[]> {
-  const { data, error } = await (await getClient()).from('bets').select('id, amount, payout, nonce, client_seed, server_hash, result').order('id', { ascending: false }).limit(limit);
+export async function dailyRacePrev(): Promise<RaceRow[]> {
+  const { data, error } = await (await getClient()).from('daily_race_prev').select('*');
   if (error) throw new Error(explain(error));
-  return data as never;
+  return (data as RaceRow[]).map(r => ({ ...r, wagered: Number(r.wagered) }));
+}
+/** The player's most recent bets of every game (the database made them; row-level security shows only the player's own). */
+export async function myBets(limit = 20): Promise<ServerBetRow[]> {
+  const { data, error } = await (await getClient()).from('bets').select('id, game, amount, payout, multiplier, nonce, client_seed, server_hash, params, result, created_at').order('id', { ascending: false }).limit(limit);
+  if (error) throw new Error(explain(error));
+  return (data as ServerBetRow[]).map(b => ({ ...b, amount: Number(b.amount), payout: Number(b.payout), multiplier: Number(b.multiplier) }));
 }
 export const postChat = async (body: string): Promise<void> => {
   const { error } = await (await getClient()).from('chat_messages').insert({ body });

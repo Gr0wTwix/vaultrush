@@ -5,6 +5,7 @@ import { pushBet, pushDrop } from '../feed.js';
 import { $, $$, fmt, money, itemCard, toast, icon, coin, confetti, avatar, esc, itemArt } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { randomBot } from '../data.js';
+import { serverWallet, upgradeItem } from '../wallet.js';
 
 const liveUps = [];
 function simUp() {
@@ -146,14 +147,23 @@ export function render(el) {
     // Shown in the live feed as "from → to": your most valuable staked item (or the closest item to a coin stake).
     const fromItem = uids.map(u => ITEM[state.inv.find(i => i.uid === u).id]).sort((a, b) => b.value - a.value)[0]
       || [...ITEMS].sort((a, b) => Math.abs(a.value - sv) - Math.abs(b.value - sv))[0];
-    removeItems(uids);
-    const ch = upgradeChance(sv, target.value);
     const dirOver = over;
-    const { floats, entry } = await bet('upgrade', 1, { chance: ch, over: dirOver });
-    // The pointer's position IS the roll: under wins below the chance, over wins above 1 - chance.
-    const f = floats[0];
-    const win = dirOver ? f > 1 - ch : f < ch;
-    annotate(entry, `${(ch * 100).toFixed(2)}% ${dirOver ? 'over' : 'under'} for ${target.weapon} | ${target.skin}: roll ${(f * 100).toFixed(2)} → ${win ? 'win' : 'lose'}`, `${f.toFixed(6)}:${win ? 1 : 0}`);
+    let ch: number, f: number, win: boolean;
+    if (serverWallet()) {
+      // The database checks the items are yours, takes them and the coins, draws the roll from your secret seed and gives the target on a win.
+      try {
+        const r = await upgradeItem(uids, coins, target.id, dirOver);
+        ch = r.chance; f = r.roll; win = r.win;
+      } catch (e) { busy = false; drawStage(); return toast(e instanceof Error ? e.message : 'Could not upgrade', 'error'); }
+    } else {
+      removeItems(uids);
+      ch = upgradeChance(sv, target.value);
+      const { floats, entry } = await bet('upgrade', 1, { chance: ch, over: dirOver });
+      // The pointer's position IS the roll: under wins below the chance, over wins above 1 - chance.
+      f = floats[0];
+      win = dirOver ? f > 1 - ch : f < ch;
+      annotate(entry, `${(ch * 100).toFixed(2)}% ${dirOver ? 'over' : 'under'} for ${target.weapon} | ${target.skin}: roll ${(f * 100).toFixed(2)} → ${win ? 'win' : 'lose'}`, `${f.toFixed(6)}:${win ? 1 : 0}`);
+    }
     const land = f * 360;
     const fromRot = rotation;
     rotation += 360 * 5 + ((land - (rotation % 360)) + 360) % 360;
@@ -163,7 +173,7 @@ export function render(el) {
     p.style.transition = `transform ${spinMs}ms cubic-bezier(.15,.7,.12,1)`;
     p.style.transform = `rotate(${rotation}deg)`;
     const tgt = target;
-    if (win) addItems([tgt]);   // granted immediately; the animation only reveals it
+    if (win && !serverWallet()) addItems([tgt]);   // granted immediately; the animation only reveals it (with the server wallet it is already in the inventory)
     pushBet({ user: state.name, game: 'Upgrade', amount: sv, multi: win ? round2(tgt.value / sv) : 0, payout: win ? tgt.value : 0, mine: true });
     // Count the roll up live in the centre while the pointer spins, then land on the real roll.
     const rollEl = $('#chance', el), t0 = performance.now(), final = f * 100;

@@ -6,13 +6,16 @@ import { bet, annotate, HOUSE } from '../fair.js';
 import { pushBet } from '../feed.js';
 import { $, $$, esc, fmt, money, icon, toast, avatar, coin, modal, confetti, sleep } from '../ui.js';
 import { sfx } from '../sfx.js';
-import { isLive, liveMe, callLiveFlipBot, createLiveFlip, joinLiveFlip, cancelLiveFlip, openLiveFlips, myLiveFlips, watchFlips, liveFlipSeed, refundOnce, settleOnce, isSettled, onReconcile, type LiveFlip } from '../live.js';
+import { serverWallet, holdPayout } from '../wallet.js';
+import { tellBalance, isLive, liveMe, callLiveFlipBot, createLiveFlip, joinLiveFlip, cancelLiveFlip, openLiveFlips, myLiveFlips, watchFlips, liveFlipSeed, refundOnce, settleOnce, isSettled, onReconcile, type LiveFlip } from '../live.js';
 
 const SIDES = {
   bolt: { label: 'Bolt', svg: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>' },
   star: { label: 'Star', svg: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>' },
 };
 const PAYOUT = 2 * HOUSE.coinflip;   // winner takes the pot minus 3%
+/** The winner's payout in cents, rounded the way the database rounds (half a cent up), so what is shown is exactly what was paid. */
+const payoutOf = (amount: number): number => Math.floor((Math.round(amount * 100) * 194) / 100 + 0.5) / 100;
 const other = s => (s === 'bolt' ? 'star' : 'bolt');
 /** Who won is decided by user id for live games (names can change or be hidden), by name for simulated ones. */
 const iWon = (g: CfGame): boolean => (g.live ? !!g.winnerId && g.winnerId === liveMe() : g.winner === state.name);
@@ -156,7 +159,7 @@ export function render(el) {
       waiting: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Waiting for an opponent</span>${g.mine ? '<button class="btn btn-primary" id="callBot">Call bot</button>' : ''}${g.mine && g.live ? '<button class="btn btn-ghost" id="cancelFlip">Cancel game</button>' : ''}</div>`,
       countdown: () => `<div class="cf-center"><div class="cf-ring"><b class="cf-count" id="cfCount">3</b></div><span class="muted">Game starting</span></div>`,
       flipping: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Flipping…</span></div>`,
-      done: () => `<div class="cf-center"><div class="cf-ring win">${avatar(g.winner, 120)}${sideChip(g.result, 34)}</div><b class="cf-winner">${iWon(g) ? 'You win!' : `${esc(g.winner)} wins`}</b>${money(round2(g.amount * PAYOUT))}
+      done: () => `<div class="cf-center"><div class="cf-ring win">${avatar(g.winner, 120)}${sideChip(g.result, 34)}</div><b class="cf-winner">${iWon(g) ? 'You win!' : `${esc(g.winner)} wins`}</b>${money(payoutOf(g.amount))}
         ${canDouble(g) ? `<div class="row"><button class="btn btn-cash" id="dd">Double down? ${money(round2(g.amount * 2))}</button></div>` : ''}</div>`,
     };
     const center = centers[g.status]();
@@ -257,7 +260,7 @@ export function render(el) {
     if (g.status === 'done') return;
     g.status = 'done';
     if (g.mine) {
-      const won = iWon(g), payout = won ? round2(g.amount * PAYOUT) : 0;
+      const won = iWon(g), payout = won ? payoutOf(g.amount) : 0;
       const first = g.live ? settleOnce(`f:${g.id}`) : true;       // a live game is paid once, even after a reload
       if (won && first) credit(payout);
       if (g.entry) annotate(g.entry, `#${g.id}: ${g.creator.name} (${g.creator.side}) vs ${g.joiner.name} → ${g.result}, ${g.winner} wins`, g.result);
@@ -296,7 +299,10 @@ export function render(el) {
     const g = old ?? next;
     if (!old) list.unshift(g);
     else Object.assign(g, { joiner: next.joiner, mine: next.mine, result: next.result, winner: next.winner, winnerId: next.winnerId, hash: next.hash });
-    if (r.status === 'done' && g.status === 'waiting') void start(g);   // the result is already known; this only plays the countdown and the flip
+    if (r.status === 'done' && g.status === 'waiting') {                // the result is already known; this only plays the countdown and the flip
+      if (serverWallet() && g.mine && next.winnerId === liveMe()) holdPayout(payoutOf(g.amount));      // the database has paid me: show it when the coin lands (settle() reveals it)
+      void start(g);
+    }
     else drawLists();
     return g;
   }
@@ -310,7 +316,9 @@ export function render(el) {
   async function joinLive(g) {
     if (!debit(g.amount)) return toast(debitError(g.amount), 'error');
     try {
-      const joined = upsert(await joinLiveFlip(g.id));
+      const row = await joinLiveFlip(g.id);
+      const joined = upsert(row);                                       // holds my payout first when I won...
+      tellBalance(row);                                                 // ...and only then shows the new balance
       sfx.click(); if (joined) openMatch(joined);
     } catch (e) {
       credit(g.amount); toast(e instanceof Error ? e.message : 'Could not join the game', 'error');
@@ -319,7 +327,7 @@ export function render(el) {
   }
   /** The creator takes the other seat with a house bot. The server draws the result; if the bot wins, nobody is paid. */
   async function callBotLive(g) {
-    try { upsert(await callLiveFlipBot(g.id, randomBot([g.creator.name]))); sfx.click(); }
+    try { const row = await callLiveFlipBot(g.id, randomBot([g.creator.name])); upsert(row); tellBalance(row); sfx.click(); }
     catch (e) { toast(e instanceof Error ? e.message : 'Could not call a bot', 'error'); }
   }
   function cancelLive(g) {
@@ -366,7 +374,7 @@ onReconcile(async () => {
     } else if (r.status === 'cancelled') {
       if (r.creator === me && refundOnce(key, amount)) toast(`Coinflip #${r.id} was cancelled: ${fmt(amount)} refunded`);
     } else if (r.status === 'done' && settleOnce(key) && r.winner === me) {
-      const payout = round2(amount * PAYOUT); credit(payout); toast(`Coinflip #${r.id}: you won ${fmt(payout)}`, 'win');
+      const payout = payoutOf(amount); credit(payout); toast(`Coinflip #${r.id}: you won ${fmt(payout)}`, 'win');
     }
   }
 });

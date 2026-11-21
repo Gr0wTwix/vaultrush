@@ -45,7 +45,7 @@ export function render(el) {
     { cls: 's-vault', eyebrow: `${icon('bolt')} Play-money skin arena`, title: 'Open. Battle.<br><span class="grad">Rush the vault.</span>', text: 'Cases, battles, crash, upgrades and mines. Every result can be re-checked, and you start with 100 free coins.',
       cta: isAuthed()
         ? '<a class="btn btn-primary btn-lg" href="#/cases">Open a case</a><a class="btn btn-ghost btn-lg" href="#/battles/create" data-needs-auth="battle">Start a battle</a>'
-        : '<button type="button" class="btn btn-primary btn-lg" data-auth-open="register">Get 100 free coins</button><a class="btn btn-ghost btn-lg" href="#/cases">Browse cases</a>',
+        : '<button type="button" class="btn btn-primary btn-lg" data-auth-open="register">Create a free account</button><a class="btn btn-ghost btn-lg" href="#/cases">Browse cases</a>',
       art: `<div class="hm-cases">${featured.map((c, i) => `<a href="#/case/${c.id}" class="float-case f${i}">${caseArt(c)}</a>`).join('')}</div>` },
     { cls: 's-legend', eyebrow: `${icon('star')} Chase the legends`, title: `${CASES.length} cases.<br><span class="grad gold">${ITEMS.length} skins.</span>`, text: 'From starter crates to knife-tier vaults. Peek inside any case with the eye button before you open it.',
       cta: '<a class="btn btn-primary btn-lg" href="#/cases">Browse cases</a>',
@@ -64,7 +64,7 @@ export function render(el) {
       <div class="hm-who"><span class="muted small">Welcome back</span><b>${esc(state.name)}</b></div>
       <div class="hm-level"><span class="hm-lvl">LVL ${lvl}</span><div class="hm-bar"><i style="width:${pct.toFixed(1)}%"></i></div><span class="muted small">${Math.round(next - state.xp).toLocaleString('en-US')} XP to level ${lvl + 1}</span></div>
       <div class="hm-welcome-cta"><a class="btn btn-ghost" href="#/rewards">${icon('gift')} Rewards</a><a class="btn btn-ghost" href="#/leaderboard">${icon('trophy')} Race</a></div>
-    </section>` : guestCard('You are browsing as a guest', 'Create a free account to get 100 play coins. Bets, rewards and your own stats need an account.')}
+    </section>` : guestCard('You are browsing as a guest', 'Create a free account to play. Free coins, crates and rewards, bets and your own stats need an account.')}
 
     <section class="hm-car" id="car" role="region" aria-roledescription="carousel" aria-label="Featured">
       ${slides.map((s, i) => `<article class="hm-slide ${s.cls} ${i ? '' : 'on'}"><div class="hm-copy"><span class="eyebrow">${s.eyebrow}</span><h1>${s.title}</h1><p>${s.text}</p><div class="hero-cta">${s.cta}</div></div><div class="hm-art">${s.art}</div></article>`).join('')}

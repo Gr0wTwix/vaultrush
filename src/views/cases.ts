@@ -5,6 +5,7 @@ import { pushDrop, pushBet } from '../feed.js';
 import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, SPEEDS, reelMs, speedSeg } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
+import { serverWallet, openCases, sellItems } from '../wallet.js';
 
 const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50+', 50, Infinity]] as [string, string, number, number][];
 
@@ -114,18 +115,27 @@ export function renderCase(el, id) {
     const cost = round2(c.price * count);
     if (!debit(cost)) return toast(debitError(cost), 'error');
     setBusy(true); sfx.click(); $('#result', el).hidden = true;
-    // One nonce per case opened (consecutive nonces, like the reference sites).
-    const rolls = [];
-    for (let i = 0; i < count; i++) {
-      const { floats, entry } = await bet('cases', 1, { case: c.id });
-      const ticket = ticketOf(floats[0]);
-      const item = entryForTicket(c, ticket).item;
-      annotate(entry, `${c.name}: ticket #${ticket} → ${item.weapon} | ${item.skin}`, `${ticket}:${item.id}`);
-      rolls.push({ ticket, item });
+    let rolls = [], added = [];
+    if (serverWallet()) {
+      // The database takes the price, draws the tickets from your secret seed and puts the items in your inventory before it answers.
+      try {
+        const r = await openCases(c.id, count);
+        rolls = r.opened.map(o => ({ ticket: o.ticket, item: ITEM[o.item] }));
+        added = r.opened.map(o => ({ uid: o.uid, id: o.item, at: Date.now() }));
+      } catch (e) { setBusy(false); return toast(e instanceof Error ? e.message : 'Could not open the case', 'error'); }
+    } else {
+      // One nonce per case opened (consecutive nonces, like the reference sites).
+      for (let i = 0; i < count; i++) {
+        const { floats, entry } = await bet('cases', 1, { case: c.id });
+        const ticket = ticketOf(floats[0]);
+        const item = entryForTicket(c, ticket).item;
+        annotate(entry, `${c.name}: ticket #${ticket} → ${item.weapon} | ${item.skin}`, `${ticket}:${item.id}`);
+        rolls.push({ ticket, item });
+      }
+      // Items are granted right away, so leaving mid-spin never loses them.
+      added = addItems(rolls.map(r => r.item));
     }
     const winners = rolls.map(r => r.item);
-    // Items are granted right away, so leaving mid-spin never loses them.
-    const added = addItems(winners);
     const total = round2(winners.reduce((s, w) => s + w.value, 0));
     pushBet({ user: state.name, game: 'Cases', amount: cost, multi: round2(total / cost), payout: total, mine: true });
     await spinAll(winners);
@@ -148,9 +158,15 @@ export function renderCase(el, id) {
           const kept = still.includes(a);
           return itemCard(ITEM[a.id], { cls: kept ? '' : 'sold', extra: `<div class="chance">#${rolls[i].ticket}</div>${kept ? `<button class="btn btn-sm sell" data-uid="${a.uid}">Sell</button>` : '<div class="muted small">Sold</div>'}` });
         }).join('')}</div>`;
-      $$('.sell', res).forEach(b => b.onclick = () => { const a = added.find(x => x.uid === b.dataset.uid); removeItems([a.uid]); credit(ITEM[a.id].value); sfx.click(); draw(); });
+      /** Sell through the server (it checks the items are still mine and pays their value), or in this browser when there is no server wallet. */
+      const sell = async (list) => {
+        if (serverWallet()) { try { await sellItems(list.map(a => a.uid)); } catch (e) { toast(e instanceof Error ? e.message : 'Could not sell', 'error'); return false; } }
+        else { removeItems(list.map(a => a.uid)); credit(round2(list.reduce((s, a) => s + ITEM[a.id].value, 0))); }
+        return true;
+      };
+      $$('.sell', res).forEach(b => b.onclick = async () => { const a = added.find(x => x.uid === b.dataset.uid); if (a && await sell([a])) { sfx.click(); if (alive) draw(); } });
       const sa = $('#sellAll', res);
-      if (sa) sa.onclick = () => { removeItems(still.map(a => a.uid)); credit(round2(still.reduce((s, a) => s + ITEM[a.id].value, 0))); sfx.win(); draw(); };
+      if (sa) sa.onclick = async () => { if (await sell(still)) { sfx.win(); if (alive) draw(); } };
       $('#again', res).onclick = () => openBtn.click();
     };
     draw();

@@ -45,6 +45,7 @@ const balance = async (uid: string): Promise<number> => Number((await sql(`selec
 const inv = async (uid: string) => sql(`select id, item_id from public.inventory where user_id = $1 order by created_at, id`, [uid]);
 const nonceOf = async (uid: string): Promise<number> => Number((await sql(`select nonce from public.seed_pairs where user_id = $1 and status = 'active'`, [uid]))[0].nonce);
 /** Reveal the active seed (the player's own right) so a bet can be recomputed with the browser's maths. */
+const rotate = async (uid: string) => { await rpc(uid, 'rotate_seed'); };
 const reveal = async (uid: string) => { const r = await rpc(uid, 'rotate_seed'); return r as { server_seed: string; client_seed: string }; };
 const lastBet = async (uid: string, game: string) => (await sql(`select * from public.bets where user_id = $1 and game = $2 order by id desc limit 1`, [uid, game]))[0];
 
@@ -251,7 +252,7 @@ describe('Upgrade', () => {
     await fails(rpc(P2, 'upgrade_item', [ids, 0, 'k1', false]), 'too_many_items');            // 5 items
     await fails(rpc(P2, 'upgrade_item', [[], 0, 'k1', false]), 'invalid_amount');             // nothing staked
     await fails(rpc(P2, 'upgrade_item', [[], 10, 'nope', false]), 'unknown_item');
-    await fails(rpc(P2, 'upgrade_item', [[], 10, 'p1', false]), 'invalid_target');            // target not worth more than the stake
+    await fails(rpc(P2, 'upgrade_item', [[], 10, 'p1', false]), 'target_too_low');            // target not worth more than the stake
     await fails(rpc(P2, 'upgrade_item', [[], 1000, 'x18', false]), 'insufficient_funds');
     await fails(rpc(P2, 'upgrade_item', [[], -1, 'k1', false]), 'invalid_amount');
     const theirs = (await inv(P1))[0] ?? (await (async () => { await sql(`insert into public.inventory (user_id, item_id) values ($1, 'p1')`, [P1]); return (await inv(P1))[0]!; })());
@@ -404,5 +405,33 @@ describe('Mines', () => {
     await sql(`update public.site_controls set games_off = '{mines}'`);
     await fails(rpc(P1, 'mines_start', [10, 25, 3]), 'game_off');
     await sql(`update public.site_controls set games_off = '{}'`);
+  });
+});
+
+describe('every bet the database makes can be re-checked in the browser', () => {
+  it('Cases, Upgrade, Plinko and Mines recompute from the revealed seed with the verifier and the page\'s own result mapping', async () => {
+    const { checkable } = await import('../src/server-bets.js');
+    const { recompute } = await import('../src/verify.js');
+    await fund(P1, 5000); await sql(`update public.mines_games set status = 'cancelled' where user_id = $1 and status = 'active'`, [P1]);
+    await rotate(P1); const firstNew = Number((await sql('select coalesce(max(id), 0) as m from public.bets'))[0].m);                              // start a fresh seed so all bets below share it
+    await rpc(P1, 'open_cases', ['neon', 2]);
+    await rpc(P1, 'upgrade_item', [[], 30, 'k1', false]); await rpc(P1, 'upgrade_item', [[], 30, 'k1', true]);
+    await rpc(P1, 'plinko_drop', [12, 'normal', 5]); await rpc(P1, 'plinko_drop', [8, 'high', 5]);
+    const s = await rpc(P1, 'mines_start', [5, 25, 4]), bombs = (await sql(`select bombs from public.mines_secrets where game_id = $1`, [s.game]))[0].bombs as number[];
+    await rpc(P1, 'mines_pick', [s.game, bombs[0]]);                                                         // lose on purpose: the bombs are then in the bet
+    const seed = await reveal(P1);
+    const rows = (await sql(`select id, game, amount, payout, multiplier, nonce, client_seed, server_hash, params, result, created_at from public.bets where user_id = $1 and id > $2 order by id`, [P1, firstNew]))
+      .map(r => ({ ...r, amount: Number(r.amount), payout: Number(r.payout), multiplier: Number(r.multiplier) }));
+    expect(rows.map(r => r.game)).toEqual(['cases', 'cases', 'upgrade', 'upgrade', 'plinko', 'plinko', 'mines']);
+    for (const b of rows) {
+      const chk = checkable(b)!;
+      expect(chk, b.game).not.toBeNull();
+      const again = await recompute(chk.game, chk.params, seed.server_seed, b.client_seed, b.nonce);
+      expect(again?.key, `${b.game} #${b.id}`).toBe(chk.key);
+    }
+  });
+  it('live games have no personal seed and are left to their own page', async () => {
+    const { checkable } = await import('../src/server-bets.js');
+    expect(checkable({ id: 1, game: 'coinflip', amount: 1, payout: 0, multiplier: 0, nonce: null, client_seed: null, server_hash: null, params: {}, result: {}, created_at: '' })).toBeNull();
   });
 });

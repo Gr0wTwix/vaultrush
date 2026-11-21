@@ -5,6 +5,7 @@ import type { Risk } from '../types.js';
 import { pushBet } from '../feed.js';
 import { $, $$, fmt, money, icon, toast, amountField, wireAmount } from '../ui.js';
 import { sfx } from '../sfx.js';
+import { serverWallet, plinkoDrop } from '../wallet.js';
 
 const SEG_MS = 240;        // slower, weightier drop (was 105)
 
@@ -137,7 +138,7 @@ export function render(el) {
 
   function land(ball) {
     ball.done = true;
-    const payout = round2(ball.amount * ball.mult);
+    const payout = ball.paid ?? round2(ball.amount * ball.mult);        // with the server wallet: exactly what the database paid
     if (payout > 0) credit(payout);
     const bk = $(`.bucket[data-i="${ball.bucket}"]`, el);
     if (bk) { bk.classList.remove('hit'); void bk.offsetWidth; bk.classList.add('hit'); }
@@ -151,18 +152,26 @@ export function render(el) {
     if (!(amount >= 0.1)) return toast('Minimum bet is 0.10', 'error');
     for (let i = 0; i < n; i++) {
       if (!debit(amount)) { toast(debitError(amount), 'error'); break; }
-      const { floats, entry } = await bet('plinko', rows, { rows, risk });
-      const path = plinkoPath(floats, rows);
-      const bucket = path.reduce((a, b) => a + b, 0);
-      const mult = plinkoTable(rows, risk)[bucket];
-      annotate(entry, `${rows} rows ${risk}: bucket ${bucket} → ${fmt(mult)}×`, path.map(x => (x ? 'R' : 'L')).join(''));
-      if (!alive) return;
-      balls.push({ path, start: performance.now(), amount, mult, bucket, sound: i === 0, lastSeg: -1, trail: [] });
+      let path: number[], bucket: number, mult: number, paid: number | undefined;
+      if (serverWallet()) {
+        // The database takes the stake, draws the ball's path from your secret seed and pays the multiplier. The payout is held back from the shown
+        // balance until the ball lands (land() calls credit(), which reveals it).
+        try { const r = await plinkoDrop(rows, risk, amount); path = r.path; bucket = r.bucket; mult = Number(r.mult); paid = Number(r.payout); }
+        catch (e) { toast(e instanceof Error ? e.message : 'Could not drop the ball', 'error'); break; }
+      } else {
+        const { floats, entry } = await bet('plinko', rows, { rows, risk });
+        path = plinkoPath(floats, rows);
+        bucket = path.reduce((a, b) => a + b, 0);
+        mult = plinkoTable(rows, risk)[bucket];
+        annotate(entry, `${rows} rows ${risk}: bucket ${bucket} → ${fmt(mult)}×`, path.map(x => (x ? 'R' : 'L')).join(''));
+      }
+      if (!alive) { if (paid) credit(paid); return; }
+      balls.push({ path, start: performance.now(), amount, mult, bucket, paid, sound: i === 0, lastSeg: -1, trail: [] });
       if (i < n - 1) await new Promise(r => setTimeout(r, 320));
     }
   };
 
   drawTotal();
   // Balls still falling when you leave are paid out immediately.
-  return () => { alive = false; cancelAnimationFrame(raf); ro.disconnect(); balls.filter(b => !b.done).forEach(b => { b.done = true; const p = round2(b.amount * b.mult); if (p > 0) credit(p); pushBet({ user: state.name, game: 'Plinko', amount: b.amount, multi: b.mult, payout: p, mine: true }); }); };
+  return () => { alive = false; cancelAnimationFrame(raf); ro.disconnect(); balls.filter(b => !b.done).forEach(b => { b.done = true; const p = b.paid ?? round2(b.amount * b.mult); if (p > 0) credit(p); pushBet({ user: state.name, game: 'Plinko', amount: b.amount, multi: b.mult, payout: p, mine: true }); }); };
 }

@@ -1,5 +1,5 @@
 // Account window: one modal with a left menu (Account, Security, Affiliates, Options, Game History, Transactions, Self Exclusion).
-import { state, stateKey, save, level, levelFromXp, xpForLevel, isExcluded, resetAccount, START_BALANCE } from './state.js';
+import { state, stateKey, save, level, levelFromXp, xpForLevel, isExcluded, resetAccount, START_BALANCE, isServerWallet } from './state.js';
 import { getFair, fairKey, setClientSeed, rotate, randHex } from './fair.js';
 import { BOTS } from './data.js';
 import { $, $$, esc, fmt, money, icon, avatar, toast, modal } from './ui.js';
@@ -84,7 +84,7 @@ export function openAccount(tab = 'account') {
         <div class="ac-card"><h3>Active sessions</h3><p class="ac-note">Sessions on this device. A real account would list other devices here and let you sign them out.</p>
           <div class="table-wrap"><table class="bets ac-table"><thead><tr><th>Device</th><th>Location</th><th>Started</th></tr></thead><tbody><tr><td>${esc(device())}</td><td>This device</td><td><b class="pos">Current session</b> <span class="muted small">since ${new Date(state.rg.sessionStart || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td></tr></tbody></table></div></div>
         <div id="acSecCloud"></div>
-        <div class="ac-card ac-danger"><div><h3>Reset demo account</h3><p class="ac-note">Back to ${fmt(START_BALANCE)} coins, level 0, an empty inventory and no history. This cannot be undone.</p></div><button class="btn btn-ghost" id="acReset">Reset account</button></div>`;
+        ${isServerWallet() ? '' : `<div class="ac-card ac-danger"><div><h3>Reset demo account</h3><p class="ac-note">Back to ${fmt(START_BALANCE)} coins, level 0, an empty inventory and no history. This cannot be undone.</p></div><button class="btn btn-ghost" id="acReset">Reset account</button></div>`}`;
       $('#acExport', pane).onclick = () => {
         const blob = new Blob([JSON.stringify({ app: 'vaultrush', version: 1, savedAt: new Date().toISOString(), state, fair: getFair() }, null, 2)], { type: 'application/json' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'vaultrush-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -100,7 +100,7 @@ export function openAccount(tab = 'account') {
           location.reload();
         } catch { toast('That is not a Vaultrush backup', 'error'); }
       };
-      $('#acReset', pane).onclick = () => { if (confirm('Reset your demo account? This cannot be undone.')) { resetAccount(); applyUi(); toast('Account reset'); VIEWS.security(); } };
+      const rst = $('#acReset', pane); if (rst) rst.onclick = () => { if (confirm('Reset your demo account? This cannot be undone.')) { resetAccount(); applyUi(); toast('Account reset'); VIEWS.security(); } };
       void renderSecurityCloud($('#acSecCloud', pane), ctx);
     },
 

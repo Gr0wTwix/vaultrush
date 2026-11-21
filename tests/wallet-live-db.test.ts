@@ -427,6 +427,9 @@ describe('Rewards', () => {
     const ids = [A, B, C, Z];
     for (const [i, u] of ids.entries()) await sql(`insert into public.bets (user_id, game, amount, payout, created_at) values ($1, 'plinko', $2, 0, (date_trunc('day', now() at time zone 'utc') - interval '12 hours') at time zone 'utc')`, [u, 1000 - i * 100]);
     await sql(`insert into public.bets (user_id, game, amount, payout) values ($1, 'plinko', 99999, 0)`, [C]);               // today's bets do not count yesterday
+    const prev = await sql('select display_name, wagered from public.daily_race_prev'), today = await sql('select display_name, wagered from public.daily_race');
+    expect(prev.map((r: any) => [r.display_name, Number(r.wagered)])).toEqual([['Alice', 1000], ['Bob', 900], ['Cara', 800], ['Zed', 700]]);
+    expect(today.map((r: any) => [r.display_name, Number(r.wagered)])).toEqual([['Cara', 99999]]);
     await fund(A, 0); await fund(Z, 0);
     const a = await rpc(A, 'claim_race_prize'); expect(a).toMatchObject({ paid: true, rank: 1, prize: 400 }); expect(await bal(A)).toBe(400);
     expect((await rpc(A, 'claim_race_prize')).paid).toBe(false); expect(await bal(A)).toBe(400);

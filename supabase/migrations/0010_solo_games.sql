@@ -63,7 +63,7 @@ begin
   if stake <= 0 then raise exception 'invalid_amount'; end if;
   select * into t from public.catalog_items where id = p_target and active;
   if not found then raise exception 'unknown_item'; end if;
-  if t.value <= stake * 1.05 then raise exception 'invalid_target'; end if;
+  if t.value <= stake * 1.05 then raise exception 'target_too_low'; end if;
   if p_idem is not null and exists (select 1 from public.bets where user_id = uid and idem_key = p_idem) then raise exception 'duplicate_request'; end if;
   if coins > 0 then perform public.wallet_gate(uid, coins); end if;
 
