@@ -169,6 +169,11 @@ export const setServerClientSeed = (seed: string) => call<void>('set_client_seed
 export const requestServerLimit = (key: 'max_bet' | 'loss_daily', value: number | null) => call<'applied' | 'pending' | 'same'>('request_limit_change', { p_key: key, p_value: value });
 export const serverSelfExclude = (hours: number) => call<string>('self_exclude', { p_hours: hours });
 
+/** True when this browser holds a saved cloud sign-in (so the real chat and live games are about to switch on after a refresh). Reads storage only: no request. */
+export function hasStoredSession(): boolean {
+  try { return backendEnabled() && Object.keys(localStorage).some(k => /^sb-.+-auth-token$/.test(k) && !!localStorage.getItem(k)); } catch { return false; }
+}
+
 export async function mySeeds(): Promise<SeedRow[]> {
   const { data, error } = await (await getClient()).from('my_seeds').select('*').order('id', { ascending: false });
   if (error) throw new Error(explain(error));

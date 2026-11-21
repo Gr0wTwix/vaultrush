@@ -1,6 +1,7 @@
 // Chat with coin rain. Signed in with live games on, it is the real shared chat (Supabase realtime); otherwise it is simulated.
 import { state, credit, logTx, save, emit, on, requireLogin } from './state.js';
 import { isLive, recentChat, sendChat, watchChat, onOnline } from './live.js';
+import { hasStoredSession } from './backend.js';
 import { randomBot } from './data.js';
 import { shownName } from './feed.js';
 import { $, $$, esc, fmt, avatar, icon, coin, toast, h } from './ui.js';
@@ -12,7 +13,7 @@ const levelOf = n => 5 + (n.length * 7) % 60;
 
 export function initChat(root) {
   root.innerHTML = `
-    <div class="chat-head"><div class="chat-title">${icon('chat')} Chat</div><div class="online"><span class="live-dot"></span><b id="onlineCount">412</b> online</div></div>
+    <div class="chat-head"><div class="chat-title">${icon('chat')} Chat</div><div class="online"><span class="live-dot"></span><b id="onlineCount">…</b> online</div></div>
     <div class="rain" id="rain" hidden></div>
     <a class="pool-promo" href="#/double" id="poolPromo"><div><b>Triple Green</b><span>Here's your chance for the <b id="poolAmt"></b> pool!</span></div><span class="btn btn-primary btn-sm">Play Double</span></a>
     <div class="chat-msgs" id="chatMsgs"></div>
@@ -40,12 +41,21 @@ export function initChat(root) {
     toast(`Ignoring ${n.dataset.u}`);
   });
 
-  for (let i = 0; i < 8; i++) add(randomBot(), LINES[Math.floor(Math.random() * LINES.length)]);
-  add('', `Welcome to Vaultrush! Everything here is <b>play money</b>.`, true);
-
-  let botT: ReturnType<typeof setTimeout> | undefined;
+  let botT: ReturnType<typeof setTimeout> | undefined, onlineT: ReturnType<typeof setInterval> | undefined, rainT: ReturnType<typeof setTimeout> | undefined, fallbackT: ReturnType<typeof setTimeout> | undefined;
+  let online = 412, simulated = false;
   const botTalk = () => { if (isLive()) return; add(randomBot(), LINES[Math.floor(Math.random() * LINES.length)]); botT = setTimeout(botTalk, 3500 + Math.random() * 6000); };
-  botT = setTimeout(botTalk, 3000);
+  /** The simulated room: bot chatter, a drifting online count, coin rain. Only for visitors with no live chat to show. */
+  const startSimulated = (): void => {
+    if (simulated || isLive()) return;
+    simulated = true; clearTimeout(fallbackT);
+    box.innerHTML = '';
+    for (let i = 0; i < 8; i++) add(randomBot(), LINES[Math.floor(Math.random() * LINES.length)]);
+    add('', `Welcome to Vaultrush! Everything here is <b>play money</b>.`, true);
+    botT = setTimeout(botTalk, 3000);
+    const el = $('#onlineCount', root); if (el) el.textContent = String(online);
+    onlineT = setInterval(() => { online = Math.max(250, online + Math.round((Math.random() - 0.5) * 14)); const e = $('#onlineCount', root); if (e) e.textContent = String(online); }, 4000);
+    rainT = setTimeout(startRain, 40000);
+  };
 
   $('#chatForm', root).onsubmit = e => {
     e.preventDefault();
@@ -61,9 +71,6 @@ export function initChat(root) {
     add(state.name, v); $('#chatInput', root).value = '';
     box.scrollTop = box.scrollHeight;
   };
-
-  let online = 412;
-  const onlineT = setInterval(() => { online = Math.max(250, online + Math.round((Math.random() - 0.5) * 14)); const el = $('#onlineCount'); if (el) el.textContent = online; }, 4000);
 
   // Promo card for the Double pool (keeps the live pool amount up to date).
   const drawPool = () => { const a = $('#poolAmt', root); if (a) a.innerHTML = `${coin()}${fmt(getPool())}`; };
@@ -95,14 +102,13 @@ export function initChat(root) {
       }
     }, 1000);
   };
-  setTimeout(startRain, 40000);
 
   // Live games switched on (or off): swap the simulated chat for the real one.
   let stopChat: (() => void) | null = null, stopOnline: (() => void) | null = null;
   const goLive = async (): Promise<void> => {
     stopChat?.(); stopOnline?.(); stopChat = stopOnline = null;
     if (!isLive()) return;
-    clearTimeout(botT); clearInterval(onlineT); rainEl.hidden = true;
+    clearTimeout(botT); clearInterval(onlineT); clearTimeout(rainT); clearTimeout(fallbackT); simulated = false; rainEl.hidden = true;
     box.innerHTML = '';
     add('', 'Live chat: these are real players. Everything here is <b>play money</b>.', true);
     try { (await recentChat(30)).forEach(m => add(m.display_name, m.body)); } catch { add('', 'Could not load earlier messages.', true); }
@@ -111,4 +117,10 @@ export function initChat(root) {
   };
   on('live', () => { void goLive(); });
   if (isLive()) void goLive();
+  else if (hasStoredSession()) {
+    // A saved sign-in: the real chat is about to switch on. Show a quiet "connecting" line, not the bots, and fall back to the simulated room only if it does not.
+    box.innerHTML = '<div class="msg msg-sys chat-connecting">Connecting to the live chat…</div>';
+    fallbackT = setTimeout(startSimulated, 6000);
+    on('auth', signedIn => { if (!signedIn) startSimulated(); });
+  } else startSimulated();
 }
