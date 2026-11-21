@@ -125,6 +125,7 @@ export async function initWallet(userId: string): Promise<boolean> {
   if (started !== userId) return false;                                // signed out (or someone else signed in) while asking
   setServerWallet(ok);
   if (!ok) return false;
+  emit('wallet:quiet');                                                   // the first numbers from the server are an account being loaded, not a gain: no glow
   listenWallet();
   try { await refreshWallet(true); } catch { /* the poll below retries */ }
   void loadHistory().catch(() => {});

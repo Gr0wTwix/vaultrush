@@ -2,7 +2,7 @@ import { CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf } from '../data.js'
 import { state, save, debit, credit, addItems, removeItems, round2, debitError } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop, pushBet } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, SPEEDS, reelMs, speedSeg } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
 import { serverWallet, openCases, sellItems, releaseItems } from '../wallet.js';
@@ -63,7 +63,6 @@ export function renderCase(el, id) {
           <div class="seg" id="count">${[1, 2, 3, 4, 6].map(n => `<button class="${n === 1 ? 'active' : ''}" data-n="${n}">${n}</button>`).join('')}</div>
           <button class="btn btn-primary btn-lg" id="openBtn" data-needs-auth="bet"></button>
           <button class="btn btn-ghost" id="demoBtn">Demo spin</button>
-          ${speedSeg(state.speed)}
         </div>
       </div>
     </section>
@@ -90,13 +89,12 @@ export function renderCase(el, id) {
     $('#result', el).hidden = true;
     drawIdle();
   });
-  $$('.speed-seg button', el).forEach(b => b.onclick = () => { state.speed = b.dataset.speed; save(); $$('.speed-seg button', el).forEach(x => x.classList.toggle('active', x === b)); });
 
   // 1–2 cases spin horizontally; 3+ spin as vertical columns side by side (like the reference sites).
   const spinAll = winners => {
     const axis = winners.length > 2 ? 'y' : 'x';
     reels.innerHTML = winners.map(() => '<div class="reel-host"></div>').join('');
-    const dur = reelMs();
+    const dur = openMs();
     return Promise.all([...reels.children].map((host, i) => spinReel(host, c.entries, winners[i], { axis, duration: dur + i * 90, sound: i === 0, ...(axis === 'y' ? { total: 40, winIndex: 34 } : {}) })));
   };
 

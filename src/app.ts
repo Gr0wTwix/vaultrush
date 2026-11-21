@@ -21,6 +21,7 @@ import * as rngLab from './views/rng.js';
 import { initChat } from './chat.js';
 import { initSite, gameOff, pausedPanel, GAME_OF_NAV } from './site.js';
 import { serverWallet, claimFaucet, visibleInventoryCount } from './wallet.js';
+import { initBarFx } from './barfx.js';
 import * as home from './views/home.js';
 import * as cases from './views/cases.js';
 import * as battles from './views/battles.js';
@@ -182,19 +183,7 @@ function renderTopbar() {
   };
   tickFree(); setInterval(tickFree, 1000);
 
-  let shown = state.balance;
-  on('state', s => {
-    const el = $('#bal'); if (!el) return;
-    const from = shown, to = s.balance, t0 = performance.now();
-    shown = to;
-    el.parentElement.classList.remove('bump-up', 'bump-down'); void el.offsetWidth;
-    el.parentElement.classList.add(to >= from ? 'bump-up' : 'bump-down');
-    // No count-up animation for people who asked for less motion or turned visual effects off.
-    const calm = !s.ui.fx || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (calm) el.textContent = fmt(to);
-    else { const anim = t => { const k = Math.min(1, (t - t0) / 450); el.textContent = fmt(from + (to - from) * (1 - (1 - k) ** 3)); if (k < 1) requestAnimationFrame(anim); }; requestAnimationFrame(anim); }
-    $('#invCount b').textContent = visibleInventoryCount();       // an item still being revealed is not counted yet
-  });
+  initBarFx(document, visibleInventoryCount);      // the balance and inventory chip: green glow only when coins or an item were added
 }
 
 const CASE_BY_NAME = new Map([...CASES, ...REWARD_CASES].map(c => [c.name, c]));

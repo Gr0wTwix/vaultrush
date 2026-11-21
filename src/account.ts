@@ -131,7 +131,7 @@ export function openAccount(tab = 'account') {
           ${switchRow('acChat', 'Show chat', state.ui.chat, 'Hide the chat column for a wider game area')}
           ${switchRow('acLvl', 'Level-up pop-ups', state.ui.levelPopup)}
           ${switchRow('acStream', 'Streamer mode', state.ui.streamer, 'Blurs your balance and name')}
-          <div class="ac-row"><span>Default animation speed</span><div class="seg" id="acSpd">${['normal', 'fast', 'turbo'].map(v => `<button data-v="${v}" class="${state.speed === v ? 'active' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div></div></div>
+          <div class="ac-row"><span>Battle animation speed</span><div class="seg" id="acSpd">${['normal', 'fast', 'turbo'].map(v => `<button data-v="${v}" class="${state.speed === v ? 'active' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div></div></div>
         <div class="ac-card"><h3>Fairness</h3><p class="ac-note">Your server and client seed pair decides every result. Verify bets on the <a href="#/fair" id="acFairLink">Fairness page</a>.</p>
           <label class="ac-field">Current server seed (hashed)<div class="ac-copy"><code>${esc(f.serverHash)}</code><button data-copy="${esc(f.serverHash)}" aria-label="Copy">${icon('copy')}</button></div></label>
           <label class="ac-field">Next server seed (hashed)<div class="ac-copy"><code>${esc(f.next.serverHash)}</code><button data-copy="${esc(f.next.serverHash)}" aria-label="Copy">${icon('copy')}</button></div></label>
