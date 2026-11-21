@@ -1,11 +1,11 @@
 import { CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf } from '../data.js';
-import { state, save, debit, credit, addItems, removeItems, round2, debitError } from '../state.js';
+import { state, save, debit, addItems, round2, debitError } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop, pushBet } from '../feed.js';
 import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
-import { serverWallet, openCases, sellItems, releaseItems } from '../wallet.js';
+import { serverWallet, openCases, releaseItems } from '../wallet.js';
 
 const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50+', 50, Infinity]] as [string, string, number, number][];
 
@@ -67,7 +67,6 @@ export function renderCase(el, id) {
       </div>
     </section>
     <section class="reels" id="reels"></section>
-    <section class="result" id="result" hidden></section>
     <div class="panel"><div class="panel-head"><h2>Case contents</h2><span class="muted small">Each roll picks a ticket from 0 to 99,999</span></div>
       <div class="contents">${c.entries.map(e => itemCard(e.item, { extra: `<div class="chance">${(e.chance * 100).toFixed(e.chance < 0.01 ? 3 : 2)}%</div><div class="tickets">#${fmt(e.from).replace('.00', '')} – #${fmt(e.to).replace('.00', '')}</div>` })).join('')}</div>
     </div>`;
@@ -86,7 +85,6 @@ export function renderCase(el, id) {
     if (busy) return;
     count = +b.dataset.n;
     $$('#count button', el).forEach(x => x.classList.toggle('active', x === b));
-    $('#result', el).hidden = true;
     drawIdle();
   });
 
@@ -102,7 +100,7 @@ export function renderCase(el, id) {
 
   $('#demoBtn', el).onclick = async () => {
     if (busy) return;
-    setBusy(true); $('#result', el).hidden = true;
+    setBusy(true);
     const winners = Array.from({ length: count }, () => entryForTicket(c, ticketOf(Math.random())).item);
     await spinAll(winners);
     if (alive) { toast('Demo spin: no coins used, nothing won'); setBusy(false); }
@@ -112,7 +110,7 @@ export function renderCase(el, id) {
     if (busy) return;
     const cost = round2(c.price * count);
     if (!debit(cost)) return toast(debitError(cost), 'error');
-    setBusy(true); sfx.click(); $('#result', el).hidden = true;
+    setBusy(true); sfx.click();
     let rolls = [], added = [];
     if (serverWallet()) {
       // The database takes the price, draws the tickets from your secret seed and puts the items in your inventory before it answers.
@@ -146,31 +144,6 @@ export function renderCase(el, id) {
     const best = winners.reduce((a, b) => (b.value > a.value ? b : a));
     if (['legendary', 'mythic'].includes(best.rarity)) { sfx.big(); confetti(RARITY[best.rarity].color); }
     else if (total >= cost) sfx.win(); else sfx.lose();
-
-    const res = $('#result', el);
-    res.hidden = false;
-    const draw = () => {
-      const still = added.filter(a => state.inv.some(i => i.uid === a.uid));
-      res.innerHTML = `
-        <div class="result-head"><div><h2>You unboxed ${money(total)}</h2><span class="muted">Cost ${money(cost)} · ${total >= cost ? '<span class="pos">profit</span>' : '<span class="neg">loss</span>'} ${money(round2(total - cost))}</span></div>
-          <div class="row">${still.length ? `<button class="btn btn-ghost" id="sellAll">Sell all for ${money(round2(still.reduce((s, a) => s + ITEM[a.id].value, 0)))}</button>` : ''}<button class="btn btn-primary" id="again">Open again</button></div></div>
-        <div class="contents">${added.map((a, i) => {
-          const kept = still.includes(a);
-          return itemCard(ITEM[a.id], { cls: kept ? '' : 'sold', extra: `<div class="chance">#${rolls[i].ticket}</div>${kept ? `<button class="btn btn-sm sell" data-uid="${a.uid}">Sell</button>` : '<div class="muted small">Sold</div>'}` });
-        }).join('')}</div>`;
-      /** Sell through the server (it checks the items are still mine and pays their value), or in this browser when there is no server wallet. */
-      const sell = async (list) => {
-        if (serverWallet()) { try { await sellItems(list.map(a => a.uid)); } catch (e) { toast(e instanceof Error ? e.message : 'Could not sell', 'error'); return false; } }
-        else { removeItems(list.map(a => a.uid)); credit(round2(list.reduce((s, a) => s + ITEM[a.id].value, 0))); }
-        return true;
-      };
-      $$('.sell', res).forEach(b => b.onclick = async () => { const a = added.find(x => x.uid === b.dataset.uid); if (a && await sell([a])) { sfx.click(); if (alive) draw(); } });
-      const sa = $('#sellAll', res);
-      if (sa) sa.onclick = async () => { if (await sell(still)) { sfx.win(); if (alive) draw(); } };
-      $('#again', res).onclick = () => openBtn.click();
-    };
-    draw();
-    res.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   return () => { alive = false; releaseItems(held); };               // leaving mid-spin: the items are in the inventory, show them

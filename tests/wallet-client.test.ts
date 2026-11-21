@@ -212,19 +212,18 @@ afterEach(() => { if (typeof leave === 'function') leave(); leave = undefined; }
 const settle = async (ms = 20_000): Promise<void> => { await vi.advanceTimersByTimeAsync(ms); };
 
 describe('Cases page with the server wallet', () => {
-  it('opens through the server, shows what it returned, and sells through the server', async () => {
+  it('opens through the server, shows the winner on the reel, and has no result panel (items are sold from the Inventory page)', async () => {
     await on(); mount(renderCase, 'starter');
+    expect(el.querySelector('#result')).toBeNull();
     (el.querySelector('#openBtn') as HTMLElement).click(); await settle();
     const call = srv.calls.find(c => c[0] === 'open_cases')!;
     expect(call[1]).toEqual({ p_case: 'starter', p_count: 1 });
     expect(state.inv).toHaveLength(1);
     expect(state.balance).toBeCloseTo(100 - CASE['starter']!.price, 2);
-    const res = el.querySelector('#result') as HTMLElement;
-    expect(res.hidden).toBe(false); expect(res.textContent).toContain('You unboxed');
-    const sold = ITEM[state.inv[0]!.id]!.value;
-    (res.querySelector('.sell') as HTMLElement).click(); await settle(100);
-    expect(srv.calls.some(c => c[0] === 'sell_items' && c[1].p_uids.length === 1)).toBe(true);
-    expect(state.inv).toHaveLength(0); expect(state.balance).toBeCloseTo(100 - CASE['starter']!.price + sold, 2);
+    expect(el.querySelector('.reel-won')).not.toBeNull();                                  // the reel itself shows what was won
+    expect(el.textContent).not.toContain('You unboxed'); expect(el.querySelector('#sellAll, #again, .sell')).toBeNull();
+    expect((el.querySelector('#openBtn') as HTMLButtonElement).disabled).toBe(false);      // ready to open again
+    expect(srv.calls.some(c => c[0] === 'sell_items')).toBe(false);
   });
   it('shows the server\'s refusal and changes nothing', async () => {
     acct.balance = 0.01; await on(); mount(renderCase, 'starter');
