@@ -126,6 +126,23 @@ export const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 2
 /** Card-less reel cell: item art floating on a rarity glow; name/value appear when it wins. */
 export const bareCell = it => `<div class="reel-cell bare" style="--rc:${RARITY[it.rarity].color}"><div class="bare-glow"></div>${itemArt(it)}<div class="bare-meta"><b>${esc(it.skin)}</b>${money(it.value)}</div></div>`;
 
+/**
+ * How far along its way the strip is after a fraction t of the spin time (0 to 1). The speed starts from rest, picks up in the first few percent, then falls
+ * away smoothly (speed ~ (1 - t)^1.5), so the reel races through the case, slows to a crawl over the last tiles and stops with no speed left: no snap, no bounce.
+ */
+const CURVE_STEPS = 600;
+const REEL_CURVE: number[] = (() => {
+  const out: number[] = []; let sum = 0;
+  for (let i = 0; i <= CURVE_STEPS; i++) { const t = i / CURVE_STEPS, r = Math.min(1, t / 0.05); sum += r * r * (3 - 2 * r) * Math.pow(1 - t, 1.5); out.push(sum); }
+  return out.map(v => v / sum);
+})();
+export const reelProgress = (t: number): number => {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  const f = t * CURVE_STEPS, i = Math.floor(f);
+  return (REEL_CURVE[i] as number) + ((REEL_CURVE[i + 1] as number) - (REEL_CURVE[i] as number)) * (f - i);
+};
+
 export function spinReel(host, pool, winner, { axis = 'x', duration = 5200, total = 56, winIndex = 46, sound = true, bare = true } = {}) {
   const fillers = () => {
     const sum = pool.reduce((s, e) => s + e.weight, 0);
@@ -147,39 +164,36 @@ export function spinReel(host, pool, winner, { axis = 'x', duration = 5200, tota
   const step = cells[1].getBoundingClientRect()[prop] - cells[0].getBoundingClientRect()[prop];
   const size = axis === 'x' ? cells[0].offsetWidth : cells[0].offsetHeight;
   const view = axis === 'x' ? host.clientWidth : host.clientHeight;
-  const exact = view / 2 - (winIndex * step + size / 2);
-  const jitter = (Math.random() - 0.5) * size * 0.8;
-  const tf = v => (axis === 'x' ? `translate3d(${v}px,0,0)` : `translate3d(0,${v}px,0)`);
+  // Where the strip comes to rest: the winning tile under the marker, a little off-centre like a real reel (never near a tile edge, so the result is unmistakable).
+  const target = view / 2 - (winIndex * step + size / 2) + (Math.random() - 0.5) * size * 0.56;
+  const tf = (v: number): string => (axis === 'x' ? `translate3d(${v}px,0,0)` : `translate3d(0,${v}px,0)`);
+  const dpr = globalThis.devicePixelRatio || 1, snap = (v: number): number => Math.round(v * dpr) / dpr;     // whole device pixels: art stays sharp while it moves
 
+  strip.style.transition = 'none';
   strip.style.transform = tf(0);
+  host.classList.add('spinning');
   return new Promise<void>(resolve => {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      strip.style.transition = `transform ${duration}ms cubic-bezier(.08,.62,.1,1)`;
-      strip.style.transform = tf(exact + jitter);
-      let last = -1, running = true;
-      const loop = () => {
-        if (!running) return;
-        const m = new DOMMatrixReadOnly(getComputedStyle(strip).transform);
-        const off = axis === 'x' ? m.m41 : m.m42;
+    let t0 = -1, last = -1, done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      strip.style.transform = tf(snap(target));
+      host.classList.remove('spinning');
+      setTimeout(() => { cells[winIndex].classList.add('reel-won'); host.classList.add('settled'); resolve(); }, 140);     // a short breath before the winner lights up
+    };
+    const frame = (now: number): void => {
+      if (done) return;
+      if (t0 < 0) t0 = now;
+      const t = Math.min(1, (now - t0) / duration), off = target * reelProgress(t);
+      strip.style.transform = tf(snap(off));
+      if (sound && step > 0) {
         const idx = Math.floor((view / 2 - off) / step);
-        if (idx !== last) {
-          if (last !== -1 && sound) sfx.tick();
-          // Magnify whatever is passing the marker (and slightly its neighbours).
-          if (cells[last]) cells[last].classList.remove('near');
-          if (cells[idx]) cells[idx].classList.add('near');
-          last = idx;
-        }
-        requestAnimationFrame(loop);
-      };
-      requestAnimationFrame(loop);
-      setTimeout(() => {
-        running = false;
-        strip.querySelectorAll('.near').forEach(c => c.classList.remove('near'));
-        strip.style.transition = 'transform 350ms ease-out';
-        strip.style.transform = tf(exact);
-        setTimeout(() => { cells[winIndex].classList.add('reel-won'); host.classList.add('settled'); resolve(); }, 360);
-      }, duration + 30);
-    }));
+        if (idx !== last) { if (last !== -1) sfx.tick(); last = idx; }
+      }
+      if (t < 1) requestAnimationFrame(frame); else finish();
+    };
+    requestAnimationFrame(frame);
+    setTimeout(finish, duration + 500);                    // a tab in the background pauses animation frames: still end on time
   });
 }
 

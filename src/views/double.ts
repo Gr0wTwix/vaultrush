@@ -67,10 +67,9 @@ export function render(el) {
         <span class="dmark top"></span><span class="dmark bot"></span>
         <div class="dover" id="dover"><span id="tlabel">Rolling in</span><b id="doverT">12.00</b></div></div>
       <div class="dbl-bet">
-        <label class="dbl-amt"><span class="amount-coin">${coin()}</span><input id="amt" type="number" min="0.1" step="0.1" value="1" aria-label="Bet amount"></label>
-        <button class="dbtn" data-op="clear" aria-label="Clear">${TRASH}</button>
-        ${[0.1, 1, 10, 25, 50, 100, 1000].map(v => `<button class="dbtn" data-add="${v}">+${v}</button>`).join('')}
-        <button class="dbtn" data-op="half">1/2</button><button class="dbtn" data-op="double">X2</button><button class="dbtn" data-op="max">Max</button>
+        <label class="dbl-amt"><span class="amount-coin">${coin()}</span><input id="amt" type="number" min="0.1" step="0.1" value="1" aria-label="Bet amount"><button class="dbtn ghost" data-op="clear" aria-label="Clear the amount" title="Clear">${TRASH}</button></label>
+        <div class="dbl-chips" role="group" aria-label="Add to the bet">${[0.1, 1, 10, 25, 50, 100, 1000].map(v => `<button class="dbtn" data-add="${v}">+${v}</button>`).join('')}</div>
+        <div class="dbl-chips" role="group" aria-label="Change the bet"><button class="dbtn" data-op="half">1/2</button><button class="dbtn" data-op="double">2×</button><button class="dbtn max" data-op="max">Max</button></div>
       </div>
     </section>
     <div class="lanes">${LANES.map(([k, label, key]) => `
@@ -116,7 +115,7 @@ export function render(el) {
       $(`#tot-${k}`, el).innerHTML = money(total);
       $(`#list-${k}`, el).innerHTML = list.length
         ? [...list].sort((a, b) => b.amount - a.amount).slice(0, 12)
-          .map(b => `<div class="lrow ${b.mine ? 'mine' : ''} ${b.result || ''}">${avatar(b.user, 22)}<span>${esc(b.user)}</span>${money(b.result === 'won' ? round2(b.amount * DOUBLE_PAY[k]) : b.amount)}</div>`).join('')
+          .map(b => `<div class="lrow ${b.mine ? 'mine' : ''} ${b.result || ''}">${avatar(b.user, 24)}<span class="lname">${esc(b.user)}${b.mine ? ' <i class="you">you</i>' : ''}</span>${money(b.result === 'won' ? round2(b.amount * DOUBLE_PAY[k]) : b.amount)}</div>`).join('')
         : `<div class="lane-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 18 18 6" stroke="currentColor" stroke-width="1.8"/></svg>No bets yet</div>`;
     });
     $$('.lane-btn', el).forEach(b => b.disabled = phase !== 'betting');

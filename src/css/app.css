@@ -236,10 +236,14 @@ table.bets { width: 100%; border-collapse: collapse; font-size: 13px; }
 .open-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .reels { display: flex; flex-direction: column; gap: 8px; }
 .reel { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--bg2); border: 1px solid var(--line); }
-.reel-x { height: 170px; mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent); }
+.reel-x { height: 170px; }
+/* edge fade as two cheap overlays (a mask on a moving strip makes the browser repaint it every frame) */
+.reel-x::before, .reel-x::after { content: ''; position: absolute; top: 0; bottom: 0; width: 15%; z-index: 1; pointer-events: none; }
+.reel-x::before { left: 0; background: linear-gradient(90deg, var(--bg2), transparent); }
+.reel-x::after { right: 0; background: linear-gradient(270deg, var(--bg2), transparent); }
 .reel.idle { display: grid; place-items: center; mask-image: none; }
 .reel.idle .case-art { width: 130px; opacity: .55; animation: float 4s ease-in-out infinite; }
-.reel-strip { display: flex; gap: 8px; padding: 0; will-change: transform; }
+.reel-strip { display: flex; gap: 8px; padding: 0; will-change: transform; backface-visibility: hidden; }
 .reel-x .reel-strip { height: 100%; align-items: center; }
 .reel-x .reel-cell { flex: none; width: 140px; }
 .reel-y .reel-strip { flex-direction: column; }

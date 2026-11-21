@@ -468,10 +468,10 @@ function drawBattle(el, b) {
     <div id="jpRoll"></div>
     <div class="battle-stage bt-stage ${teams ? 'teams' : ''}" style="--P:${P}">
       <span class="stage-arrow l"></span><span class="stage-arrow r"></span><div class="stage-line"></div>
-      <div class="bt-grid">${b.players.map((p, i) => `<div class="bt-reel" data-p="${i}" style="--pc:${PCOLORS[i]}"><div class="reel-host vreel" id="reel${i}">${seatHtml(i)}</div></div>`).join('')}</div>
+      <div class="bt-grid">${b.players.map((p, i) => `<div class="bt-reel ${hasSep(i) ? 'has-vs' : ''}" data-p="${i}" style="--pc:${PCOLORS[i]}"><div class="reel-host vreel" id="reel${i}">${seatHtml(i)}</div></div>`).join('')}</div>
     </div>
     <div class="bt-grid bt-players" style="--P:${P}">${b.players.map((p, i) => `<div class="pbar ${hasSep(i) ? 'has-vs' : ''}" id="pbar${i}" data-p="${i}" style="--pc:${PCOLORS[i]}">${pbarInner(i)}</div>`).join('')}</div>
-    <div class="bt-grid bt-slots" style="--P:${P}">${b.players.map((p, i) => `<div class="slots" id="items${i}" data-p="${i}">${b.ids.map((c, r) => `<div class="slot" id="slot${i}_${r}">${slotEmpty(r)}</div>`).join('')}</div>`).join('')}</div>`;
+    <div class="bt-grid bt-slots" style="--P:${P}">${b.players.map((p, i) => `<div class="slots ${hasSep(i) ? 'has-vs' : ''}" id="items${i}" data-p="${i}">${b.ids.map((c, r) => `<div class="slot" id="slot${i}_${r}">${slotEmpty(r)}</div>`).join('')}</div>`).join('')}</div>`;
 
   const colsOf = p => $$(`[data-p="${p}"]`, el);
   $('#shareB', el).onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Battle link copied'); } catch { toast('Copy the address bar to share'); } };
