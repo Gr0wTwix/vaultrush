@@ -199,8 +199,9 @@ export function spinReel(host, pool, winner, { axis = 'x', duration = 5200, tota
 
 /** Reel durations for the three speeds the reference sites offer. */
 export const SPEEDS = { normal: 5200, fast: 2600, turbo: 1200 };
-/** Case opening has ONE speed, Fast, the same everywhere (people who ask their system for less motion get the quickest). */
-export const openMs = (): number => ((() => { try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })() ? SPEEDS.turbo : SPEEDS.fast);
+/** Case opening: the normal length, or the fast open (the lightning button) which is between the old Fast and Turbo. People who ask their system for less motion always get the quickest. */
+export const OPEN_MS = { normal: 5200, fast: 1800, reduced: 1200 } as const;
+export const openMs = (): number => ((() => { try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })() ? OPEN_MS.reduced : state.ui.fastOpen ? OPEN_MS.fast : OPEN_MS.normal);
 /** Reel length in ms: the player's chosen speed, or the fastest one when their system asks for reduced motion. */
 export const reelMs = (): number => ((() => { try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })() ? SPEEDS.turbo : (SPEEDS[state.speed] || SPEEDS.normal));
 export const speedSeg = cur => `<div class="seg speed-seg" role="group" aria-label="Animation speed">${Object.keys(SPEEDS).map(s => `<button data-speed="${s}" class="${s === cur ? 'active' : ''}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;

@@ -50,7 +50,7 @@ export interface GameState {
   calendar: { streak: number; last: string };
   race: { date: string; wagered: number }; racePaid: string;
   history: HistoryBet[]; excludedUntil: number;
-  ui: { chat: boolean; levelPopup: boolean; streamer: boolean; anonymous: boolean; fx: boolean; notify: boolean };
+  ui: { chat: boolean; levelPopup: boolean; streamer: boolean; anonymous: boolean; fx: boolean; notify: boolean; fastOpen: boolean };
   legal: { termsAt: number; termsVersion: string };
   gameStats: Record<string, GameStat>;
   liveCredit: Record<string, number>;               // shared-round bets: how much of each one's winnings this browser has already been paid

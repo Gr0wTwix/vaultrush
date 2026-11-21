@@ -28,7 +28,7 @@ export const newGameState = (): GameState => ({
   calendar: { streak: 0, last: '' },
   race: { date: '', wagered: 0 }, racePaid: '',
   history: [], excludedUntil: 0,
-  ui: { chat: true, levelPopup: true, streamer: false, anonymous: false, fx: !prefersReducedMotion(), notify: true },
+  ui: { chat: true, levelPopup: true, streamer: false, anonymous: false, fx: !prefersReducedMotion(), notify: true, fastOpen: false },
   legal: { termsAt: 0, termsVersion: '' }, gameStats: {}, liveSettled: [], liveCredit: {}, bestDrop: null,
   blocked: [], tx: [], betSeq: 0,
   rg: defaultRg(), kyc: defaultKyc(), aml: { alerts: [], payouts: [], seq: 0 },

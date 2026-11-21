@@ -34,6 +34,10 @@ a.perk:hover { border-color: var(--line2); }
 .case-grid:not(.big) .case-card .eye { top: 6px; right: 6px; width: 26px; height: 26px; }
 .case-tag { position: absolute; top: 10px; left: 10px; font: 800 11px var(--display); padding: 3px 8px; border-radius: 6px; background: rgba(255,197,61,.15); color: var(--gold); }
 .speed-seg button { min-width: 60px; }
+.fast-toggle { width: 44px; padding: 0; display: inline-grid; place-items: center; color: var(--muted); }
+.fast-toggle .icon { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.fast-toggle:hover { color: var(--text); }
+.fast-toggle.on { color: var(--accent); border-color: var(--accent); background: rgba(198,255,61,.1); box-shadow: 0 0 14px -4px var(--accent); }
 .reels.n3, .reels.n4, .reels.n6 { display: grid; gap: 8px; }
 .reels.n3 { grid-template-columns: repeat(3, 1fr); }
 .reels.n4 { grid-template-columns: repeat(4, 1fr); }

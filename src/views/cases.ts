@@ -63,6 +63,7 @@ export function renderCase(el, id) {
           <div class="seg" id="count">${[1, 2, 3, 4, 6].map(n => `<button class="${n === 1 ? 'active' : ''}" data-n="${n}">${n}</button>`).join('')}</div>
           <button class="btn btn-primary btn-lg" id="openBtn" data-needs-auth="bet"></button>
           <button class="btn btn-ghost" id="demoBtn">Demo spin</button>
+          <button class="btn btn-ghost fast-toggle ${state.ui.fastOpen ? 'on' : ''}" id="fastBtn" type="button" aria-pressed="${state.ui.fastOpen}" aria-label="Fast open" title="Fast open: a quicker spin (also for demo spins)">${icon('bolt')}</button>
         </div>
       </div>
     </section>
@@ -96,6 +97,11 @@ export function renderCase(el, id) {
     return Promise.all([...reels.children].map((host, i) => spinReel(host, c.entries, winners[i], { axis, duration: dur + i * 90, sound: i === 0, ...(axis === 'y' ? { total: 40, winIndex: 34 } : {}) })));
   };
 
+  $('#fastBtn', el).onclick = () => {
+    state.ui.fastOpen = !state.ui.fastOpen; save();
+    const f = $('#fastBtn', el); f.classList.toggle('on', state.ui.fastOpen); f.setAttribute('aria-pressed', String(state.ui.fastOpen));
+    sfx.click();
+  };
   const setBusy = v => { busy = v; openBtn.disabled = v; $('#demoBtn', el).disabled = v; };
 
   $('#demoBtn', el).onclick = async () => {
