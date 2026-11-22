@@ -35,3 +35,24 @@ describe('the pause between battle rounds', () => {
     expect(src).not.toContain("'turbo' ? 150 : 400");
   });
 });
+
+describe('audit fixes guarded at the source (2026-11-22)', () => {
+  const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+  it('a browser-only battle is settled or refunded when the page is closed or reloaded', () => {
+    const src = read('src/views/battles.ts');
+    expect(src).toContain("window.addEventListener('pagehide', onHide)");
+    expect(src).toContain("window.removeEventListener('pagehide', onHide)");
+    expect(src).toMatch(/const onHide = \(\): void => \{ if \(!b\.live\) leave\(\); \};/);
+  });
+  it('the account menu hands focus back to its button, so closing the account window returns focus there', () => {
+    expect(read('src/app.ts')).toMatch(/setMenu\(false\); meBtn\.focus\(\);/);
+  });
+});
+
+describe('the drop chance on each pulled battle item (idea from Chicken.gg)', () => {
+  it('is written on the round card from the case entry of that item', () => {
+    const src = readFileSync(new URL('../src/views/battles.ts', import.meta.url), 'utf8');
+    expect(src).toContain('const odds = c.entries.find(e => e.item.id === it.id)?.chance;');
+    expect(src).toContain('<span class="slot-odds"');
+  });
+});

@@ -6,9 +6,9 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 
 | Part | State | How we know |
 |---|---|---|
-| **The site** | Live at the production address on Vercel, running the latest commit of the `compliance` branch | Checked at each deploy: the served JavaScript file is the one built locally |
+| **The site** | Live at the production address on Vercel, running the latest commit of the `compliance` branch (`1f005be`) | Checked at each deploy: the served JavaScript file is the one built locally |
 | **Supabase variables** | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_STEAM_LOGIN` are **set** in the owner's local `.env` and in Vercel Production. So the live site runs in **cloud mode** (Supabase accounts), not the browser-only fallback | Checked: names listed from `.env` and from `vercel env ls production`; the live bundle contains the project address and the publishable key |
-| **Database migrations** | `0001` to `0016` have all been run | Owner confirmed `0007` to `0016`; `0001` to `0006` are in place because everything built on them works (not each confirmed one by one) |
+| **Database migrations** | `0001` to `0019` have all been run | Owner confirmed `0007` to `0019` (the `0015` re-run, `0017`, `0018` and `0019` on 2026-11-21); `0001` to `0006` are in place because everything built on them works (not each confirmed one by one) |
 | **Server wallet** | On: coins, items and every game and reward are handled by the database | Owner has used it; the migration tests pass. Not tested by me signed in on the live site |
 | **Real CS2 catalogue and case art** | Deployed; the database holds all 14,411 items and the first 27 cases (the 25 high-stakes cases are built but not live yet, see below) | Owner ran `0014`/`0015` and confirmed; pictures and files checked on the live site |
 | **Steam sign-in functions** | `steam-login` and `close-login` are deployed and answer | Checked: they respond (400 without Steam's parameters, 401 without a signed-in user) |
@@ -16,6 +16,8 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 | **GitHub CI** | Runs the type-check, tests and build on pushes to **every branch** and on pull requests (widened on 2026-11-21; before that only `main` and pull requests, so nothing since PR #2 had been checked) | Checked: the first run on the `compliance` branch (commit `34412dc`, 2026-11-21) passed on GitHub's servers: type-check, all 664 tests and the build, in about 40 seconds (`gh run list`) |
 | **n8n alerts and the daily report** | On. Alerts reach the owner's Discord; the report works. n8n runs on the owner's PC (Docker, a gate, an ngrok tunnel) | Owner confirmed both messages arrived |
 | **Operator alerts in the database** | Switched on (`ops_settings.enabled`) with the webhook address and secret | Owner confirmed the test message |
+| **25 high-stakes cases, the 10,000 verification limit, the Double history fix** | Live (deployed 2026-11-21 with the SQL `0015` re-run and `0017`). The pictures of the 25 new cases are recoloured placeholders | Owner ran the SQL ("all sqls success"); checked after the deploy: the live bundle is the new build and a new case picture loads |
+| **Server-side limits (`0018`), the admin Wallets page's database part (`0019`), the phone layout fixes, the slower battle rounds** | Live (commit `1f005be`, deployed 2026-11-21). The limits are now enforced by the database for every stake; the Wallets page itself only exists in the admin site, which is still localhost-only | Owner ran `0018` and `0019` ("all sqls success"); checked after the deploy: the live bundle contains the new limit calls and the sideways battle board, the public status function answers, maintenance is off. **Not tried by me signed in on the live site**, and the phone fixes were only seen in a 375 px browser window |
 
 ## Set up, but not confirmed
 
@@ -31,9 +33,6 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 
 | Part | State |
 |---|---|
-| **25 high-stakes cases, the 10,000 verification limit, the Double history fix** | Committed and pushed (`f461aad`, CI passed), but **not live**: not deployed, and the SQL (`0015` re-run for the new cases, `0017` for the caps) has not been run. The pictures of the 25 new cases are recoloured placeholders |
-| **Server-side limits, admin wallet tools, admin deployment config** | Built and tested locally (813 tests with the phone fixes, typecheck and build clean) but **not committed, not deployed**, and the SQL (`0018`, `0019`) has not been run. Until `0018` is run and the site deployed, weekly and monthly loss, the wager limit, the play-time limit, cool-off and self-exclusion are still enforced only by the page. See [compliance.md](compliance.md) and [admin-site.md](admin-site.md) |
-| **Phone layout fixes** | Built and tested (813 tests, build clean), **not committed or deployed**: battles with 4 or more players now scroll sideways with readable columns, battles and multi-case openings scroll into view, Plinko multipliers are readable, toasts clear the bottom bar. Checked only in a 375 px browser window, not on a real phone; see [history.md](history.md) entry 26 for what was not checked |
 | **Admin site** | Built (sign-in chain, roles, audit log, explorer, site controls, the Wallets page) but it runs **only on localhost** and is not deployed. Its deployment config (`vercel.admin.json`) is written and tested, but no Vercel project exists for it yet. That the Owner role has been created and that `http://localhost:5174` is allowed for sign-in is not confirmed; the steps to go live, and who does each, are in [admin-site.md](admin-site.md) |
 | **Pull request into `main`** | Not opened; `main` has PR #2 but none of the later work |
 | **Always-on n8n** | n8n runs on the owner's PC, so alerts arrive only while the PC and Docker are on (the database does not retry). The server version (`n8n/docker-compose.server.yml`) is written but not tested or set up |

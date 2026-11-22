@@ -76,7 +76,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 **Status (2026-11-21):** the SQL in step 1 is run. That the Owner role has been created (step 2) and that `http://localhost:5174` is allowed for sign-in (step 3) is **not confirmed**; the admin site has not been deployed and runs only on the owner's PC. See [setup-status.md](setup-status.md).
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (**not run yet**).
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -101,7 +101,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 | # | Who | What |
 |---|---|---|
-| 1 | You | Run `0017`, `0018` and `0019` (and re-run `0015`) in the Supabase SQL editor |
+| 1 | You | Done (2026-11-21): `0015` re-run, `0017`, `0018` and `0019` were run in the Supabase SQL editor |
 | 2 | You | If not done: make yourself the Owner (the one SQL statement in step 2 above) |
 | 3 | You | Supabase, Authentication, Multi-factor: make sure **TOTP** is enabled (step 2 of the sign-in needs it) |
 | 4 | Me, once you say go | Create the second Vercel project (a name you choose), give it the same three public variables as the game site (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STEAM_LOGIN`; no secret is involved), export the branch into a clean folder, copy `vercel.admin.json` over `vercel.json` there, link the folder to the new project and deploy it to production |

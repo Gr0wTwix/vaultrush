@@ -1,5 +1,5 @@
 // Shared UI helpers: formatting, item art, toasts and the spinning reel.
-import { RARITY, itemName } from './data.js';
+import { RARITY, itemName, caseRisk, RISK_LABEL } from './data.js';
 import { state } from './state.js';
 import { sfx } from './sfx.js';
 import { itemArtSvg, NO_PICTURE } from './art.js';
@@ -224,6 +224,12 @@ export const openMs = (): number => ((() => { try { return !!globalThis.matchMed
 /** Reel length in ms: the player's chosen speed, or the fastest one when their system asks for reduced motion. */
 export const reelMs = (): number => ((() => { try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })() ? SPEEDS.turbo : (SPEEDS[state.speed] || SPEEDS.normal));
 export const speedSeg = cur => `<div class="seg speed-seg" role="group" aria-label="Animation speed">${Object.keys(SPEEDS).map(s => `<button data-speed="${s}" class="${s === cur ? 'active' : ''}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;
+
+/** A case's risk label: Low, Medium or High, with the exact chance in the tooltip and for screen readers. */
+export function riskBadge(c): string {
+  const r = caseRisk(c), pct = `${(r.back * 100).toFixed(1)}%`;
+  return `<span class="risk-badge risk-${r.level}" title="${pct} chance to pull an item worth at least the price"><i aria-hidden="true"></i>${RISK_LABEL[r.level]}<span class="sr-only">: ${pct} chance to pull an item worth at least the price</span></span>`;
+}
 
 /** Bet amount input with ½ / 2× / Max buttons. Call wireAmount after rendering. */
 export const amountField = (id, value = 1, label = 'Bet amount') =>

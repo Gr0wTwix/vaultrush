@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cheapestAtLeast, ensureItems, filterRows, indexLoaded, loadIndex, queryItems, TYPES } from '../src/catalogue.js';
 import { CATALOGUE_TOTAL, CATALOGUE_VERSION, ITEM, ITEMS, RARITY_ORDER, itemImage } from '../src/data.js';
 
+vi.setConfig({ testTimeout: 30_000 });                                     // reads the whole catalogue from disk: slow under a full parallel test run (it once took 5.1 s)
 const pub = (p: string): any => JSON.parse(readFileSync(new URL(`../public/${p}`, import.meta.url), 'utf8'));
 const manifest = pub('catalogue/manifest.json'), index = pub('catalogue/index.json');
 let fetched: string[] = [], broken = false;

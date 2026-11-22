@@ -1,9 +1,9 @@
 import { ITEMS, ITEM, RARITY, RARITY_ORDER, itemOf, itemName, CATALOGUE_TOTAL } from '../data.js';
 import { ensureItems, queryItems, cheapestAtLeast } from '../catalogue.js';
 import { state, debit, addItems, removeItems, round2, debitError, handoff, on } from '../state.js';
-import { bet, upgradeChance, annotate } from '../fair.js';
+import { bet, upgradeChance, annotate, HOUSE, UPGRADE_MAX } from '../fair.js';
 import { pushBet, pushDrop } from '../feed.js';
-import { $, $$, fmt, money, itemCard, toast, icon, coin, confetti, avatar, esc, itemArt } from '../ui.js';
+import { sleep, wireAmount, $, $$, fmt, money, itemCard, toast, icon, coin, confetti, avatar, esc, itemArt } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { randomBot } from '../data.js';
 import { serverWallet, upgradeItem, releaseItems } from '../wallet.js';
@@ -39,20 +39,24 @@ export function render(el) {
     </div>
     <div class="up-action">
       <div class="seg" id="preset" aria-label="Pick a target by multiplier">${[1.5, 2, 5, 10].map(m => `<button data-m="${m}">${m}×</button>`).join('')}</div>
+      <label class="up-want">Chance <input id="wantChance" type="number" min="1" max="${UPGRADE_MAX * 100}" step="0.5" placeholder="25" inputmode="decimal" aria-label="Chance you want, in percent"> %</label>
       <div class="seg" id="dir"><button data-d="under" class="active">Roll under</button><button data-d="over">Roll over</button></div>
       <label class="check"><input type="checkbox" id="fastUp" ${state.speed !== 'normal' ? 'checked' : ''}> Fast spin</label>
+      <div class="up-auto"><label for="autoN">Auto</label><select id="autoN"><option value="0">Off</option><option value="5">5 upgrades</option><option value="10">10 upgrades</option><option value="25">25 upgrades</option></select>
+        <label class="check"><input type="checkbox" id="autoStopWin" checked> Stop on a win</label></div>
       <button class="btn btn-primary btn-lg" id="upBtn" data-needs-auth="upgrade">Select a stake and a target</button>
     </div>
     <div class="upgrade-pickers">
       <div class="panel">
-        <div class="panel-head"><h2>Stake</h2><div class="amount small-amount"><span class="amount-coin">${coin()}</span><input id="coinStake" type="number" min="0" step="0.1" placeholder="Coins" value=""></div></div>
+        <div class="panel-head"><h2>Stake</h2><div class="amount small-amount"><span class="amount-coin">${coin()}</span><input id="coinStake" type="number" min="0" step="0.1" placeholder="Coins" value="" aria-label="Coin stake"><button type="button" data-amt="half" aria-label="Halve the stake">½</button><button type="button" data-amt="double" aria-label="Double the stake">2×</button><button type="button" data-amt="max" aria-label="Stake your whole balance">Max</button></div></div>
         <div class="muted small" style="margin-bottom:8px">Pick up to 4 items from your inventory, add coins, or both.</div>
         <div class="contents small-grid" id="invPick"></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>Target item</h2><div class="tabs" id="tSort"><button class="tab active" data-s="asc">Low → high</button><button class="tab" data-s="desc">High → low</button></div></div>
         <input id="tSearch" class="search" placeholder="Search all ${CATALOGUE_TOTAL.toLocaleString('en-US')} skins…" autocomplete="off" aria-label="Search items" style="margin-bottom:10px">
-        <div class="row target-filters"><select id="tType" aria-label="Weapon type"><option value="">All weapons</option><option value="knife">Knives</option><option value="gloves">Gloves</option><option value="rifle">Rifles</option><option value="sniper">Snipers</option><option value="smg">SMGs</option><option value="pistol">Pistols</option><option value="heavy">Heavy</option><option value="equipment">Equipment</option></select><select id="tRar" aria-label="Grade"><option value="">All grades</option>${RARITY_ORDER.map(r => `<option value="${r}">${RARITY[r].label}</option>`).join('')}</select></div>
+        <div class="row target-filters"><select id="tType" aria-label="Weapon type"><option value="">All weapons</option><option value="knife">Knives</option><option value="gloves">Gloves</option><option value="rifle">Rifles</option><option value="sniper">Snipers</option><option value="smg">SMGs</option><option value="pistol">Pistols</option><option value="heavy">Heavy</option><option value="equipment">Equipment</option></select><select id="tRar" aria-label="Grade"><option value="">All grades</option>${RARITY_ORDER.map(r => `<option value="${r}">${RARITY[r].label}</option>`).join('')}</select>
+          <label class="tprice">Up to <b id="tMaxLbl">any price</b><input id="tMax" type="range" min="0" max="100" step="1" value="100" aria-label="Highest target price"></label></div>
         <div class="contents small-grid" id="targetPick" aria-live="polite"></div>
       </div>
     </div>
@@ -69,11 +73,18 @@ export function render(el) {
   const pushLiveUp = u => { liveUps.unshift(u); liveUps.length = Math.min(liveUps.length, 20); drawLiveUp(); };
   drawLiveUp();
   const liveTimer = setInterval(() => pushLiveUp(simUp()), 3800);
-  let tq = '', tType = '', tRar = '';
+  let tq = '', tType = '', tRar = '', tMax = Infinity;
+  // The price slider runs from 1 to 100,000 coins on a log scale; the far right means no limit. (Idea from SkinRave's upgrader.)
+  const priceOf = (v: number): number => (v >= 100 ? Infinity : Math.round(10 ** (v / 20) * 100) / 100);
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   $('#tSearch', el).oninput = e => { tq = e.target.value.trim().toLowerCase(); clearTimeout(searchTimer); searchTimer = setTimeout(() => void drawTargets(), 160); };
   $('#tType', el).onchange = e => { tType = e.target.value; void drawTargets(); };
   $('#tRar', el).onchange = e => { tRar = e.target.value; void drawTargets(); };
+  $('#tMax', el).oninput = e => {
+    tMax = priceOf(+e.target.value);
+    $('#tMaxLbl', el).textContent = tMax === Infinity ? 'any price' : fmt(tMax);
+    clearTimeout(searchTimer); searchTimer = setTimeout(() => void drawTargets(), 160);
+  };
 
   const invItem = (u: string) => itemOf(state.inv.find(i => i.uid === u)?.id ?? '');
   const stakeValue = () => round2([...sel].reduce((s, u) => s + invItem(u).value, 0) + coins);
@@ -99,7 +110,7 @@ export function render(el) {
     if (target && target.value <= sv * 1.05) target = null;
     if (!more) { shown = 0; if (!box.children.length) box.innerHTML = '<div class="muted small">Loading items…</div>'; }
     let res;
-    try { res = await queryItems({ min: sv * 1.05, max: sv > 0 ? sv * MAX_MULTI : undefined, q: tq, dir: sortDir as 'asc' | 'desc', type: tType || undefined, rarity: (tRar || undefined) as any }, shown, PAGE); }
+    try { res = await queryItems({ min: sv * 1.05, max: sv > 0 ? Math.min(sv * MAX_MULTI, tMax) : (tMax === Infinity ? undefined : tMax), q: tq, dir: sortDir as 'asc' | 'desc', type: tType || undefined, rarity: (tRar || undefined) as any }, shown, PAGE); }
     catch { if (alive && mine === token) box.innerHTML = '<div class="muted small">Could not load the item list. Check your connection, then change the search to try again.</div>'; return; }
     if (!alive || mine !== token) return;                                // a newer search has started: this answer is stale
     const card = i => `<button class="pick ${target === i ? 'on' : ''}" data-id="${i.id}">${itemCard(i, { compact: true, extra: sv > 0 ? `<div class="chance">${(upgradeChance(sv, i.value) * 100).toFixed(2)}%</div>` : '' })}</button>`;
@@ -107,7 +118,7 @@ export function render(el) {
     box.querySelector('.more-row')?.remove();
     box.insertAdjacentHTML('beforeend', res.items.map(card).join(''));
     shown += res.items.length;
-    if (!box.children.length) box.innerHTML = sv > 0 ? '<div class="muted small">No item matches. Try another search or a bigger stake.</div>' : '<div class="muted small">Pick a stake first: the list shows items worth more than it.</div>';
+    if (!box.children.length) box.innerHTML = sv > 0 ? '<div class="muted small">No item matches. Try another search, a bigger stake or a higher price limit.</div>' : '<div class="muted small">Pick a stake first: the list shows items worth more than it.</div>';
     else if (shown < res.total) box.insertAdjacentHTML('beforeend', `<div class="more-row"><button class="btn btn-ghost btn-sm" id="moreTargets">Show more (${(res.total - shown).toLocaleString('en-US')} left)</button></div>`);
     $$('#targetPick .pick', el).forEach(b => b.onclick = () => { if (busy) return; target = ITEM[b.dataset.id]; sfx.click(); $$('#targetPick .pick', el).forEach(x => x.classList.toggle('on', x === b)); drawStage(); });
     const mo = $('#moreTargets', el); if (mo) mo.onclick = () => void drawTargets(true);
@@ -131,19 +142,23 @@ export function render(el) {
     $('#multi', el).textContent = sv > 0 && target ? `${fmt(target.value / sv)}×` : '';
     $('#arc', el).setAttribute('stroke-dasharray', `${ch * 100} 100`);
     $('#arc', el).setAttribute('stroke-dashoffset', over ? `${-(100 - ch * 100)}` : '0');
-    const btn = $('#upBtn', el);
-    btn.disabled = !(sv > 0 && target) || busy;
-    btn.innerHTML = sv > 0 && target ? `Upgrade (${(ch * 100).toFixed(2)}%)` : 'Select a stake and a target';
+    const btn = $('#upBtn', el), autoN = +$('#autoN', el).value;
+    if (autoRunning) { btn.disabled = false; btn.innerHTML = `Stop auto (${autoLeft} left)`; }
+    else {
+      btn.disabled = !(sv > 0 && target) || busy;
+      btn.innerHTML = sv > 0 && target ? (autoN > 0 ? `Start auto: ${autoN} × ${(ch * 100).toFixed(2)}%` : `Upgrade (${(ch * 100).toFixed(2)}%)`) : 'Select a stake and a target';
+    }
     drawTargetsIfNeeded();
   };
-  let lastSv = -1;
+  let lastSv = -1, autoRunning = false, autoLeft = 0;
   const drawTargetsIfNeeded = () => { const sv = stakeValue(); if (sv !== lastSv) { lastSv = sv; void drawTargets(); } };
 
-  $('#coinStake', el).oninput = e => {
-    const v = Math.max(0, round2(+e.target.value || 0));
+  const setStake = (): void => {
+    const v = Math.max(0, round2(+$('#coinStake', el).value || 0));
     coins = Math.min(v, state.balance);
     drawStage();
   };
+  wireAmount(el, $('#coinStake', el), () => state.balance, setStake);      // typing, or the ½ / 2× / Max buttons
   $$('#tSort .tab', el).forEach(t => t.onclick = () => { $$('#tSort .tab', el).forEach(x => x.classList.toggle('active', x === t)); sortDir = t.dataset.s; void drawTargets(); });
   // Multiplier presets pick the cheapest item worth at least stake × multiplier.
   $$('#preset button', el).forEach(b => b.onclick = async () => {
@@ -155,12 +170,26 @@ export function render(el) {
     if (!pick) return toast('No item is that valuable', 'error');
     target = pick; sfx.click(); void drawTargets(); drawStage();
   });
+  // A typed chance picks the cheapest item worth at least stake × 95% ÷ chance, so the real chance is as close as possible without going over.
+  $('#wantChance', el).onchange = async e => {
+    if (busy) return;
+    const p = +e.target.value;
+    if (!(p >= 1 && p <= UPGRADE_MAX * 100)) return toast(`Enter a chance from 1% to ${UPGRADE_MAX * 100}%`, 'error');
+    const sv = stakeValue();
+    if (!(sv > 0)) return toast('Pick a stake first', 'error');
+    const pick = await cheapestAtLeast(sv * HOUSE.upgrade / (p / 100)).catch(() => null);
+    if (!alive) return;
+    if (!pick) return toast('No item is that valuable', 'error');
+    target = pick; sfx.click(); void drawTargets(); drawStage();
+  };
+  $('#autoN', el).onchange = () => drawStage();
   $$('#dir button', el).forEach(b => b.onclick = () => { if (busy) return; over = b.dataset.d === 'over'; $$('#dir button', el).forEach(x => x.classList.toggle('active', x === b)); drawStage(); });
 
-  $('#upBtn', el).onclick = async () => {
+  /** One upgrade. `keep` (Auto) keeps the coin stake and the target for the next round. Resolves true on a win, false on a miss, null when it could not run. */
+  const runUpgrade = async (keep: boolean): Promise<boolean | null> => {
     const sv = stakeValue();
-    if (busy || !(sv > 0) || !target) return;
-    if (coins > 0 && !debit(coins)) return toast(debitError(coins), 'error');
+    if (busy || !(sv > 0) || !target) return null;
+    if (coins > 0 && !debit(coins)) { toast(debitError(coins), 'error'); return null; }
     busy = true; drawStage();
     const uids = [...sel];
     // Shown in the live feed as "from → to": your most valuable staked item (or the closest item to a coin stake).
@@ -174,7 +203,7 @@ export function render(el) {
         const r = await upgradeItem(uids, coins, target.id, dirOver);
         ch = r.chance; f = r.roll; win = r.win;
         held = r.uid ? [r.uid] : [];
-      } catch (e) { busy = false; drawStage(); return toast(e instanceof Error ? e.message : 'Could not upgrade', 'error'); }
+      } catch (e) { busy = false; drawStage(); toast(e instanceof Error ? e.message : 'Could not upgrade', 'error'); return null; }
     } else {
       removeItems(uids);
       ch = upgradeChance(sv, target.value);
@@ -214,14 +243,41 @@ export function render(el) {
     releaseItems(held); held = [];                                      // the pointer has landed: now the top bar counts the item
     if (alive) { rollEl.textContent = final.toFixed(2); $('#chanceLbl', el).textContent = win ? 'winning roll' : 'roll'; rollEl.className = win ? 'pos' : 'neg'; }
     pushLiveUp({ user: state.name, mine: true, from: fromItem, to: tgt, multi: round2(tgt.value / sv), chance: ch, win });
-    if (!alive) return;
+    if (!alive) return null;
     $('.upgrade-stage', el).classList.add(win ? 'up-win' : 'up-lose');
     setTimeout(() => $('.upgrade-stage', el)?.classList.remove('up-win', 'up-lose'), 1600);
     if (win) { sfx.big(); confetti(RARITY[tgt.rarity].color); toast(`Upgrade hit! ${itemName(tgt)}`, 'win'); pushDrop({ user: state.name, item: tgt, source: 'Upgrade' }); }
     else { sfx.lose(); toast('Upgrade missed', 'error'); }
-    sel.clear(); coins = 0; $('#coinStake', el).value = ''; target = null; lastSv = -1;
+    sel.clear();
+    if (!keep) { coins = 0; $('#coinStake', el).value = ''; target = null; lastSv = -1; }
     // Keep the landed roll visible for a moment before resetting the gauge.
-    setTimeout(() => { if (!alive) return; busy = false; $('#chance', el).className = ''; drawInv(); drawStage(); }, 1400);
+    await sleep(keep ? 900 : 1400);
+    if (alive) { busy = false; $('#chance', el).className = ''; drawInv(); drawStage(); }
+    return win;
+  };
+
+  // Auto (idea from SkinRave): the same coin stake and target, up to 25 times. Every round goes through the same checks as a manual one (balance,
+  // limits, cool-off), and it stops on a win (unless switched off), on any refusal, when a reality check or another dialog opens, or when you press Stop.
+  const stopAuto = (why = ''): void => { if (!autoRunning) return; autoRunning = false; autoLeft = 0; if (why) toast(why); drawStage(); };
+  const startAuto = async (): Promise<void> => {
+    if (sel.size) return toast('Auto works with a coin stake only: unselect the items', 'error');
+    if (!(coins > 0) || !target) return toast('Pick a coin stake and a target first', 'error');
+    autoRunning = true; autoLeft = +$('#autoN', el).value; drawStage();
+    let won = false;
+    while (autoRunning && alive && autoLeft > 0) {
+      if (document.querySelector('.rg-overlay, .modal-back')) { stopAuto('Auto stopped: answer the open window first'); break; }
+      autoLeft--; drawStage();
+      const r = await runUpgrade(true);
+      if (r === null) { stopAuto(); break; }
+      if (r) { won = true; if ($('#autoStopWin', el).checked) { stopAuto('Auto stopped: you won'); break; } }
+      if (coins > state.balance) { stopAuto('Auto stopped: not enough coins for another round'); break; }
+    }
+    if (autoRunning) stopAuto(won ? 'Auto finished' : 'Auto finished: no win this time');
+  };
+  $('#upBtn', el).onclick = () => {
+    if (autoRunning) return stopAuto('Auto stopped');
+    if (+$('#autoN', el).value > 0) return void startAuto();
+    void runUpgrade(false);
   };
 
   // "Upgrade win" from a battle arrives here as a ready coin stake.
@@ -235,5 +291,5 @@ export function render(el) {
   // Items that came from an upgrade are not bundled with the page: fetch the ones the inventory holds, then show them.
   void ensureItems(state.inv.map(e => e.id));
   const offItems = on('items:loaded', () => { if (alive) { drawInv(); drawStage(); } });
-  return () => { alive = false; clearInterval(liveTimer); clearTimeout(searchTimer); offItems(); releaseItems(held); };
+  return () => { alive = false; autoRunning = false; clearInterval(liveTimer); clearTimeout(searchTimer); offItems(); releaseItems(held); };
 }

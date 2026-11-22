@@ -684,7 +684,8 @@ function drawBattle(el, b) {
         const s = $(`#slot${p}_${r}`, el);
         s.className = 'slot filled';
         s.style.setProperty('--rc', RARITY[it.rarity].color);
-        s.innerHTML = `<span class="slot-n">#${r + 1}</span>${itemArt(it)}<b class="slot-name">${esc(it.skin)}</b>${money(it.value)}`;
+        const odds = c.entries.find(e => e.item.id === it.id)?.chance;          // the chance of this pull, shown on the card (idea from Chicken.gg)
+        s.innerHTML = `<span class="slot-n">#${r + 1}</span>${odds != null ? `<span class="slot-odds" title="Chance of this item in ${esc(c.name)}">${(odds * 100).toFixed(odds < 0.01 ? 3 : 2)}%</span>` : ''}${itemArt(it)}<b class="slot-name">${esc(it.skin)}</b>${money(it.value)}`;
       });
       updateChips(running, points);
       // The value under each landed item turns green for the round's best pull (lowest in Crazy modes), red otherwise.
@@ -741,10 +742,18 @@ function drawBattle(el, b) {
   play(false);
 
   // Leaving a lobby that hasn't started cancels it and refunds you; a started battle is settled.
-  return () => {
-    alive = false;
+  const leave = () => {
     if (b.live ? b.running : b.started) settle(b);        // a battle that is already decided is paid out even if I leave early
     else cancelBattle(true);
+  };
+  // A browser-only battle lives in this tab's memory: closing or reloading the page must settle or refund it too, or the stake is lost.
+  // (A live battle is kept by the database, which pays it either way.)
+  const onHide = (): void => { if (!b.live) leave(); };
+  window.addEventListener('pagehide', onHide);
+  return () => {
+    alive = false;
+    window.removeEventListener('pagehide', onHide);
+    leave();
   };
 }
 

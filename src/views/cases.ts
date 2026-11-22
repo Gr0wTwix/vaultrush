@@ -1,11 +1,14 @@
-import { CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf, isHugeDrop } from '../data.js';
-import { state, save, debit, addItems, round2, debitError } from '../state.js';
+import { caseRisk, CASES, CASE, ITEM, RARITY, entryForTicket, ticketOf, isHugeDrop } from '../data.js';
+import { state, save, debit, addItems, round2, debitError, handoff } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop, pushBet } from '../feed.js';
-import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs, preloadImages, bringIntoView } from '../ui.js';
+import { $, $$, esc, fmt, money, caseArt, itemCard, spinReel, toast, confetti, icon, openMs, preloadImages, bringIntoView, riskBadge } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { eyeBtn } from '../preview.js';
 import { serverWallet, openCases, releaseItems } from '../wallet.js';
+
+/** How many cases can be opened at once (the same choice as on the case page). */
+const COUNTS = [1, 2, 3, 4, 6];
 
 const PRICE_BANDS = [['all', 'All prices', 0, Infinity], ['low', 'Under 5', 0, 5], ['mid', '5 – 50', 5, 50], ['high', '50 – 250', 50, 250], ['vip', '250+', 250, Infinity]] as [string, string, number, number][];
 
@@ -31,9 +34,32 @@ export function renderList(el) {
     $('#grid', el).innerHTML = list.map(c => `<a class="case-card" href="#/case/${c.id}" data-case="${c.id}" style="--hue:${c.hue}">
       ${eyeBtn(c.id)}<button class="fav ${state.favs.includes(c.id) ? 'on' : ''}" data-fav="${c.id}" aria-label="Favourite">${icon('star')}</button>
       ${c.tag !== 'official' ? `<span class="case-tag">${esc(c.tag)}</span>` : ''}
-      ${caseArt(c)}<b>${esc(c.name)}</b><span class="muted small">Top drop ${money(c.entries[0].item.value)}</span>${money(c.price, 'price')}</a>`).join('')
+      ${caseArt(c)}<b>${esc(c.name)}</b><span class="muted small">Top drop ${money(c.entries[0].item.value)}</span>${riskBadge(c)}${money(c.price, 'price')}
+      <button type="button" class="qo-btn" data-qo="${c.id}" aria-label="Quick open ${esc(c.name)}" aria-expanded="false">${icon('bolt')}</button>
+      <div class="qo-back" hidden><b>${esc(c.name)}</b><div class="seg qo-count" role="group" aria-label="How many">${COUNTS.map(n => `<button type="button" data-qn="${n}" class="${n === 1 ? 'active' : ''}">${n}</button>`).join('')}</div>
+        <button type="button" class="btn btn-primary btn-sm qo-open" data-needs-auth="bet">Open for ${money(c.price)}</button><button type="button" class="btn btn-ghost btn-sm qo-view">View case</button>
+        <button type="button" class="qo-close" aria-label="Close quick open">×</button></div></a>`).join('')
       || '<div class="muted">No cases match. <a href="#/cases" id="clr">Clear filters</a></div>';
     $$('[data-fav]', el).forEach(b => b.onclick = e => { e.preventDefault(); toggleFav(b.dataset.fav); draw(); });
+    // Quick open: the card turns over to show "how many" and an Open button; Open goes to the case page and opens there (same checks, same reels).
+    $$('.case-card', el).forEach(card => {
+      const back = $('.qo-back', card), btn = $('.qo-btn', card), c = CASE[card.dataset.case];
+      if (!back || !btn || !c) return;
+      let n = 1;
+      const show = (on: boolean): void => { back.hidden = !on; card.classList.toggle('flipped', on); btn.setAttribute('aria-expanded', String(on)); if (on) ($('.qo-open', back) as HTMLElement).focus(); else btn.focus(); };
+      const stop = (e: Event): void => { e.preventDefault(); e.stopPropagation(); };
+      btn.onclick = e => { stop(e); show(back.hidden); };
+      $('.qo-close', back).onclick = e => { stop(e); show(false); };
+      $$('[data-qn]', back).forEach(b => b.onclick = e => {
+        stop(e); n = +b.dataset.qn;
+        $$('[data-qn]', back).forEach(x => x.classList.toggle('active', x === b));
+        $('.qo-open', back).innerHTML = `Open ${n > 1 ? `${n}× ` : ''}for ${money(round2(c.price * n))}`;
+      });
+      $('.qo-open', back).onclick = e => { stop(e); handoff.quickOpen = { id: c.id, count: n }; location.hash = `#/case/${c.id}`; };
+      $('.qo-view', back).onclick = e => { stop(e); location.hash = `#/case/${c.id}`; };
+      back.onclick = e => stop(e);                                        // a click on the back side never follows the card's link
+      back.onkeydown = e => { if (e.key === 'Escape') { stop(e); show(false); } };
+    });
   };
   $('#q', el).oninput = e => { q = e.target.value.trim().toLowerCase(); draw(); };
   $('#band', el).onchange = e => { band = e.target.value; draw(); };
@@ -58,7 +84,7 @@ export function renderCase(el, id) {
       <div class="case-hero-art">${caseArt(c, 'xl')}</div>
       <div class="case-hero-info">
         <div class="row"><h1>${esc(c.name)}</h1><button class="fav big ${state.favs.includes(c.id) ? 'on' : ''}" id="fav" aria-label="Favourite">${icon('star')}</button></div>
-        <div class="muted">${c.entries.length} items · top drop ${money(c.entries[0].item.value)}</div>
+        <div class="muted">${c.entries.length} items · top drop ${money(c.entries[0].item.value)}</div><div class="case-risk">${riskBadge(c)}<span class="muted small">${(caseRisk(c).back * 100).toFixed(1)}% chance to pull an item worth at least ${fmt(c.price)}</span></div>
         <div class="open-controls">
           <div class="seg" id="count">${[1, 2, 3, 4, 6].map(n => `<button class="${n === 1 ? 'active' : ''}" data-n="${n}">${n}</button>`).join('')}</div>
           <button class="btn btn-primary btn-lg" id="openBtn" data-needs-auth="bet"></button>
@@ -156,5 +182,12 @@ export function renderCase(el, id) {
     else if (total >= cost) sfx.win(); else sfx.lose();
   };
 
+  // Quick open from the case list: pick the count and open straight away (the Open button runs every usual check).
+  if (handoff.quickOpen?.id === c.id) {
+    const qo = handoff.quickOpen; delete handoff.quickOpen;
+    const b = $(`#count button[data-n="${qo.count}"]`, el) as HTMLButtonElement | null;
+    b?.click();
+    setTimeout(() => { if (alive) openBtn.click(); }, 50);
+  }
   return () => { alive = false; releaseItems(held); };               // leaving mid-spin: the items are in the inventory, show them
 }

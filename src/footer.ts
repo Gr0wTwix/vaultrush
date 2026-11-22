@@ -31,7 +31,7 @@ export function footerHtml(): string {
       <span class="ft-note">By using this site you confirm you are over 18. Have a gaming problem? <a href="#/responsible">Reach out for help</a>. No purchase is possible or necessary: Vaultrush is free to play.</span>
       <span class="ft-chips"><span>Play money</span><span>Provably fair</span><span>Demo</span></span>
     </div>
-    <div class="ft-bottom"><span>© ${new Date().getFullYear() > c.since ? `${c.since}–${new Date().getFullYear()}` : c.since} ${esc(c.name)} (fictional). All rights reserved.</span><span>Contact: ${esc(c.email)} (placeholder)</span></div>`;
+    <div class="ft-bottom"><button type="button" class="link" id="ftTips">Show the site tips</button><span>© ${new Date().getFullYear() > c.since ? `${c.since}–${new Date().getFullYear()}` : c.since} ${esc(c.name)} (fictional). All rights reserved.</span><span>Contact: ${esc(c.email)} (placeholder)</span></div>`;
 }
 
 export function renderFooter(): void {

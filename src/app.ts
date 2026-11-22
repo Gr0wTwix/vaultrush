@@ -22,6 +22,7 @@ import { initChat } from './chat.js';
 import { initSite, gameOff, pausedPanel, GAME_OF_NAV } from './site.js';
 import { serverWallet, claimFaucet, visibleInventoryCount } from './wallet.js';
 import { initBarFx } from './barfx.js';
+import { maybeShowTips, wireTipsLink } from './tips.js';
 import * as home from './views/home.js';
 import * as cases from './views/cases.js';
 import * as battles from './views/battles.js';
@@ -155,7 +156,7 @@ function renderTopbar() {
   };
   $('.me-wrap').addEventListener('focusout', (e: FocusEvent) => { if (!meMenu.hidden && !(e.relatedTarget && $('.me-wrap').contains(e.relatedTarget as Node))) setMenu(false); });
   meBtn.onclick = e => { e.stopPropagation(); sfx.click(); setMenu(meMenu.hidden); };
-  meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); sfx.click(); if (b.dataset.tab === 'logout') void logout(); else openAccount(b.dataset.tab); };
+  meMenu.onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; setMenu(false); meBtn.focus(); sfx.click(); if (b.dataset.tab === 'logout') void logout(); else openAccount(b.dataset.tab); };   // focus the menu button first, so closing the window returns focus there (the menu item is hidden by then)
   document.addEventListener('click', e => { if (!meMenu.hidden && !(e.target as Element).closest('.me-wrap')) setMenu(false); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !meMenu.hidden) { setMenu(false); meBtn.focus(); } });
   $('#muteBtn').onclick = () => { state.muted = !state.muted; save(); $('#muteBtn').innerHTML = icon(state.muted ? 'mute' : 'sound'); };
@@ -257,6 +258,8 @@ async function boot() {
   initChat($('#chat'));
   window.addEventListener('hashchange', route);
   route();
+  wireTipsLink();
+  setTimeout(maybeShowTips, 1500);                                        // first visit: a short tour, unless another window is open
   const race = settlePastRace();
   if (race) setTimeout(() => toast(`You finished #${race.rank} in yesterday's race: +${fmt(race.prize)}`, 'win'), 800);
 }

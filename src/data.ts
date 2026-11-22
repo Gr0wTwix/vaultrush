@@ -64,6 +64,15 @@ export const CASES: Case[] = ALL.filter(c => !c.reward);
 export const REWARD_CASES: Case[] = ALL.filter(c => c.reward);
 export const CASE: Record<string, Case> = Object.fromEntries(ALL.map(c => [c.id, c]));
 
+/** How risky a case is, measured honestly: the chance that one opening gives an item worth at least the price (`back`, 0 to 1).
+ *  22% or more is Low, 12% or more is Medium, less is High. (Idea from the L / M / H labels on CSGOBig's cases.) */
+export type CaseRisk = { level: 'low' | 'medium' | 'high'; back: number };
+export function caseRisk(c: Case): CaseRisk {
+  const back = c.entries.reduce((s, e) => s + (e.item && e.item.value >= c.price ? e.chance : 0), 0);
+  return { level: back >= 0.22 ? 'low' : back >= 0.12 ? 'medium' : 'high', back };
+}
+export const RISK_LABEL = { low: 'Low risk', medium: 'Medium risk', high: 'High risk' } as const;
+
 /** Ticket number (0–99,999) for a roll, and the entry that owns it. */
 export const ticketOf = (f: number): number => Math.floor(f * 100000);
 export const entryForTicket = (c: Case, ticket: number): CaseEntry => c.entries.find(e => ticket >= e.from && ticket <= e.to) || (c.entries[c.entries.length - 1] as CaseEntry);

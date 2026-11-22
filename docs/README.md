@@ -5,6 +5,7 @@ Vaultrush is an original **play-money** skin-game demo. Coins cannot be bought, 
 | Document | Read it for |
 |---|---|
 | [setup-status.md](setup-status.md) | What is set up and what is not: variables, migrations, services, sign-in, n8n, CI; what is confirmed and what is not; how to re-check |
+| [audit-2026-11-22.md](audit-2026-11-22.md) | Full-site audit: what was tested, what was fixed, what still needs verifying |
 | [architecture.md](architecture.md) | Folder layout, how state and views work, the single gates for bets and claims |
 | [accounts-and-auth.md](accounts-and-auth.md) | Browser accounts, Supabase cloud accounts, Google and Steam sign-in, the signed-out rules |
 | [server-wallet.md](server-wallet.md) | Where coins and items live now (the database): what each game does there, how the page mirrors it, setup steps, what is still simplified |

@@ -148,7 +148,9 @@ a.drop:hover, .drop:hover { transform: translateY(-3px); box-shadow: 0 12px 24px
 .amount button { border: 0; background: var(--panel3); color: var(--muted); padding: 8px 10px; border-radius: 8px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .amount button:hover { color: var(--text); }
 .amount-coin { padding-left: 8px; display: flex; }
-.small-amount { width: 150px; }
+.small-amount { width: auto; min-width: 150px; }
+.small-amount input { min-width: 64px; }                               /* the coin box keeps room for the number next to ½ / 2× / Max */
+@media (max-width: 600px) { .upgrade-pickers .panel-head { flex-wrap: wrap; gap: 8px; } .upgrade-pickers .small-amount { flex: 1 1 100%; } }
 .check { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); cursor: pointer; font-weight: 600; }
 .check input { width: auto; accent-color: var(--accent); }
 .tag { display: inline-block; padding: 3px 8px; border-radius: 6px; font: 700 10px var(--display); text-transform: uppercase; letter-spacing: .08em; background: var(--panel3); color: var(--muted); }

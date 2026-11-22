@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { vi, describe, expect, it } from 'vitest';
+
+vi.setConfig({ testTimeout: 30_000 });                                     // statistical tests over large streams: slow under a full parallel run (one took 5.2 s)
 import {
   ALPHA, RngHealth, auditNonces, bitBattery, bitsFromString, blockFrequencyTest, byteTest, chiSquarePValue, erfc, fips1402,
   floatsToBits, frequencyTest, igamc, ksUniformTest, lgamma, longestRunTest, nibbleTest, proportionTest, runsTest, serialCorrelationTest,

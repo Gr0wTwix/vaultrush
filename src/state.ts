@@ -39,8 +39,13 @@ function load(): GameState {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaults();
-    const saved = JSON.parse(raw) as Partial<GameState>;
+    const parsed = JSON.parse(raw) as Partial<GameState> | null;
+    if (!parsed || typeof parsed !== 'object') return defaults();
     const d = defaults();
+    // A damaged or hand-edited save must not break the games: every list that is not a list, and a balance that is not a number, falls back to the default.
+    const saved: Partial<GameState> = { ...parsed };
+    for (const k of Object.keys(d) as (keyof GameState)[]) if (Array.isArray(d[k]) && k in saved && !Array.isArray(saved[k])) delete saved[k];
+    if (saved.balance !== undefined && !Number.isFinite(saved.balance)) delete saved.balance;
     const real = (e: { id?: unknown } | null | undefined): boolean => typeof e?.id === 'string' && e.id.startsWith('skin-');       // items of the old invented catalogue no longer exist
     const welcomeLeft = Math.min(1, typeof saved.welcomeLeft === 'number' ? saved.welcomeLeft : 1);   // one welcome crate per account (older saves had three)
     return { ...d, ...saved, inv: (saved.inv ?? d.inv).filter(real), bestDrop: real(saved.bestDrop) ? saved.bestDrop! : null, welcomeLeft, rakeback: { ...d.rakeback, ...saved.rakeback }, stats: { ...d.stats, ...saved.stats }, calendar: { ...d.calendar, ...saved.calendar }, race: { ...d.race, ...saved.race }, ui: { ...d.ui, ...saved.ui }, legal: { ...d.legal, ...saved.legal }, gameStats: { ...saved.gameStats },

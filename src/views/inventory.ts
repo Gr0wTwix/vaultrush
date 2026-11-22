@@ -1,6 +1,6 @@
 import { itemOf } from '../data.js';
 import { ensureItems } from '../catalogue.js';
-import { state, credit, removeItems, round2, resetAccount, START_BALANCE, isAuthed, on } from '../state.js';
+import { state, grant, removeItems, round2, resetAccount, START_BALANCE, isAuthed, on } from '../state.js';
 import { serverWallet, sellItems } from '../wallet.js';
 import { $, $$, fmt, money, itemCard, icon, toast, guestCard } from '../ui.js';
 import { sfx } from '../sfx.js';
@@ -29,14 +29,14 @@ export function render(el) {
     $$('.sell', el).forEach(b => b.onclick = async () => {
       const e = state.inv.find(x => x.uid === b.dataset.u); if (!e) return;
       if (serverWallet()) { try { await sellItems([e.uid]); } catch (er) { return toast(er instanceof Error ? er.message : 'Could not sell', 'error'); } }
-      else { removeItems([e.uid]); credit(itemOf(e.id).value); }
+      else { removeItems([e.uid]); grant(itemOf(e.id).value, 'Item sale'); }     // like the server wallet: a sale is not a win, and it shows in Transactions
       sfx.click(); draw();
     });
     const sa = $('#sellAll', el);
     if (sa) sa.onclick = async () => {
       const t = total;
       if (serverWallet()) { try { await sellItems(null); } catch (er) { return toast(er instanceof Error ? er.message : 'Could not sell', 'error'); } }
-      else { removeItems(state.inv.map(e => e.uid)); credit(t); }
+      else { removeItems(state.inv.map(e => e.uid)); grant(t, 'Item sale'); }
       sfx.win(); toast(`Sold everything for ${fmt(t)}`, 'win'); draw();
     };
     const rs = $('#reset', el);

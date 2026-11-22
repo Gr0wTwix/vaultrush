@@ -1,7 +1,7 @@
 import { CASES, ITEMS, RARITY, CATALOGUE_TOTAL } from '../data.js';
 import { bets, drops } from '../feed.js';
 import { state, save, on, levelFromXp, xpForLevel, isAuthed } from '../state.js';
-import { $, $$, esc, fmt, money, icon, avatar, caseArt, itemArt, guestCard } from '../ui.js';
+import { riskBadge, $, $$, esc, fmt, money, icon, avatar, caseArt, itemArt, guestCard } from '../ui.js';
 import { eyeBtn } from '../preview.js';
 import { applyUi } from '../account.js';
 
@@ -89,7 +89,7 @@ export function render(el) {
     </section>
 
     <div class="panel-head" style="margin:0"><h2 class="section-title">Popular cases</h2><a class="small" href="#/cases">View all ${CASES.length} cases →</a></div>
-    <section class="case-grid">${CASES.slice(0, 12).map(c => `<a class="case-card" href="#/case/${c.id}" data-case="${c.id}" style="--hue:${c.hue}">${eyeBtn(c.id)}${caseArt(c)}<b>${esc(c.name)}</b>${money(c.price, 'price')}</a>`).join('')}</section>
+    <section class="case-grid">${CASES.slice(0, 12).map(c => `<a class="case-card" href="#/case/${c.id}" data-case="${c.id}" style="--hue:${c.hue}">${eyeBtn(c.id)}${caseArt(c)}<b>${esc(c.name)}</b>${riskBadge(c)}${money(c.price, 'price')}</a>`).join('')}</section>
 
     <section class="hm-two">
       <div class="panel">

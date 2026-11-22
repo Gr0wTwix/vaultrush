@@ -135,10 +135,10 @@ describe('changing limits and taking breaks', () => {
     const until = await takeBreak('cool-off', 90 * 60_000);                               // 90 minutes -> 2 hours
     expect(asked('start_cool_off')).toEqual([{ p_hours: 2 }]);
     expect(Math.abs(until - (Date.now() + 2 * HOUR))).toBeLessThan(5_000);
-    expect(state.rg.coolOffUntil).toBe(until);
+    expect(Math.abs(state.rg.coolOffUntil - until)).toBeLessThan(1_000);                  // the mirror is shifted by the measured clock gap, which can differ by a millisecond
     const excl = await takeBreak('self-exclusion', 3 * 24 * HOUR);
     expect(asked('self_exclude')).toEqual([{ p_hours: 72 }]);
-    expect(state.excludedUntil).toBe(excl);
+    expect(Math.abs(state.excludedUntil - excl)).toBeLessThan(1_000);
   });
 
   it('without the server wallet the same calls keep the break in the browser and ask nothing', async () => {

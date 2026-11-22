@@ -33,7 +33,7 @@ On this project all three are set both locally and in Vercel Production. Locally
 ## Supabase setup (once per project)
 
 1. Create a project. In the create form, leave "Enable Data API" on and turn **off** "Automatically expose new tables" (the migration sets its own grants and row-level security).
-On this project's database migrations `0001` to `0016` have all been run; the notes under each step say what a database that has **not** run it would do.
+On this project's database migrations `0001` to `0019` have all been run; the notes under each step say what a database that has **not** run it would do.
 
 2. SQL editor: run `supabase/migrations/0001_core.sql`. A "destructive operations" warning is expected because the script revokes default grants.
    Then run `supabase/migrations/0002_live.sql` (live battles, coinflip and the realtime tables; see [live-multiplayer.md](live-multiplayer.md)). The site works without it and keeps the simulated lobbies.
