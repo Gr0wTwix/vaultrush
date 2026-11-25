@@ -1,5 +1,5 @@
 // Account window > Verification: KYC tiers (sandbox), AML monitoring and the payout simulator.
-import { state, save } from './state.js';
+import { state, save, isServerWallet } from './state.js';
 import {
   SCENARIOS, TIER_MAX_BET, TIER_NAMES, declareSourceOfFunds, requestEmailCode, resolveReview, submitDob, submitDocument, verifyEmailCode, type ScenarioId,
 } from './kyc.js';
@@ -8,6 +8,7 @@ import type { PaneCtx } from './account-rg.js';
 import { $, $$, esc, fmt, icon, money, toast } from './ui.js';
 import { sfx } from './sfx.js';
 import { activeAccount } from './accounts.js';
+import { renderServerVerification } from './verification-server.js';
 
 const when = (t: number): string => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const step = (done: boolean, title: string, body: string): string =>
@@ -25,6 +26,7 @@ export function renderVerification(pane: HTMLElement, ctx: PaneCtx): void {
   pane.innerHTML = `
     <h2 class="ac-h">Verification</h2>
     <p class="ac-sub">Know-your-customer and anti-money-laundering controls, running in <b>sandbox mode</b>: it behaves like a real provider integration, but no documents are collected, nothing is sent anywhere, and no money moves.</p>
+    <div id="kServer"></div>
 
     <div class="ac-card kyc-tier"><div><span class="muted small">Your level</span><b class="kyc-tier-n">Level ${k.tier}</b><span>${TIER_NAMES[k.tier]}</span></div>
       <div class="kyc-lim"><span class="muted small">Highest single bet</span><b>${fmt(TIER_MAX_BET[k.tier])}</b></div>
@@ -60,6 +62,7 @@ export function renderVerification(pane: HTMLElement, ctx: PaneCtx): void {
     ${k.log.length ? `<div class="ac-card"><h3>Verification log</h3><ul class="rg-log">${k.log.slice(0, 8).map(l => `<li><span class="muted">${when(l.at)}</span> ${esc(l.text)}</li>`).join('')}</ul></div>` : ''}`;
 
   const fail = (msg: string): void => { toast(msg, 'error'); };
+  if (isServerWallet()) void renderServerVerification($('#kServer', pane));        // the level the server uses, asked of staff (0026)
   $('#kSend', pane)?.addEventListener('click', () => {
     const r = requestEmailCode(k, ($('#kEmail', pane) as HTMLInputElement).value);
     if (!r.ok) return fail(r.error ?? 'Could not send');

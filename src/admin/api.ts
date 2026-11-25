@@ -107,6 +107,16 @@ export interface GameSettings { crash_bet_seconds: number; double_bet_seconds: n
   bots_battles: boolean; bots_coinflip: boolean; simulated_activity: boolean; bot_names: string[]; limits: Record<string, { min: number; max: number }>;
   games?: string[]; updated_at?: string; updated_by?: string | null }
 
+/** Step F part 1 (migration 0026): verification requests and the responsible-play console. */
+export interface KycRequest { id: number; user_id: string; name: string; tier: number; note: string; status: 'pending' | 'approved' | 'declined' | 'withdrawn'; at: string; decided_at: string | null;
+  decision_note: string | null; by: string | null; current_tier: number; joined: string; wagered: number | null; flags: string[] }
+export interface RgOverview {
+  excluded: { id: string; name: string; until: string }[]; cool_off: { id: string; name: string; until: string }[];
+  pending: { id: string; name: string; key: string; value: number | null; effective_at: string }[];
+  losses_7d: { id: string; name: string; staked: number; net_loss: number; bets: number }[]; busy_today: { id: string; name: string; bets: number; staked: number; minutes: number }[]; now: number;
+}
+export type RgKind = 'cool_off' | 'exclude' | 'max_bet' | 'loss_daily' | 'loss_weekly' | 'loss_monthly' | 'wager_daily' | 'time_daily_min';
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -201,6 +211,11 @@ export interface AdminApi {
   cancelGiveaway(id: number, reason: string): Promise<void>;
   gameSettings(): Promise<GameSettings>;
   saveGameSettings(s: GameSettings, reason: string): Promise<GameSettings>;
+  kycQueue(status: string | null): Promise<KycRequest[]>;
+  kycDecide(id: number, approve: boolean, reason: string): Promise<void>;
+  kycSetTier(user: string, tier: number, reason: string): Promise<void>;
+  rgOverview(): Promise<RgOverview>;
+  rgApply(user: string, kind: RgKind, value: number, reason: string): Promise<Record<string, unknown>>;
 }
 
 export const realApi: AdminApi = {
@@ -305,6 +320,11 @@ export const realApi: AdminApi = {
   saveGameSettings: (s, reason) => call<GameSettings>('admin_game_settings_save', { p_crash: s.crash_bet_seconds, p_double: s.double_bet_seconds, p_lobby: s.lobby_minutes,
     p_battles_max: s.battle_lobbies_max, p_flips_max: s.flip_lobbies_max, p_bots_battles: s.bots_battles, p_bots_coinflip: s.bots_coinflip, p_simulated: s.simulated_activity,
     p_bot_names: s.bot_names, p_limits: s.limits, p_reason: reason }),
+  kycQueue: status => call<KycRequest[]>('admin_kyc_queue', { p_status: status }),
+  kycDecide: async (id, approve, reason) => { await call('admin_kyc_decide', { p_id: id, p_approve: approve, p_reason: reason }); },
+  kycSetTier: async (user, tier, reason) => { await call('admin_kyc_set_tier', { p_user: user, p_tier: tier, p_reason: reason }); },
+  rgOverview: () => call<RgOverview>('admin_rg_overview'),
+  rgApply: (user, kind, value, reason) => call('admin_rg_apply', { p_user: user, p_kind: kind, p_value: value, p_reason: reason }),
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -341,6 +361,9 @@ export const ADMIN_ERRORS: Record<string, string> = {
   rtp_out_of_range: 'At this price the case would return less than 70% or more than 98% of its price on average. Change the price or the chances.',
   rakeback_too_high: 'The three rakeback shares together can be at most 5% of every stake.',
   invalid_bot_names: 'Give 3 to 100 bot names, each 2 to 20 letters, numbers, _, - or &.', bot_name_taken: 'A new bot name is a real player\'s name. Bots must never pass for players: pick another.',
+  invalid_tier: 'The level is 0, 1 or 2.', request_closed: 'That request was already decided or withdrawn.',
+  not_tighter: 'Staff can only make a limit stricter. The player can loosen it themselves (it waits 24 hours).', invalid_duration: 'A break is 1 to 720 hours; a self-exclusion 1 to 3,650 days.',
+  invalid_limit: 'Enter a limit of 0 or more with at most 2 decimals (play time: whole minutes, at most 1,440).',
   race_not_found: 'That race does not exist.', race_closed: 'That race has ended or was paid or cancelled, so it cannot change.', race_not_ended: 'Prizes can be paid once the race has ended (and only once).',
   rain_active: 'A coin rain is already running. Wait for it to end or cancel it.', rain_closed: 'That coin rain has already ended.',
   giveaway_not_found: 'That giveaway does not exist.', giveaway_not_ended: 'A giveaway can be drawn once its entries have closed (and only once).', giveaway_closed: 'That giveaway was already drawn.',

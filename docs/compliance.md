@@ -42,6 +42,8 @@ Before this migration only the maximum bet and the daily loss limit could exist 
 
 The cap applies to one stake: a bet, a case opening, an upgrade stake, a coinflip, a Crash or Double bet, or the whole cost of a case battle. So **verification is only needed above 10,000 coins**. Until 2026-11-21 the caps were 1,000 / 2,500 / 5,000; migration `0017_bet_caps.sql` and `TIER_MAX_BET` in `src/kyc.ts` hold the numbers (a test checks they agree).
 
+**On the server (since `0026`):** the tiers above are reached in the browser demonstration only. The level the database uses for the cap is raised by staff: a player with a cloud account asks for the next level in Account, Verification, and staff approve or decline it on the admin site's Compliance page (a manual decision, no documents). Staff can also start or extend a break or self-exclusion and tighten a limit for a player, never the other way (see admin-site.md).
+
 The date of birth is collected only here, when a player chooses to verify. It is not asked at sign-up. Screening is a local mock list; a match puts the account on a compliance hold.
 
 ## AML monitoring (`aml.ts`)

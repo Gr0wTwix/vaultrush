@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AdminGiveaway, AdminRace, AdminRain, AnnouncementRow, GameSettings, Promo, RewardSettings } from '../src/admin/api.js';
+import type { AdminGiveaway, AdminRace, AdminRain, AnnouncementRow, GameSettings, KycRequest, Promo, RewardSettings, RgOverview } from '../src/admin/api.js';
 import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, CatCase, CatCaseFull, CatItem, CatSave, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
@@ -92,6 +92,10 @@ const RAINS: AdminRain[] = [{ id: 9, pot: 30, min_level: 0, starts_at: '2026-11-
 const GIVEAWAYS: AdminGiveaway[] = [{ id: 5, title: 'Friday giveaway', prize: 100, winners: 1, min_level: 0, starts_at: '2026-11-24T09:00:00Z', ends_at: '2026-11-25T09:00:00Z', server_hash: 'f'.repeat(64), state: 'ended', entries: 12, seed: null, drawn: null, by: 'Mirage' }];
 const GAMESET: GameSettings = { crash_bet_seconds: 7, double_bet_seconds: 12, lobby_minutes: 30, battle_lobbies_max: 3, flip_lobbies_max: 5, bots_battles: true, bots_coinflip: true,
   simulated_activity: true, bot_names: ['frostbyte', 'kappa_kid', 'm0nkey'], limits: { plinko: { min: 0.01, max: 50000 }, crash: { min: 0.1, max: 50000 } }, games: ['plinko', 'crash'], updated_at: '2026-11-25T09:00:00Z', updated_by: null };
+const KYC: KycRequest[] = [{ id: 7, user_id: 'p1', name: 'Nova', tier: 1, note: 'I play <big> battles', status: 'pending', at: '2026-11-25T09:00:00Z', decided_at: null, decision_note: null, by: null,
+  current_tier: 0, joined: '2026-11-18T10:00:00Z', wagered: 400, flags: ['mute'] }];
+const RG: RgOverview = { excluded: [{ id: 'p2', name: 'Orion', until: '2026-12-25T09:00:00Z' }], cool_off: [], pending: [{ id: 'p1', name: 'Nova', key: 'loss_daily', value: 500, effective_at: '2026-11-26T09:00:00Z' }],
+  losses_7d: [{ id: 'p1', name: 'Nova', staked: 800, net_loss: 300, bets: 40 }], busy_today: [], now: Date.now() };
 const CAT_ITEMS: CatItem[] = [{ id: 'c', name: 'AWP | Asiimov', rarity: 'covert', value: 50 }];
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
@@ -199,6 +203,11 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     cancelGiveaway: rec('cancelGiveaway', async () => undefined),
     gameSettings: rec('gameSettings', async () => ({ ...GAMESET, limits: { ...GAMESET.limits } })),
     saveGameSettings: rec('saveGameSettings', async (s: GameSettings) => s),
+    kycQueue: rec('kycQueue', async () => KYC),
+    kycDecide: rec('kycDecide', async () => undefined),
+    kycSetTier: rec('kycSetTier', async () => undefined),
+    rgOverview: rec('rgOverview', async () => RG),
+    rgApply: rec('rgApply', async () => ({ until: '2026-11-27T10:00:00Z' })),
     ...apiOver,
   };
   return { api, calls, state };
@@ -1029,5 +1038,34 @@ describe('step E part 3: game settings', () => {
   it('staff who may only look cannot change anything', async () => {
     await start(fake({ perms: ['config.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) })); await goto('config', '#cCrash');
     expect(q<HTMLInputElement>('#cCrash').disabled).toBe(true); expect(q('#cSave')).toBeNull();
+  });
+});
+
+describe('step F part 1: compliance', () => {
+  const F1 = [...OWNER_PERMS, 'compliance.view', 'compliance.review', 'rg.view', 'rg.apply'];
+
+  it('the verification queue is escaped and decisions ask for a reason', async () => {
+    const f = fake({ perms: F1 }); await start(f); await goto('compliance', 'tr[data-k="7"]');
+    expect(q('tr[data-k="7"]').textContent).toContain('I play <big> battles');
+    expect(q('tr[data-k="7"]').textContent).toContain('up to 25,000');
+    q('tr[data-k="7"] [data-ok]').click(); await answerReason('regular player');
+    await wait(() => expect(f.calls['kycDecide']).toEqual([[7, true, 'regular player']]));
+  });
+
+  it('responsible play: the lists show, and applying finds the player and sends the action', async () => {
+    const f = fake({ perms: F1 }); await start(f); await goto('compliance', '#cBody');
+    q('[data-t="rg"]').click(); await wait(() => expect(q('#rgFind')).not.toBeNull());
+    expect(q('#cBody').textContent).toContain('Orion'); expect(q('#cBody').textContent).toContain('Daily loss');
+    type('#rgQ', 'nov'); submit('#rgFind');
+    await wait(() => expect(q('[data-p="p1"]')).not.toBeNull());
+    q('[data-p="p1"]').click();
+    q<HTMLSelectElement>('#rgKind').value = 'cool_off'; type('#rgVal', '48'); submit('#rgForm'); await answerReason('asked by support');
+    await wait(() => expect(f.calls['rgApply']).toEqual([['p1', 'cool_off', 48, 'asked by support']]));
+  });
+
+  it('staff without review rights see the queue but cannot decide; without rg.view there is no console tab', async () => {
+    await start(fake({ perms: ['compliance.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) })); await goto('compliance', 'tr[data-k="7"]');
+    expect(q<HTMLButtonElement>('tr[data-k="7"] [data-ok]').disabled).toBe(true);
+    expect(q('[data-t="rg"]')).toBeNull();
   });
 });
