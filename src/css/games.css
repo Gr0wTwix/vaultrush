@@ -819,3 +819,14 @@ img.item-art { object-fit: contain; display: block; margin: 0 auto; filter: drop
 .tips-dots { display: flex; gap: 6px; } .tips-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line2); } .tips-dots i.on { background: var(--accent); }
 .tips-nav { gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
 @media (prefers-reduced-motion: reduce) { .case-card .qo-back { animation: none; } }
+
+/* staff events (migration 0024): special races on the race board, giveaways on the Rewards page */
+.ev-races { margin-top: 16px; }
+.ev-race { padding: 12px 0; border-top: 1px solid var(--line); } .ev-race:first-of-type { border-top: 0; }
+.ev-race-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.ev-race-head > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ev-pool { display: flex; flex-direction: column; align-items: flex-end; }
+.giveaways { margin-top: 16px; }
+.gv-list { display: grid; gap: 10px; }
+.gv { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); flex-wrap: wrap; }
+.gv > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }

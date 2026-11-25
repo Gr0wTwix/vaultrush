@@ -5,6 +5,7 @@ import { $, $$, coins, esc, reasonDialog, when } from './dom.js';
 import { CONTROL_PAGES } from './pages-control.js';
 import { CATALOGUE_PAGES } from './pages-catalogue.js';
 import { REWARD_PAGES } from './pages-rewards.js';
+import { EVENT_PAGES } from './pages-events.js';
 
 export interface PageCtx { api: AdminApi; status: Status; perms: string[]; toast: (m: string, k?: 'info' | 'ok' | 'error') => void; reload: () => void; lock: () => Promise<void> }
 export interface Page { title: string; perm?: string; render(el: HTMLElement, c: PageCtx): Promise<void> }
@@ -15,7 +16,7 @@ export const ROADMAP: { step: string; title: string; items: string; state: 'done
   { step: 'B', title: 'Control and visibility', items: 'Dashboard, players with notes and tags, account actions (mute, warn, betting and site bans, sign-out, rename, claim reset, closing), chat moderation (English room), live rooms, round control, site controls (maintenance, notice, game switches, sign-ups, country restrictions)', state: 'done' },
   { step: 'C', title: 'Catalogue in the database', items: 'Cases, their items, chances and prices edited here with a live return check (70% to 98%), versions you can restore, switch cases on and off, JSON export and import; the game site reads the published catalogue', state: 'done' },
   { step: 'D', title: 'Full server wallet', items: 'All coins in the database, every game rewritten around it, everyone starts at 0. Built: owner wallet adjustments, wallet, ledger and bets viewer (the Wallets page)', state: 'done' },
-  { step: 'E', title: 'Rewards and operations', items: 'Built: reward settings (faucet, rakeback, login calendar, race prizes), promo codes, in-app announcements. Still to build: races, rain, giveaways, game configuration, bots', state: 'partial' },
+  { step: 'E', title: 'Rewards and operations', items: 'Built: reward settings (faucet, rakeback, login calendar, race prizes), promo codes, in-app announcements, races with their own prizes, real coin rain, giveaways with a checkable draw. Still to build: game configuration, bots', state: 'partial' },
   { step: 'F', title: 'Compliance, fairness, economy, risk, analytics', items: 'Built: the responsible-play limits, cool-offs and self-exclusion are enforced by the database. Still to build: verification queues, admin tools to apply limits and exclusions to a player, fairness audit, economy monitor, risk signals with IP and device marker, reports', state: 'partial' },
   { step: 'G', title: 'Legal, system health, developer tools', items: 'Legal pages editor and privacy requests, system health, developer and test tools', state: 'later' },
 ];
@@ -305,6 +306,6 @@ const BASE: Record<string, Page> = {
 
 /** Every page, in menu order. */
 export const PAGES: Record<string, Page> = {
-  overview: BASE['overview'] as Page, ...CONTROL_PAGES, ...CATALOGUE_PAGES, ...REWARD_PAGES,
+  overview: BASE['overview'] as Page, ...CONTROL_PAGES, ...CATALOGUE_PAGES, ...REWARD_PAGES, ...EVENT_PAGES,
   site: BASE['site'] as Page, wallets: BASE['wallets'] as Page, staff: BASE['staff'] as Page, permissions: BASE['permissions'] as Page, audit: BASE['audit'] as Page, explorer: BASE['explorer'] as Page,
 };

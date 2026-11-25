@@ -7,7 +7,7 @@ What Vaultrush is built on, what it must do, and the limits it works within. Las
 - A **play-money** skin-game demo: case openings, case battles, Upgrade, Crash, Double, Plinko, Mines, Coinflip, rewards, a daily race and chat.
 - **No real money.** Coins can never be bought, sold or withdrawn, and no gambling licence is held. Nothing may add a deposit, a withdrawal or a cash-out.
 - **Adults only.** An 18+ confirmation is required (a tickbox at sign-up, re-checked by the database).
-- **Honest about simulation.** KYC, AML, the Triple Green pot and coin rain are demonstrations and are labelled so.
+- **Honest about simulation.** KYC, AML and the Triple Green pot are demonstrations and are labelled so; the coin rain is simulated only for visitors without live games (staff start real rains since `0024`).
 
 ## Stack
 

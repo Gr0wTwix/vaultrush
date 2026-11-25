@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AnnouncementRow, Promo, RewardSettings } from '../src/admin/api.js';
+import type { AdminGiveaway, AdminRace, AdminRain, AnnouncementRow, Promo, RewardSettings } from '../src/admin/api.js';
 import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, CatCase, CatCaseFull, CatItem, CatSave, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
@@ -84,6 +84,12 @@ const ANNS: AnnouncementRow[] = [
   { id: 2, kind: 'banner', style: 'win', body: 'Double <b>XP</b> weekend', starts_at: '2026-11-25T09:00:00Z', ends_at: null, ended_at: null, by: 'Mirage', state: 'showing' },
   { id: 1, kind: 'popup', style: 'info', body: 'Old news', starts_at: '2026-11-20T09:00:00Z', ends_at: null, ended_at: '2026-11-21T09:00:00Z', by: 'Mirage', state: 'ended' },
 ];
+const RACES: AdminRace[] = [
+  { id: 4, name: 'Plinko <sprint>', starts_at: '2026-11-24T09:00:00Z', ends_at: '2026-11-25T09:00:00Z', prizes: [100, 50], games: ['plinko'], state: 'ended', pool: 150, top: [{ rank: 1, name: 'Orion', wagered: 50, prize: 100 }], paid_at: null, by: 'Mirage', payouts: [] },
+  { id: 3, name: 'Old race', starts_at: '2026-11-20T09:00:00Z', ends_at: '2026-11-21T09:00:00Z', prizes: [10], games: [], state: 'paid', pool: 10, top: [], paid_at: '2026-11-21T10:00:00Z', by: 'Mirage', payouts: [{ rank: 1, name: 'Nova', prize: 10 }] },
+];
+const RAINS: AdminRain[] = [{ id: 9, pot: 30, min_level: 0, starts_at: '2026-11-25T09:00:00Z', ends_at: '2026-11-25T09:01:00Z', settled_at: '2026-11-25T09:01:02Z', cancelled_at: null, share: 10, joiners: 3, by: 'Mirage' }];
+const GIVEAWAYS: AdminGiveaway[] = [{ id: 5, title: 'Friday giveaway', prize: 100, winners: 1, min_level: 0, starts_at: '2026-11-24T09:00:00Z', ends_at: '2026-11-25T09:00:00Z', server_hash: 'f'.repeat(64), state: 'ended', entries: 12, seed: null, drawn: null, by: 'Mirage' }];
 const CAT_ITEMS: CatItem[] = [{ id: 'c', name: 'AWP | Asiimov', rarity: 'covert', value: 50 }];
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
@@ -178,6 +184,17 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     announcements: rec('announcements', async () => ANNS),
     announce: rec('announce', async () => undefined),
     endAnnouncement: rec('endAnnouncement', async () => undefined),
+    races: rec('races', async () => RACES),
+    saveRace: rec('saveRace', async () => undefined),
+    payRace: rec('payRace', async () => ({ winners: 2, paid: 150 })),
+    cancelRace: rec('cancelRace', async () => undefined),
+    rains: rec('rains', async () => RAINS),
+    startRain: rec('startRain', async () => undefined),
+    cancelRain: rec('cancelRain', async () => undefined),
+    giveaways: rec('giveaways', async () => GIVEAWAYS),
+    createGiveaway: rec('createGiveaway', async () => undefined),
+    drawGiveaway: rec('drawGiveaway', async () => ({ winners: 1, paid: 100 })),
+    cancelGiveaway: rec('cancelGiveaway', async () => undefined),
     ...apiOver,
   };
   return { api, calls, state };
@@ -934,5 +951,43 @@ describe('step E part 1: rewards and announcements', () => {
     await wait(() => expect(f.calls['announce']).toEqual([[{ kind: 'popup', style: 'warn', body: 'Maintenance tonight', starts_at: null, ends_at: null }, 'heads-up']]));
     q('tr[data-a="2"] [data-end]').click(); await answerReason('weekend over');
     await wait(() => expect(f.calls['endAnnouncement']).toEqual([[2, 'weekend over']]));
+  });
+});
+
+describe('step E part 2: events', () => {
+  const E2 = [...OWNER_PERMS, 'rewards.view', 'races.manage', 'rain.manage', 'giveaways.manage'];
+
+  it('races: the list is escaped; an ended race can be paid; a new race sends its prizes and games', async () => {
+    const f = fake({ perms: E2 }); await start(f); await goto('events', 'tr[data-r="4"]');
+    expect(q('tr[data-r="4"]').textContent).toContain('Plinko <sprint>');
+    expect(q('tr[data-r="3"]').textContent).toContain('Nova');                          // a paid race shows who got what
+    expect(q('tr[data-r="3"] [data-pay]')).toBeNull();
+    q('tr[data-r="4"] [data-pay]').click(); await answerReason('well played');
+    await wait(() => expect(f.calls['payRace']).toEqual([[4, 'well played']]));
+    type('#rName', 'Crash weekend'); type('#rPrizes', '500, 250'); type('#rEnd', '2030-01-01T12:00');
+    q<HTMLInputElement>('[data-g="crash"]').checked = true;
+    submit('#rNew'); await answerReason('weekend event');
+    await wait(() => expect(f.calls['saveRace']).toHaveLength(1));
+    expect(f.calls['saveRace']![0]![0]).toMatchObject({ id: null, name: 'Crash weekend', prizes: [500, 250], games: ['crash'] });
+  });
+
+  it('coin rain: starting one sends the pot, time and level', async () => {
+    const f = fake({ perms: E2 }); await start(f); await goto('events', '#evBody');
+    q('[data-t="rain"]').click(); await wait(() => expect(q('#rnNew')).not.toBeNull());
+    expect(q('tr[data-rn="9"]').textContent).toContain('paid');
+    type('#rnPot', '75'); q<HTMLSelectElement>('#rnSec').value = '120'; type('#rnLvl', '5');
+    submit('#rnNew'); await answerReason('stream party');
+    await wait(() => expect(f.calls['startRain']).toEqual([[75, 120, 5, 'stream party']]));
+  });
+
+  it('giveaways: an ended giveaway can be drawn; staff without the permission cannot', async () => {
+    const f = fake({ perms: E2 }); await start(f); await goto('events', '#evBody');
+    q('[data-t="giveaways"]').click(); await wait(() => expect(q('tr[data-g="5"]')).not.toBeNull());
+    q('tr[data-g="5"] [data-draw]').click(); await answerReason('Friday draw');
+    await wait(() => expect(f.calls['drawGiveaway']).toEqual([[5, 'Friday draw']]));
+    const g = fake({ perms: ['rewards.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) }); app?.stop(); document.body.innerHTML = '';
+    await start(g); await goto('events', '#evBody'); q('[data-t="giveaways"]').click();
+    await wait(() => expect(q('tr[data-g="5"]')).not.toBeNull());
+    expect(q<HTMLButtonElement>('tr[data-g="5"] [data-draw]').disabled).toBe(true);
   });
 });

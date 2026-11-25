@@ -13,7 +13,7 @@ Added 2026-11-21. Signed-in cloud players can now play **case battles** and **co
 | **Crash** and **Double** | Yes (needs `0005_rounds.sql`) | One round per game run by the database clock; every player sees the same round, everyone's bets on the right, the same result |
 | Other games (plinko, mines, cases, upgrade) | Solo, as before | They have no second player |
 | Daily race leaderboard | Yes (needs `0012_rewards.sql`) | The race board and yesterday's prize come from the database |
-| Coin rain | No | Simulated, and not shown next to real players |
+| Coin rain | Yes, since `0024` | Started by staff on the admin site's Events page, joined from the chat, split and paid by the database. The simulated rain is shown only when live games are off |
 
 Simulated opponents, lobbies, chat lines and coin rain are shown only when live games are **off** (signed out, no cloud backend, or `0002_live.sql` not applied yet).
 

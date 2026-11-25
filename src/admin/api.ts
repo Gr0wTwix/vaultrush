@@ -95,6 +95,13 @@ export interface RewardStats { kinds: { kind: string; today_count: number; today
 export interface Promo { code: string; amount: number; max_uses: number | null; uses: number; active: boolean; expires_at: string | null; note: string | null; created_at: string; by: string | null; live: boolean }
 export interface AnnouncementRow { id: number; kind: 'banner' | 'popup'; style: 'info' | 'warn' | 'win'; body: string; starts_at: string; ends_at: string | null; ended_at: string | null; by: string | null; state: 'showing' | 'scheduled' | 'ended' }
 
+/** Step E part 2 (migration 0024): races, coin rain, giveaways. */
+export interface AdminRace { id: number; name: string; starts_at: string; ends_at: string; prizes: number[]; games: string[]; state: 'upcoming' | 'running' | 'ended' | 'paid' | 'cancelled'; pool: number;
+  top: { rank: number; name: string; wagered: number; prize: number }[]; paid_at: string | null; by: string | null; payouts: { rank: number; name: string; prize: number }[] }
+export interface AdminRain { id: number; pot: number; min_level: number; starts_at: string; ends_at: string; settled_at: string | null; cancelled_at: string | null; share: number | null; joiners: number; by: string | null }
+export interface AdminGiveaway { id: number; title: string; prize: number; winners: number; min_level: number; starts_at: string; ends_at: string; server_hash: string;
+  state: 'upcoming' | 'open' | 'ended' | 'drawn' | 'cancelled'; entries: number; seed: string | null; drawn: { place: number; entry_no: number; name: string }[] | null; by: string | null }
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -176,6 +183,17 @@ export interface AdminApi {
   announcements(): Promise<AnnouncementRow[]>;
   announce(a: { kind: 'banner' | 'popup'; style: 'info' | 'warn' | 'win'; body: string; starts_at: string | null; ends_at: string | null }, reason: string): Promise<void>;
   endAnnouncement(id: number, reason: string): Promise<void>;
+  races(): Promise<AdminRace[]>;
+  saveRace(r: { id: number | null; name: string; starts_at: string; ends_at: string; prizes: number[]; games: string[] }, reason: string): Promise<void>;
+  payRace(id: number, reason: string): Promise<{ winners: number; paid: number }>;
+  cancelRace(id: number, reason: string): Promise<void>;
+  rains(): Promise<AdminRain[]>;
+  startRain(pot: number, seconds: number, minLevel: number, reason: string): Promise<void>;
+  cancelRain(id: number, reason: string): Promise<void>;
+  giveaways(): Promise<AdminGiveaway[]>;
+  createGiveaway(g: { title: string; prize: number; winners: number; min_level: number; starts_at: string | null; ends_at: string }, reason: string): Promise<void>;
+  drawGiveaway(id: number, reason: string): Promise<{ winners: number; paid: number }>;
+  cancelGiveaway(id: number, reason: string): Promise<void>;
 }
 
 export const realApi: AdminApi = {
@@ -265,6 +283,17 @@ export const realApi: AdminApi = {
   announcements: () => call<AnnouncementRow[]>('admin_announcements'),
   announce: async (a, reason) => { await call('admin_announce', { p_kind: a.kind, p_style: a.style, p_body: a.body, p_starts_at: a.starts_at, p_ends_at: a.ends_at, p_reason: reason }); },
   endAnnouncement: async (id, reason) => { await call('admin_announce_end', { p_id: id, p_reason: reason }); },
+  races: () => call<AdminRace[]>('admin_races'),
+  saveRace: async (r, reason) => { await call('admin_race_save', { p_id: r.id, p_name: r.name, p_starts: r.starts_at, p_ends: r.ends_at, p_prizes: r.prizes, p_games: r.games, p_reason: reason }); },
+  payRace: (id, reason) => call('admin_race_pay', { p_id: id, p_reason: reason }),
+  cancelRace: async (id, reason) => { await call('admin_race_cancel', { p_id: id, p_reason: reason }); },
+  rains: () => call<AdminRain[]>('admin_rains'),
+  startRain: async (pot, seconds, minLevel, reason) => { await call('admin_rain_start', { p_pot: pot, p_seconds: seconds, p_min_level: minLevel, p_reason: reason }); },
+  cancelRain: async (id, reason) => { await call('admin_rain_cancel', { p_id: id, p_reason: reason }); },
+  giveaways: () => call<AdminGiveaway[]>('admin_giveaways'),
+  createGiveaway: async (g, reason) => { await call('admin_giveaway_create', { p_title: g.title, p_prize: g.prize, p_winners: g.winners, p_min_level: g.min_level, p_starts: g.starts_at, p_ends: g.ends_at, p_reason: reason }); },
+  drawGiveaway: (id, reason) => call('admin_giveaway_draw', { p_id: id, p_reason: reason }),
+  cancelGiveaway: async (id, reason) => { await call('admin_giveaway_cancel', { p_id: id, p_reason: reason }); },
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -300,6 +329,9 @@ export const ADMIN_ERRORS: Record<string, string> = {
   unknown_item: 'One of the items is not in the catalogue (or is retired).', tickets_not_100000: 'The chances must add up to exactly 100%.',
   rtp_out_of_range: 'At this price the case would return less than 70% or more than 98% of its price on average. Change the price or the chances.',
   rakeback_too_high: 'The three rakeback shares together can be at most 5% of every stake.',
+  race_not_found: 'That race does not exist.', race_closed: 'That race has ended or was paid or cancelled, so it cannot change.', race_not_ended: 'Prizes can be paid once the race has ended (and only once).',
+  rain_active: 'A coin rain is already running. Wait for it to end or cancel it.', rain_closed: 'That coin rain has already ended.',
+  giveaway_not_found: 'That giveaway does not exist.', giveaway_not_ended: 'A giveaway can be drawn once its entries have closed (and only once).', giveaway_closed: 'That giveaway was already drawn.',
   invalid_code_format: 'A code is 3 to 20 letters, numbers, - or _ (it is saved in capitals).', invalid_dates: 'The end must be after the start and in the future; the start at most 90 days ahead.',
 };
 export const errorText = (e: unknown): string => {

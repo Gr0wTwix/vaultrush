@@ -92,7 +92,7 @@ The page shows the new balance within moments (realtime) or at the next 20-secon
 ## What is still simplified
 
 - **Responsible-play limits** are all enforced by the database since `0018` (see [compliance.md](compliance.md)). Simplified: the play-time limit is an estimate from the stakes, and a live game's stake counts toward the loss limits only when its round settles.
-- **Triple Green** in Double is a simulated pot: with the server wallet it pays nothing (a toast says so). Coin rain in chat is not shown next to real players.
+- **Triple Green** in Double is a simulated pot: with the server wallet it pays nothing (a toast says so). The simulated coin rain is not shown next to real players; since `0024` staff can start a real coin rain that the database pays (see admin-site.md, Events).
 - **Bots** in Battles and the Coinflip bot play for the house, as before.
 - **Owner tools** for the wallet (adjustments, ledger viewer, per-player balance) exist since `0019`: the Wallets page of the admin site ([admin-site.md](admin-site.md)). They run only where the admin site runs (today: localhost).
 

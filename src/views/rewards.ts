@@ -7,6 +7,7 @@ import { takeFreeClaim } from '../live.js';
 import { $, $$, esc, fmt, money, icon, toast, caseArt, itemCard, spinReel, modal, confetti, avatar, openMs, guestCard, preloadImages } from '../ui.js';
 import { sfx } from '../sfx.js';
 import { serverWallet, openFreeCase as openFree, sellItems, claimRakeback, claimCalendar, redeemPromo, releaseItems } from '../wallet.js';
+import { drawOrder, enterGiveaway, giveawayEntries, giveaways, sha256Hex, type Giveaway } from '../events.js';
 
 export const LEVEL_CASES: [number, string][] = [[10, 'starter'], [20, 'neon'], [30, 'charmed'], [40, 'sniper'], [50, 'blade'], [60, 'high']];
 const PROMOS = { VAULT10: 10, RUSH5: 5, WELCOME3: 3, LUCKY7: 7 };
@@ -48,8 +49,44 @@ export async function openFreeCase(c, label, kind?: string) {
   return true;
 }
 
+/** Giveaways run by staff (migration 0024): open ones to enter, and drawn ones with their winners and a button to check the draw. */
+function giveawaysHtml(list: Giveaway[]): string {
+  if (!list.length) return '';
+  const state_ = (g: Giveaway): string => (g.state === 'open' ? `ends ${new Date(g.ends_at).toLocaleString()}` : g.state === 'upcoming' ? `opens ${new Date(g.starts_at).toLocaleString()}` : g.state === 'drawn' ? 'drawn' : 'entries closed, draw soon');
+  return `<section class="panel giveaways"><div class="panel-head"><h2>${icon('gift')} Giveaways</h2></div><div class="gv-list">${list.map(g => `<div class="gv" data-gv="${Number(g.id)}">
+      <div><b>${esc(g.title)}</b><span class="muted small">${money(g.prize)} each for ${g.winners} winner${g.winners === 1 ? '' : 's'} · ${g.entries} entr${g.entries === 1 ? 'y' : 'ies'} · ${esc(state_(g))}${g.min_level ? ` · level ${g.min_level}+` : ''}</span>
+        ${g.drawn ? `<span class="small">Winners: ${g.drawn.length ? g.drawn.map(w => `<b>${esc(w.name)}</b> (#${w.entry_no})`).join(', ') : 'nobody entered'}</span>` : ''}</div>
+      ${g.state === 'open' ? `<button class="btn ${g.entered ? 'btn-ghost' : 'btn-primary'}" data-gv-enter ${g.entered ? 'disabled' : ''}>${g.entered ? 'Entered' : 'Enter'}</button>` : g.state === 'drawn' ? '<button class="btn btn-ghost" data-gv-check>Check the draw</button>' : ''}</div>`).join('')}</div>
+    <p class="muted small">Every giveaway publishes a fingerprint (SHA-256 hash) of its secret seed when it opens; after the draw the seed is shown. The entries with the lowest SHA-256 of "seed:entry number" win, so anyone can check the result.</p></section>`;
+}
+
 export function render(el) {
   let alive = true, busy = false;                 // busy stops a double click from opening a crate twice while the server is asked
+  let gvs: Giveaway[] = [];
+  const loadGiveaways = async (): Promise<void> => { if (!serverWallet()) return; gvs = await giveaways(); if (alive) draw(); };
+  const wireGiveaways = (): void => {
+    $$('[data-gv]', el).forEach(row => {
+      const g = gvs.find(x => x.id === Number(row.dataset.gv)); if (!g) return;
+      const enter = row.querySelector('[data-gv-enter]') as HTMLButtonElement | null;
+      if (enter) enter.onclick = async () => {
+        if (!isAuthed()) return requireLoginMsg();
+        enter.disabled = true;
+        try { await enterGiveaway(g.id); toast(`You are in: ${g.title}`, 'win'); await loadGiveaways(); } catch (e) { enter.disabled = false; toast(e instanceof Error ? e.message : 'Could not enter', 'error'); }
+      };
+      const check = row.querySelector('[data-gv-check]') as HTMLButtonElement | null;
+      if (check) check.onclick = async () => {
+        if (!g.seed || !g.drawn) return;
+        const entries = await giveawayEntries(g.id);
+        const hashOk = (await sha256Hex(g.seed)) === g.server_hash;
+        const order = (await drawOrder(g.seed, entries.map(e => e.entry_no))).slice(0, g.winners);
+        const ok = hashOk && order.join(',') === g.drawn.map(w => w.entry_no).join(',');
+        toast(ok ? `Checked: the seed matches its published fingerprint and picks exactly these ${g.drawn.length} winner${g.drawn.length === 1 ? '' : 's'} out of ${entries.length} entries.` : 'The draw does NOT check out. Please tell support.', ok ? 'win' : 'error', true);
+      };
+    });
+  };
+  const requireLoginMsg = (): void => toast('Log in to enter a giveaway.', 'error');
+  void loadGiveaways();
+  const gvTimer = setInterval(() => void loadGiveaways(), 60_000);
   const draw = () => {
     const lvl = level(), xp = state.xp, cur = xpForLevel(lvl), next = xpForLevel(lvl + 1);
     const rb = state.rakeback, now = Date.now();
@@ -103,7 +140,8 @@ export function render(el) {
           <form class="amount" id="promoForm"><input id="promo" placeholder="Enter code" maxlength="20" autocomplete="off"><button type="submit">Redeem</button></form>
           <p class="muted small">${serverWallet() ? 'Codes come from our announcements and socials. Each works once per player.' : 'Demo codes: VAULT10, RUSH5, WELCOME3, LUCKY7. Each works once.'}</p>
         </section>
-      </div>`;
+      </div>${giveawaysHtml(gvs)}`;
+    wireGiveaways();
 
     $$('[data-rb]', el).forEach(b => b.onclick = async () => {
       const k = b.dataset.rb, amount = round2(state.rakeback[k]);
@@ -197,5 +235,5 @@ export function render(el) {
   };
   draw();
   const t = setInterval(() => { if (!document.querySelector('.modal-back')) draw(); }, 30000);
-  return () => { alive = false; clearInterval(t); };
+  return () => { alive = false; clearInterval(t); clearInterval(gvTimer); };
 }

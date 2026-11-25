@@ -13,7 +13,7 @@ A **separate website** for running Vaultrush. It lives in this repository and us
 | Data explorer | A read-only query tool for the Owner. Every attempt is logged first, including refused and failing ones. |
 | Site controls (step B1) | Maintenance mode, site notice, per-game switches, sign-ups open or closed, country restrictions. Details below. |
 | Wallets (step D) | Every coin in the database: economy totals, player search, one player's wallet, ledger and bets, and the owner's audited coin adjustment. Details below. |
-| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Catalogue, Rewards, Announcements, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
+| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Catalogue, Rewards, Announcements, Events, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
 
 ## Site controls (step B1)
 
@@ -123,6 +123,20 @@ Rules: every change needs a reason and is logged with the old and new values. A 
 
 Tested by `tests/rewards-admin-db.test.ts` (11 database tests: the settings change what the faucet, rakeback, calendar and race pay; codes; announcements in the site status), `tests/rewards-announcements.test.ts` (the game site applying the settings and showing banners and pop-ups) and the step E part of `tests/admin-app.test.ts`.
 
+## Events: races, coin rain, giveaways (step E, part 2: `0024_events.sql`, built 2026-11-25)
+
+The **Events** page (`rewards.view` to look) has three tabs. Coins paid here appear in the ledger as `race`, `rain` or `giveaway` and on the Rewards page's cost cards.
+
+| Tab | Permission to act | How it works |
+|---|---|---|
+| **Races** | `races.manage` | A name, a start and an end (at most 31 days), a prize table (1 to 50 places) and the games that count (none ticked = every game). Players rank by the coins they wager in those games inside the window, from the bets the database records; ties go to the earlier account id so the order never changes. When a race has ended, **Pay prizes** pays each ranked player with a prize once and records it. A race can be cancelled until it is paid. The game site shows running, upcoming and recently ended races under the daily race, with the player's own place |
+| **Coin rain** | `rain.manage` | A pot (1 to 100,000), a join time (30 seconds to 10 minutes) and an optional minimum level. One rain at a time; it is announced in the chat in your name. Signed-in players join from the chat (the bar shows the pot, the seconds left and how many joined). When the time is up the pot is split equally between everyone who joined (rounded down to the cent) and paid at once; the chat tells each player what they got. A running rain can be cancelled (nobody is paid). For signed-in players this replaces the old simulated rain |
+| **Giveaways** | `giveaways.manage` | A title, a prize per winner, 1 to 100 winners, an optional minimum level, and when entries open and close. When it is created a secret seed is drawn and only its SHA-256 fingerprint is published. Players enter once each on the Rewards page (each entry gets a number in order). When entries have closed, **Draw** picks the entries with the lowest SHA-256 of `seed:entry number`, pays each winner and reveals the seed. On the game site **Check the draw** recomputes it in the browser from the seed and the list of entries |
+
+Everything is checked by the database (dates, amounts, levels, one entry per player, paying once) and every staff action is in the audit log. Banned players (site ban) cannot join a rain or enter a giveaway.
+
+Tested by `tests/events-db.test.ts` (13 database tests, including an independent re-check of a draw with Node's own SHA-256), `tests/events-client.test.ts` (the draw check, the race board, the rain bar in the chat) and the step E part of `tests/admin-app.test.ts`.
+
 ## How the sign-in works
 
 1. **Steam.** The same Steam account you use on the game, through the existing `steam-login` Edge Function.
@@ -142,7 +156,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 **Status (2026-11-21):** the SQL in step 1 is run. That the Owner role has been created (step 2) and that `http://localhost:5174` is allowed for sign-in (step 3) is **not confirmed**; the admin site has not been deployed and runs only on the owner's PC. See [setup-status.md](setup-status.md).
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; run by the owner on 2026-11-25). For step C (Catalogue): `0022_catalogue_editor.sql` (after `0021`; run by the owner on 2026-11-25). For step E part 1 (Rewards, Announcements): `0023_rewards_admin.sql` (after `0022`; run by the owner on 2026-11-25).
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; run by the owner on 2026-11-25). For step C (Catalogue): `0022_catalogue_editor.sql` (after `0021`; run by the owner on 2026-11-25). For step E part 1 (Rewards, Announcements): `0023_rewards_admin.sql` (after `0022`; run by the owner on 2026-11-25). For step E part 2 (Events): `0024_events.sql` (after `0023`; run by the owner on 2026-11-25).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -184,6 +198,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `supabase/migrations/0006_admin.sql` | Tables, permissions, sign-in chain, audit log, role and permission functions, e-mail reveal, explorer |
 | `supabase/migrations/0007_site_controls.sql` | The settings row, the guards, the status function the game site reads, the five admin switch functions |
 | `supabase/migrations/0019_admin_wallet.sql` | The Wallets page's functions: totals, search, overview, ledger, bets, the audited adjustment |
+| `supabase/migrations/0024_events.sql` | Step E part 2: races and their payouts, coin rain and its joins, giveaways with a committed seed, entries and winners |
 | `supabase/migrations/0023_rewards_admin.sql` | Step E part 1: the reward settings row and the reward functions that read it, promo-code management, announcements (also in `site_status`) |
 | `supabase/migrations/0022_catalogue_editor.sql` | Step C: case versions and history, the published catalogue the game reads, the editor functions and their checks |
 | `supabase/migrations/0021_admin_control.sql` | Step B: notes, tags, account restrictions (and the guard and chat rules that enforce them), chat moderation and reports, live-room and round tools, the dashboard |
@@ -192,6 +207,8 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `admin/index.html`, `admin/main.ts`, `vite.admin.config.ts` | The separate site's page and build |
 | `src/admin/app.ts` | The sign-in state machine and the panel shell |
 | `src/admin/pages.ts` | Overview, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer, and the menu order |
+| `src/admin/pages-events.ts` | Step E part 2: the Events page (races, coin rain, giveaways) |
+| `src/events.ts`, special races in `src/views/leaderboard.ts`, rain in `src/chat.ts`, giveaways in `src/views/rewards.ts` | Game-site side of step E part 2 |
 | `src/admin/pages-rewards.ts` | Step E part 1: the Rewards and Announcements pages |
 | `src/rewards-sync.ts`, `applyRewardSettings()` in `src/state.ts`, announcements in `src/site.ts` | Game-site side of step E part 1 |
 | `src/admin/pages-catalogue.ts` | Step C: the Catalogue page and editor |
@@ -210,7 +227,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 
 ## Not built yet
 
-Everything in the plan except steps A, B, C, D and the first part of E: races, rain, giveaways, game configuration and bots (the rest of E); rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
+Everything in the plan except steps A, B, C, D and the first part of E: game configuration and bots (the rest of E); rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
 
 ## Alerts to the owner
 

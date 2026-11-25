@@ -1,6 +1,7 @@
 // Chat with coin rain. Signed in with live games on, it is the real shared chat (Supabase realtime); otherwise it is simulated.
 import { state, credit, logTx, save, emit, on, requireLogin } from './state.js';
 import { isLive, recentChat, sendChat, watchChat, onOnline, chatStatus, reportChat, type ChatRow } from './live.js';
+import { joinRain, rainNow, watchRains } from './events.js';
 import { hasStoredSession } from './backend.js';
 import { randomBot } from './data.js';
 import { shownName } from './feed.js';
@@ -142,11 +143,43 @@ export function initChat(root) {
     }, 1000);
   };
 
+  // Real coin rain (migration 0024): staff start it; signed-in players join here; when time is up the database splits the pot and pays it.
+  let rainTick: ReturnType<typeof setInterval> | undefined, rainPoll: ReturnType<typeof setInterval> | undefined, stopRains: (() => void) | null = null;
+  const seenOpen = new Set<number>(), paidShown = new Set<number>();
+  const drawLiveRain = async (): Promise<void> => {
+    clearInterval(rainTick);
+    const r = isLive() ? await rainNow() : null;
+    if (!r) { rainEl.hidden = true; return; }
+    if (r.last && seenOpen.has(r.last.id) && !paidShown.has(r.last.id)) {
+      paidShown.add(r.last.id);
+      add('', r.last.joiners ? `${coin()} Coin rain paid ${fmt(r.last.pot)} to ${r.last.joiners} player${r.last.joiners === 1 ? '' : 's'}${r.last.mine ? `. You got <b>${fmt(r.last.share)}</b>` : ''}.` : `${coin()} Coin rain ended: nobody joined.`, true);
+      if (r.last.mine) { sfx.win(); toast(`Coin rain: +${fmt(r.last.share)}`, 'win'); }
+    }
+    const o = r.open;
+    if (!o) { rainEl.hidden = true; return; }
+    seenOpen.add(o.id);
+    const skew = r.now - Date.now(), end = Date.parse(o.ends_at);
+    let joined = o.joined, joiners = o.joiners;
+    const draw = (): void => {
+      const left = Math.max(0, Math.ceil((end - (Date.now() + skew)) / 1000));
+      rainEl.hidden = false;
+      rainEl.innerHTML = `<div class="rain-info"><b>Coin rain</b><span>${coin()}${fmt(o.pot)} · ${left}s · ${joiners} joined${o.min_level ? ` · level ${o.min_level}+` : ''}</span></div><button class="btn ${joined ? 'btn-ghost' : 'btn-primary'}" ${joined || left === 0 ? 'disabled' : ''}>${joined ? 'Joined' : 'Join'}</button>`;
+      rainEl.querySelector('button').onclick = async () => {
+        if (!requireLogin('Log in or create a free account to join the coin rain.')) return;
+        try { const j = await joinRain(o.id); joined = true; joiners = j.joiners; sfx.click(); draw(); } catch (err) { toast(err instanceof Error ? err.message : 'Could not join', 'error'); }
+      };
+      if (left === 0) { clearInterval(rainTick); setTimeout(() => void drawLiveRain(), 1500); }          // asking again settles and pays it
+    };
+    draw(); rainTick = setInterval(draw, 1000);
+  };
+  const stopLiveRain = (): void => { clearInterval(rainTick); clearInterval(rainPoll); stopRains?.(); stopRains = null; rainEl.hidden = true; };
+
   // Live games switched on (or off): swap the simulated chat for the real one.
   let stopChat: (() => void) | null = null, stopOnline: (() => void) | null = null;
   const goLive = async (): Promise<void> => {
     stopChat?.(); stopOnline?.(); stopChat = stopOnline = null;
     clearInterval(pinT); const pinBox = $('#chatPin', root); if (pinBox) pinBox.hidden = true;
+    stopLiveRain();
     if (!isLive()) return;
     clearTimeout(botT); clearInterval(onlineT); clearTimeout(rainT); clearTimeout(fallbackT); simulated = false; rainEl.hidden = true;
     box.innerHTML = '';
@@ -154,6 +187,8 @@ export function initChat(root) {
     try { (await recentChat(30)).forEach(addLive); } catch { add('', 'Could not load earlier messages.', true); }
     stopChat = await watchChat(addLive, changeLive).catch(() => null);
     clearInterval(pinT); void drawPin(); pinT = setInterval(() => void drawPin(), 60_000);
+    void drawLiveRain(); rainPoll = setInterval(() => void drawLiveRain(), 60_000);
+    stopRains = await watchRains(() => void drawLiveRain()).catch(() => null);
     stopOnline = onOnline(n => { const el = $('#onlineCount'); if (el) el.textContent = String(Math.max(1, n)); });
   };
   on('live', () => { void goLive(); });
