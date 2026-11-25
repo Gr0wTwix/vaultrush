@@ -12,7 +12,8 @@ Added 2026-11-21. Signed-in cloud players can now play **case battles** and **co
 | Bet and drop feed | Yes | Realtime broadcast between browsers (no table) |
 | **Crash** and **Double** | Yes (needs `0005_rounds.sql`) | One round per game run by the database clock; every player sees the same round, everyone's bets on the right, the same result |
 | Other games (plinko, mines, cases, upgrade) | Solo, as before | They have no second player |
-| Daily race leaderboard, coin rain | No | Still local or simulated |
+| Daily race leaderboard | Yes (needs `0012_rewards.sql`) | The race board and yesterday's prize come from the database |
+| Coin rain | No | Simulated, and not shown next to real players |
 
 Simulated opponents, lobbies, chat lines and coin rain are shown only when live games are **off** (signed out, no cloud backend, or `0002_live.sql` not applied yet).
 
@@ -49,8 +50,8 @@ Fairness: the seed hash is public from the round's creation; `float = HMAC-SHA25
 ## Trust model (read this before relying on it)
 
 - **The server decides the shared random result.** Each battle or coinflip gets a secret seed when it is created; only its SHA-256 hash is public. The seed is revealed when the game starts (battle full, coinflip joined), and anyone can recompute the result: `HMAC-SHA256(seed, "<clientSeed>:0:<round>")` for battles (same as `src/fair.ts`), `HMAC-SHA256(seed, "<id>:0:0")` for coinflip. The creator cannot see the seed, and it exists before anyone joins, so nobody can choose it.
-- **The server does not hold stakes.** Coins live in each browser's storage. A browser takes its own stake when it creates or joins, and pays itself the winnings once the result is known. `state.liveSettled` remembers which games were already paid or refunded, so a reload or a duplicate realtime event never pays twice, and `reconcileAll()` (run after sign-in) settles games that finished while the tab was closed.
-- Because of that, a determined player can edit their own balance in the browser, exactly as before. For a real-money design the wallet would have to move to the database, with the stake taken inside `join_*` and the payout inside the same transaction. Nothing here prevents doing that later.
+- **Stakes.** With the server wallet (every cloud account, since `0011_live_wallet.sql`) the database takes each stake and pays the winners inside the same transaction, so nobody can edit a balance. The rest of this point describes the browser-only fallback: coins live in each browser's storage. A browser takes its own stake when it creates or joins, and pays itself the winnings once the result is known. `state.liveSettled` remembers which games were already paid or refunded, so a reload or a duplicate realtime event never pays twice, and `reconcileAll()` (run after sign-in) settles games that finished while the tab was closed.
+- In that browser-only fallback a determined player can edit their own balance. With the server wallet they cannot: the database holds every balance.
 - Responsible-gambling limits (max bet, loss limits, wager and play-time limits, self-exclusion, cool-off, age) apply at the moment of staking: with the server wallet on, every stake passes `wallet_gate()` in the database (see [compliance.md](compliance.md)); in the browser-only fallback `debit()` checks them.
 - Bots in a battle are "called" by the creator through `call_live_bot()`. Bots play for the house: if a bot wins, the pot is gone.
 
@@ -80,7 +81,7 @@ Tested in `tests/live-db.test.ts` (runs the real SQL in PGlite):
 
 ## Known limits
 
-- Tested with a fake server in `tests/live-client.test.ts` and `tests/live-battles.test.ts`, and the SQL in PGlite. **Not yet exercised against a real Supabase project with two people**, so Realtime delivery and row-level-security on realtime events are unconfirmed.
+- Tested with a fake server in `tests/live-client.test.ts` and `tests/live-battles.test.ts`, and the SQL in PGlite. The owner has since played with two real people at once on the live project (confirmed 2026-11-22); there is still no automated test against a real Supabase project.
 - Chat messages carry the profile name, so Anonymous mode cannot hide it; chatting while Anonymous is on shows an explanation instead of sending.
 - A waiting game is cancelled and refunded when its creator leaves the page. If the tab is closed instead, the next sign-in cancels and refunds it (or pays it, if someone joined meanwhile).
 - The browser that stakes can disappear before the server confirms; in that rare case the stake can be lost or, for a refund, delayed to the next sign-in.

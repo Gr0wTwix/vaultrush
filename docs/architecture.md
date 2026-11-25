@@ -57,6 +57,7 @@ supabase/
   migrations/0016_ops_events.sql   operator alerts (pg_net to an n8n webhook) and ops_daily_report(); off until switched on; see n8n.md
   migrations/0017_bet_caps.sql   verification only above 10,000 coins: stake caps 10,000 / 25,000 / 50,000 and the live games' limit 50,000; see compliance.md
   migrations/0018_server_limits.sql   every responsible-play limit, cool-off and self-exclusion enforced by wallet_gate(); my_limits(); see compliance.md
+  migrations/0020_rate_limits.sql   chat and promo-code rate limits
   migrations/0019_admin_wallet.sql   the admin Wallets page: totals, search, wallet overview, ledger and bets viewers, the audited coin adjustment; see admin-site.md
   functions/steam-login      Steam OpenID sign-in
   functions/close-login      finishes account deletion

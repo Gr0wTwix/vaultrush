@@ -23,7 +23,7 @@ export const ERROR_TEXT: Record<string, string> = {
   daily_loss_limit: 'This bet could pass your daily loss limit.', weekly_loss_limit: 'This bet could pass your weekly loss limit.', monthly_loss_limit: 'This bet could pass your monthly loss limit.',
   wager_daily_limit: 'This bet would pass your daily wager limit.', time_limit: 'You have used your daily play-time limit.',
   unknown_limit: 'That limit does not exist.', invalid_limit: 'Enter a number of zero or more (whole minutes for the time limit, up to 2 decimals for coins).', invalid_duration: 'That break length is not allowed.',
-  insufficient_funds: 'Not enough coins.',
+  insufficient_funds: 'Not enough coins.', chat_too_fast: 'You are sending messages too fast. Wait a moment.', too_many_attempts: 'Too many wrong codes. Try again in a few minutes.',
   adult_required: 'Confirm that you are at least 18 years old.', terms_required: 'Accept the Terms of Service first.', name_taken: 'That username is already taken.',
   invalid_name: 'Use 2 to 20 letters, numbers, spaces, _ or -.', account_closed: 'This account has been closed.',
   invalid_amount: 'Enter a valid amount (up to 2 decimals).', invalid_target: 'The cash-out target must be between 1.01 and 1000.', unsupported_game: 'That game is not available on the server yet.',

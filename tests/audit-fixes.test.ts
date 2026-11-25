@@ -39,3 +39,14 @@ describe('selling an item without the server wallet', () => {
     expect(state.tx[0]).toMatchObject({ type: 'Item sale', amount: item.value });
   });
 });
+
+describe('broken pictures without inline handlers (2026-11-22 security pass)', () => {
+  it('a picture marked grey falls back to the grey tile, one marked remove disappears', async () => {
+    const { NO_PICTURE } = await import('../src/art.js');
+    document.body.innerHTML = '<img id="a" data-fallback="grey" src="x.png"><span><img id="b" data-fallback="remove" src="y.png"></span><img id="c" src="z.png">';
+    for (const id of ['a', 'b', 'c']) document.getElementById(id)!.dispatchEvent(new Event('error'));
+    expect((document.getElementById('a') as HTMLImageElement).src).toBe(NO_PICTURE);
+    expect(document.getElementById('b')).toBeNull();
+    expect((document.getElementById('c') as HTMLImageElement).getAttribute('src')).toBe('z.png');      // pictures without the mark are left alone
+  });
+});

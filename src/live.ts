@@ -4,7 +4,7 @@
 //
 // Trust model (play money): the server seats players and draws the shared random result from a secret seed. Stakes are not held
 // by the server: each browser takes its own stake and pays itself out, once per game (state.liveSettled remembers which).
-import { backendEnabled, call, getClient } from './backend.js';
+import { explain, backendEnabled, call, getClient } from './backend.js';
 import { emit, state, save, credit, isServerWallet } from './state.js';
 
 export interface LiveSeat { uid: string | null; name: string; bot: boolean }
@@ -174,7 +174,7 @@ export async function recentChat(limit = 30): Promise<ChatRow[]> {
 }
 export async function sendChat(body: string): Promise<void> {
   const { error } = await (await getClient()).from('chat_messages').insert({ body });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(explain(error));                           // e.g. chat_too_fast (0020) becomes a readable sentence
 }
 export const watchChat = async (cb: (m: ChatRow) => void): Promise<() => void> => {
   const c = await getClient();

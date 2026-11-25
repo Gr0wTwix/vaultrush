@@ -5,7 +5,7 @@
 //
 // A payout is revealed at the right moment: when a game's result is known before its animation ends (a plinko ball, a coinflip, a battle), the page
 // calls holdPayout(); the shown balance leaves that amount out until the animation ends and credit() (see state.ts) reveals it.
-import { backendEnabled, call, getClient } from './backend.js';
+import { backendEnabled, call, explain, getClient } from './backend.js';
 import { emit, isServerWallet, on, round2, save, setServerWallet, state } from './state.js';
 import { ITEM } from './data.js';
 import { ensureItems } from './catalogue.js';
@@ -255,7 +255,8 @@ export async function claimCalendar(): Promise<{ day: number; amount: number; ba
   return r;
 }
 export async function redeemPromo(code: string): Promise<{ code: string; amount: number; balance: number }> {
-  const r = await call<{ code: string; amount: number; balance: number }>('redeem_promo', { p_code: code });
+  const r = await call<{ code: string; amount: number; balance: number; error?: string }>('redeem_promo', { p_code: code });
+  if (r?.error) throw new Error(explain({ message: r.error }));          // a wrong code is answered (and counted, see 0020), not raised
   applyBalance(r.balance); await refreshWallet(false).catch(() => {});
   return r;
 }

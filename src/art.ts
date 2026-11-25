@@ -7,7 +7,20 @@ export const NO_PICTURE = "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/
  * The picture of an item. `eager` is for pictures inside a moving reel: they must be fetched now, not when they scroll near the screen (a lazy
  * picture inside a strip that is clipped by its box would still be blank when the strip reaches it).
  */
+/** One listener replaces any picture that fails to load: `data-fallback="grey"` shows the grey tile, `data-fallback="remove"` removes the picture.
+ *  (Inline onerror attributes would need 'unsafe-inline' scripts in the Content Security Policy; this keeps the policy strict.) */
+export function installImageFallback(doc: Document = document): void {
+  doc.addEventListener('error', e => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const fb = img.dataset['fallback'];
+    if (fb === 'remove') img.remove();
+    else if (fb === 'grey') { delete img.dataset['fallback']; img.src = NO_PICTURE; }
+  }, true);
+}
+if (typeof document !== 'undefined') installImageFallback();
+
 export function itemArtSvg(item, eager = false): string {
   const src = item.img || NO_PICTURE;
-  return `<img class="item-art" src="${src}" alt="" ${eager ? 'loading="eager"' : 'loading="lazy"'} decoding="async" draggable="false" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${NO_PICTURE}'">`;
+  return `<img class="item-art" src="${src}" alt="" ${eager ? 'loading="eager"' : 'loading="lazy"'} decoding="async" draggable="false" referrerpolicy="no-referrer" data-fallback="grey">`;
 }
