@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AdminGiveaway, AdminRace, AdminRain, AnnouncementRow, Promo, RewardSettings } from '../src/admin/api.js';
+import type { AdminGiveaway, AdminRace, AdminRain, AnnouncementRow, GameSettings, Promo, RewardSettings } from '../src/admin/api.js';
 import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, CatCase, CatCaseFull, CatItem, CatSave, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
@@ -90,6 +90,8 @@ const RACES: AdminRace[] = [
 ];
 const RAINS: AdminRain[] = [{ id: 9, pot: 30, min_level: 0, starts_at: '2026-11-25T09:00:00Z', ends_at: '2026-11-25T09:01:00Z', settled_at: '2026-11-25T09:01:02Z', cancelled_at: null, share: 10, joiners: 3, by: 'Mirage' }];
 const GIVEAWAYS: AdminGiveaway[] = [{ id: 5, title: 'Friday giveaway', prize: 100, winners: 1, min_level: 0, starts_at: '2026-11-24T09:00:00Z', ends_at: '2026-11-25T09:00:00Z', server_hash: 'f'.repeat(64), state: 'ended', entries: 12, seed: null, drawn: null, by: 'Mirage' }];
+const GAMESET: GameSettings = { crash_bet_seconds: 7, double_bet_seconds: 12, lobby_minutes: 30, battle_lobbies_max: 3, flip_lobbies_max: 5, bots_battles: true, bots_coinflip: true,
+  simulated_activity: true, bot_names: ['frostbyte', 'kappa_kid', 'm0nkey'], limits: { plinko: { min: 0.01, max: 50000 }, crash: { min: 0.1, max: 50000 } }, games: ['plinko', 'crash'], updated_at: '2026-11-25T09:00:00Z', updated_by: null };
 const CAT_ITEMS: CatItem[] = [{ id: 'c', name: 'AWP | Asiimov', rarity: 'covert', value: 50 }];
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
@@ -195,6 +197,8 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     createGiveaway: rec('createGiveaway', async () => undefined),
     drawGiveaway: rec('drawGiveaway', async () => ({ winners: 1, paid: 100 })),
     cancelGiveaway: rec('cancelGiveaway', async () => undefined),
+    gameSettings: rec('gameSettings', async () => ({ ...GAMESET, limits: { ...GAMESET.limits } })),
+    saveGameSettings: rec('saveGameSettings', async (s: GameSettings) => s),
     ...apiOver,
   };
   return { api, calls, state };
@@ -989,5 +993,41 @@ describe('step E part 2: events', () => {
     await start(g); await goto('events', '#evBody'); q('[data-t="giveaways"]').click();
     await wait(() => expect(q('tr[data-g="5"]')).not.toBeNull());
     expect(q<HTMLButtonElement>('tr[data-g="5"] [data-draw]').disabled).toBe(true);
+  });
+});
+
+describe('step E part 3: game settings', () => {
+  const E3 = [...OWNER_PERMS, 'config.view', 'config.edit'];
+  const setVal = (sel: string, v: string): void => { const i = q<HTMLInputElement>(sel); i.value = v; i.dispatchEvent(new Event('input')); };
+
+  it('shows the settings and the house edge, and checks values before anything is sent', async () => {
+    await start(fake({ perms: E3 })); await goto('config', '#cCrash');
+    expect(q<HTMLInputElement>('#cCrash').value).toBe('7');
+    expect(q('tr[data-g="crash"]').textContent).toContain('Crash');
+    expect(q('#pageBody').textContent).toContain('House edge');
+    setVal('#cCrash', '3');
+    expect(q('#cErr').textContent).toContain('5 to 20');
+    expect(q<HTMLButtonElement>('#cSave').disabled).toBe(true);
+    setVal('#cCrash', '10');
+    const max = q<HTMLInputElement>('tr[data-g="plinko"] [data-max]'); max.value = '0.001'; max.dispatchEvent(new Event('input'));
+    expect(q('#cErr').textContent).toContain('Plinko');
+  });
+
+  it('saving sends every value, with bots and simulated activity switched as ticked', async () => {
+    const f = fake({ perms: E3 }); await start(f); await goto('config', '#cCrash');
+    setVal('#cDouble', '15');
+    const min = q<HTMLInputElement>('tr[data-g="plinko"] [data-min]'); min.value = '1'; min.dispatchEvent(new Event('input'));
+    q<HTMLInputElement>('#cBotB').checked = false; q<HTMLInputElement>('#cSim').checked = false; q('#cSim').dispatchEvent(new Event('change'));
+    q('#cSave').click(); await answerReason('quieter site');
+    await wait(() => expect(f.calls['saveGameSettings']).toHaveLength(1));
+    const [s, reason] = f.calls['saveGameSettings']![0]!;
+    expect(reason).toBe('quieter site');
+    expect(s).toMatchObject({ crash_bet_seconds: 7, double_bet_seconds: 15, bots_battles: false, bots_coinflip: true, simulated_activity: false, bot_names: ['frostbyte', 'kappa_kid', 'm0nkey'] });
+    expect(s.limits).toEqual({ plinko: { min: 1, max: 50000 }, crash: { min: 0.1, max: 50000 } });
+  });
+
+  it('staff who may only look cannot change anything', async () => {
+    await start(fake({ perms: ['config.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) })); await goto('config', '#cCrash');
+    expect(q<HTMLInputElement>('#cCrash').disabled).toBe(true); expect(q('#cSave')).toBeNull();
   });
 });

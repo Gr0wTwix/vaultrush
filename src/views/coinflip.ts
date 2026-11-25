@@ -8,6 +8,7 @@ import { $, $$, esc, fmt, money, icon, toast, avatar, coin, modal, confetti, sle
 import { sfx } from '../sfx.js';
 import { serverWallet, holdPayout } from '../wallet.js';
 import { tellBalance, isLive, liveMe, callLiveFlipBot, createLiveFlip, joinLiveFlip, cancelLiveFlip, openLiveFlips, myLiveFlips, watchFlips, liveFlipSeed, refundOnce, settleOnce, isSettled, onReconcile, type LiveFlip } from '../live.js';
+import { GS } from '../game-settings.js';
 
 const SIDES = {
   bolt: { label: 'Bolt', svg: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>' },
@@ -156,7 +157,7 @@ export function render(el) {
     const { g, m } = view;
     // Build only the current state (the "done" view needs a result that doesn't exist earlier).
     const centers = {
-      waiting: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Waiting for an opponent</span>${g.mine ? '<button class="btn btn-primary" id="callBot">Call bot</button>' : ''}${g.mine && g.live ? '<button class="btn btn-ghost" id="cancelFlip">Cancel game</button>' : ''}</div>`,
+      waiting: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Waiting for an opponent</span>${g.mine && (!g.live || GS.botsCoinflip) ? '<button class="btn btn-primary" id="callBot">Call bot</button>' : ''}${g.mine && g.live ? '<button class="btn btn-ghost" id="cancelFlip">Cancel game</button>' : ''}</div>`,
       countdown: () => `<div class="cf-center"><div class="cf-ring"><b class="cf-count" id="cfCount">3</b></div><span class="muted">Game starting</span></div>`,
       flipping: () => `<div class="cf-center"><div class="cf-ring">${COIN}</div><span class="muted">Flipping…</span></div>`,
       done: () => `<div class="cf-center"><div class="cf-ring win">${avatar(g.winner, 120)}${sideChip(g.result, 34)}</div><b class="cf-winner">${iWon(g) ? 'You win!' : `${esc(g.winner)} wins`}</b>${money(payoutOf(g.amount))}

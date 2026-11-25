@@ -4,6 +4,7 @@ import { ensureItems } from './catalogue.js';
 import { listenFeed, shareBet, shareDrop } from './live.js';
 import { emit, recordBet, save, state } from './state.js';
 import type { Drop, Item, LiveBet } from './types.js';
+import { GS } from './game-settings.js';
 
 export const drops: Drop[] = [];
 export const bets: LiveBet[] = [];
@@ -36,12 +37,14 @@ function pickBy<T extends Record<K, number>, K extends string>(entries: T[], key
 }
 
 function simDrop(): void {
+  if (!GS.simulated) return;                                       // the admin site can switch the made-up activity off (0025)
   const c = pickBy(CASES.map(c => ({ c, w: 1 / Math.sqrt(c.price) })), 'w').c;
   const e = pickBy(c.entries, 'weight');
   pushDrop({ user: randomBot(), item: e.item, source: c.name });
 }
 
 function simBet(): void {
+  if (!GS.simulated) return;
   const games = ['Crash', 'Mines', 'Upgrade', 'Cases', 'Battles', 'Double', 'Plinko', 'Coinflip'];
   const game = games[Math.floor(Math.random() * games.length)] as string;
   const amount = Math.round(Math.exp(rnd(-1.5, 5)) * 100) / 100;

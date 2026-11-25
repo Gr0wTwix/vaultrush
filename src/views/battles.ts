@@ -8,6 +8,7 @@ import { sfx } from '../sfx.js';
 
 import { FORMATS, decide, shareOf } from '../battle-math.js';
 import { serverWallet, freezeBalance, unfreezeBalance } from '../wallet.js';
+import { GS } from '../game-settings.js';
 export { FORMATS };
 export const MODES = {
   normal: { label: 'Normal', desc: 'Highest total wins everything.' },
@@ -437,7 +438,7 @@ function drawBattle(el, b) {
     ? `<div class="seat-wait ready">${icon('fair')}<b>Ready</b><span>to battle</span></div>`
     : `<div class="seat-wait"><span class="spinner"></span><b>Waiting</b>${seatButton(i)}</div>`);
   const seatButton = i => (!b.live || b.isCreator
-    ? `<button class="btn btn-sm btn-primary call-bot" data-needs-auth="battle" data-seat="${i}">Call bot</button>`
+    ? (b.live && !GS.botsBattles ? '<span class="muted small">Waiting for a player</span>' : `<button class="btn btn-sm btn-primary call-bot" data-needs-auth="battle" data-seat="${i}">Call bot</button>`)
     : b.me < 0 ? `<button class="btn btn-sm btn-primary join-seat" data-needs-auth="battle" data-seat="${i}">Join ${fmt(b.cost)}</button>` : '');
 
   const R = b.ids.length;

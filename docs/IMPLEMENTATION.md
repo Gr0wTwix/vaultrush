@@ -9,7 +9,8 @@ Step by step: how features are built, released and documented in Vaultrush. Last
    - add a new numbered file in `supabase/migrations/` (`00NN_short_name.sql`), never edit an old one that has been run;
    - write functions as `security definer` with `set search_path = public, pg_temp`, check `auth.uid()`, and `revoke` / `grant` execute explicitly;
    - values go in as parameters; table or column names only through `format('%I')` from a fixed list;
-   - make the file safe to run twice (`create or replace`, `if not exists`, the `patch_fn` pattern in `0017` for small changes to existing functions);
+   - make the file safe to run twice (`create or replace`, `if not exists`, the `patch_fn` pattern in `0025` for small changes to existing functions);
+   - when changing a stored function by editing its text, remember that functions pasted from Windows are stored with CR LF line breaks: take the CRs out before searching (as `patch_fn` in `0025` does) and test it against CR LF functions;
    - give errors short codes (`raise exception 'too_many_attempts'`) and add a readable text for each in `ERROR_TEXT` (`src/backend.ts`) or `ADMIN_ERRORS` (`src/admin/api.ts`). Admin-only functions use their own codes, because the game's texts would be shown otherwise.
 3. **Page part.** Call the database through `call()` (`src/backend.ts`) or a wrapper in `src/wallet.ts`; the page shows what the database answers and never changes a balance itself. Escape every player-written text with `esc()`. No inline event handlers (the security policy forbids inline scripts); use listeners.
 4. **Browser-only fallback.** If the feature also exists without the backend, keep the same rules there (`src/state.ts`, `src/rg.ts`).

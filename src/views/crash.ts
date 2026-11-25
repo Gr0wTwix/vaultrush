@@ -6,9 +6,10 @@ import { $, $$, esc, fmt, money, icon, avatar, toast, amountField, wireAmount } 
 import { sfx } from '../sfx.js';
 import { roundsOn, liveMe } from '../live.js';
 import { advanceRound, serverNow, confirmedNow, liveElapsed, crashBet, crashCancel, crashCashout, roundBets, recentResults, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
+import { GS } from '../game-settings.js';
 
 const GROWTH = CRASH_GROWTH;            // multiplier = e^(GROWTH * ms)
-const WAIT_MS = 7000, AFTER_MS = 3500;
+const AFTER_MS = 3500;                                         // the betting window is GS.crashBetMs (admin setting, 0025)
 const history = [];
 const seenRounds = new Set<number>();            // shared rounds already added to the history strip
 
@@ -137,7 +138,7 @@ export function render(el) {
     drawPlayers(); updateButton();
     // Crash point is fixed by the provably fair roll before the round starts.
     bet('crash', 1).then(({ floats, entry }) => { cp = crashPoint(floats[0]); annotate(entry, `crashed at ${fmt(cp)}×`, cp.toFixed(2)); });
-    timer = window.setTimeout(() => { if (alive) { phase = 'running'; phaseStart = performance.now(); sfx.click(); updateButton(); } }, WAIT_MS);
+    timer = window.setTimeout(() => { if (alive) { phase = 'running'; phaseStart = performance.now(); sfx.click(); updateButton(); } }, GS.crashBetMs);
   };
 
   const crashNow = () => {
@@ -187,9 +188,9 @@ export function render(el) {
     }
 
     if (phase === 'waiting') {
-      const left = Math.max(0, (WAIT_MS - elapsed()) / 1000);
+      const left = Math.max(0, (GS.crashBetMs - elapsed()) / 1000);
       multEl.className = 'crash-mult waiting';
-      multEl.innerHTML = `<span class="small muted">Next round in</span>${left.toFixed(1)}s<div class="bar"><i style="width:${(left / (WAIT_MS / 1000)) * 100}%"></i></div>`;
+      multEl.innerHTML = `<span class="small muted">Next round in</span>${left.toFixed(1)}s<div class="bar"><i style="width:${(left / (GS.crashBetMs / 1000)) * 100}%"></i></div>`;
       hint.textContent = myBet ? 'Bet placed. Good luck!' : 'Place your bet before the round starts';
     } else if (phase === 'running') {
       multEl.className = 'crash-mult running';
@@ -246,7 +247,7 @@ export function render(el) {
     const now = serverNow();
     if (r.status === 'betting') {
       phase = 'waiting';
-      phaseStart = performance.now() - (WAIT_MS - Math.max(0, Date.parse(r.betting_ends_at) - now));
+      phaseStart = performance.now() - (GS.crashBetMs - Math.max(0, Date.parse(r.betting_ends_at) - now));
       if (isNew && queued) { const q = queued; queued = null; void placeLive(q.amount, q.auto); }
       schedule(Date.parse(r.betting_ends_at) - now + 40);
     } else if (r.status === 'running') {

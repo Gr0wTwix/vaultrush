@@ -10,8 +10,9 @@ import { serverWallet } from '../wallet.js';
 import { roundsOn, liveMe } from '../live.js';
 import { addRound, mergeRecent, laneCounts, chipOf, isBait } from '../double-history.js';
 import { advanceRound, serverNow, doubleBet, roundBets, recentRounds, roundSeed, watchRounds, watchRoundBets, payBet, recordFinished, settleLater, normBet, type Round, type RoundBet } from '../rounds.js';
+import { GS } from '../game-settings.js';
 
-const BET_MS = 12000, ROLL_MS = 5200, SHOW_MS = 2600;
+const ROLL_MS = 5200, SHOW_MS = 2600;                          // the betting window is GS.doubleBetMs (admin setting, 0025)
 const LANES = [['purple', 'Purple', '1'], ['bait', 'Bait', '2'], ['green', 'Green', '3'], ['gray', 'Gray', '4']];
 const TILE_W = 100, GAP = 10, STEP = TILE_W + GAP;
 const TRASH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
@@ -151,7 +152,7 @@ export function render(el) {
   const botBets = () => {
     const n = 3 + Math.floor(Math.random() * 7);
     for (let i = 0; i < n; i++) {
-      const delay = Math.random() * (BET_MS - 1500);
+      const delay = Math.random() * (GS.doubleBetMs - 1500);
       setTimeout(() => {
         if (!alive || phase !== 'betting') return;
         const r = Math.random();
@@ -168,7 +169,7 @@ export function render(el) {
     reel.classList.remove('settled');
     strip.querySelector('.landed')?.classList.remove('landed');
     drawLanes(); botBets();
-    timer = window.setTimeout(roll, BET_MS);
+    timer = window.setTimeout(roll, GS.doubleBetMs);
   };
 
   const roll = async () => {
@@ -240,7 +241,7 @@ export function render(el) {
     const t = performance.now() - phaseStart;
     const bar = $('#tbar', el), label = $('#tlabel', el);
     $('#dover', el).classList.toggle('show', phase === 'betting');
-    if (phase === 'betting') { const left = Math.max(0, BET_MS - t); bar.style.width = `${(left / BET_MS) * 100}%`; label.textContent = 'Rolling in'; $('#doverT', el).textContent = (left / 1000).toFixed(2); }
+    if (phase === 'betting') { const left = Math.max(0, GS.doubleBetMs - t); bar.style.width = `${(left / GS.doubleBetMs) * 100}%`; label.textContent = 'Rolling in'; $('#doverT', el).textContent = (left / 1000).toFixed(2); }
     else bar.style.width = '0%';
     raf = requestAnimationFrame(tick);
   };
@@ -325,7 +326,7 @@ export function render(el) {
       void roundBets(r.id).then(rows => { if (round?.id === r.id) { rows.forEach(upsertBet); applyBets(); } }).catch(() => {});
     }
     if (r.status === 'betting') {
-      phase = 'betting'; phaseStart = performance.now() - (BET_MS - Math.max(0, endsAt - now));
+      phase = 'betting'; phaseStart = performance.now() - (GS.doubleBetMs - Math.max(0, endsAt - now));
       applyBets(); schedule(endsAt - now + 40);
       return;
     }

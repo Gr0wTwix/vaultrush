@@ -7,7 +7,7 @@ How Vaultrush is tested, how to add tests, and what to check by hand before a re
 | Command | What it runs |
 |---|---|
 | `npm run typecheck` | TypeScript, loose config for the whole app and strict config for the game core |
-| `npm test` | Every test (about 975 in 63 files), usually 15 to 20 seconds |
+| `npm test` | Every test (about 990 in 65 files), usually 15 to 20 seconds |
 | `npx vitest run tests/<file>.test.ts` | One file |
 | `npm run build` and `npm run build:admin` | The production builds (each also type-checks) |
 

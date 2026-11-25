@@ -102,6 +102,11 @@ export interface AdminRain { id: number; pot: number; min_level: number; starts_
 export interface AdminGiveaway { id: number; title: string; prize: number; winners: number; min_level: number; starts_at: string; ends_at: string; server_hash: string;
   state: 'upcoming' | 'open' | 'ended' | 'drawn' | 'cancelled'; entries: number; seed: string | null; drawn: { place: number; entry_no: number; name: string }[] | null; by: string | null }
 
+/** Step E part 3 (migration 0025): game settings and house bots. */
+export interface GameSettings { crash_bet_seconds: number; double_bet_seconds: number; lobby_minutes: number; battle_lobbies_max: number; flip_lobbies_max: number;
+  bots_battles: boolean; bots_coinflip: boolean; simulated_activity: boolean; bot_names: string[]; limits: Record<string, { min: number; max: number }>;
+  games?: string[]; updated_at?: string; updated_by?: string | null }
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -194,6 +199,8 @@ export interface AdminApi {
   createGiveaway(g: { title: string; prize: number; winners: number; min_level: number; starts_at: string | null; ends_at: string }, reason: string): Promise<void>;
   drawGiveaway(id: number, reason: string): Promise<{ winners: number; paid: number }>;
   cancelGiveaway(id: number, reason: string): Promise<void>;
+  gameSettings(): Promise<GameSettings>;
+  saveGameSettings(s: GameSettings, reason: string): Promise<GameSettings>;
 }
 
 export const realApi: AdminApi = {
@@ -294,6 +301,10 @@ export const realApi: AdminApi = {
   createGiveaway: async (g, reason) => { await call('admin_giveaway_create', { p_title: g.title, p_prize: g.prize, p_winners: g.winners, p_min_level: g.min_level, p_starts: g.starts_at, p_ends: g.ends_at, p_reason: reason }); },
   drawGiveaway: (id, reason) => call('admin_giveaway_draw', { p_id: id, p_reason: reason }),
   cancelGiveaway: async (id, reason) => { await call('admin_giveaway_cancel', { p_id: id, p_reason: reason }); },
+  gameSettings: () => call<GameSettings>('admin_game_settings'),
+  saveGameSettings: (s, reason) => call<GameSettings>('admin_game_settings_save', { p_crash: s.crash_bet_seconds, p_double: s.double_bet_seconds, p_lobby: s.lobby_minutes,
+    p_battles_max: s.battle_lobbies_max, p_flips_max: s.flip_lobbies_max, p_bots_battles: s.bots_battles, p_bots_coinflip: s.bots_coinflip, p_simulated: s.simulated_activity,
+    p_bot_names: s.bot_names, p_limits: s.limits, p_reason: reason }),
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -329,6 +340,7 @@ export const ADMIN_ERRORS: Record<string, string> = {
   unknown_item: 'One of the items is not in the catalogue (or is retired).', tickets_not_100000: 'The chances must add up to exactly 100%.',
   rtp_out_of_range: 'At this price the case would return less than 70% or more than 98% of its price on average. Change the price or the chances.',
   rakeback_too_high: 'The three rakeback shares together can be at most 5% of every stake.',
+  invalid_bot_names: 'Give 3 to 100 bot names, each 2 to 20 letters, numbers, _, - or &.', bot_name_taken: 'A new bot name is a real player\'s name. Bots must never pass for players: pick another.',
   race_not_found: 'That race does not exist.', race_closed: 'That race has ended or was paid or cancelled, so it cannot change.', race_not_ended: 'Prizes can be paid once the race has ended (and only once).',
   rain_active: 'A coin rain is already running. Wait for it to end or cancel it.', rain_closed: 'That coin rain has already ended.',
   giveaway_not_found: 'That giveaway does not exist.', giveaway_not_ended: 'A giveaway can be drawn once its entries have closed (and only once).', giveaway_closed: 'That giveaway was already drawn.',

@@ -20,7 +20,7 @@ It is for **play money**. No deposits or withdrawals exist. The design keeps rea
 | **Selling** | Items sell for their catalogue value; the database checks they are yours and not sold already. |
 | **History and race** | Every finished game writes a row to `bets` (amount, payout, result), so the account history, the XP and the daily race all come from one place. |
 
-Leaving never traps coins: cancelling a coinflip, leaving a battle that has not started (the creator cancels it for everyone), cancelling a crash bet before the round, and cancelling a mines game before the first tile all refund the stake. A lobby left waiting for 30 minutes is closed and refunded.
+Leaving never traps coins: cancelling a coinflip, leaving a battle that has not started (the creator cancels it for everyone), cancelling a crash bet before the round, and cancelling a mines game before the first tile all refund the stake. A lobby left waiting for 30 minutes (the admin site's Game settings can change this since `0025`) is closed and refunded.
 
 ## How a game works inside the database
 

@@ -27,6 +27,8 @@ export const ERROR_TEXT: Record<string, string> = {
   account_banned: 'Your account is suspended. Contact support if you think this is a mistake.', betting_banned: 'Betting is suspended on your account. Contact support if you think this is a mistake.',
   chat_muted: 'You are muted in chat for now.', chat_locked: 'The chat is closed for a moment. Only staff can write.', chat_slow: 'Slow mode is on. Wait a little before your next message.',
   rain_closed: 'This coin rain has ended.', giveaway_closed: 'This giveaway is not open for entries.',
+  bet_below_min: 'That stake is below the smallest one this game allows.', bet_above_max: 'That stake is above the largest one this game allows.',
+  bots_off: 'House bots are switched off for this game right now. Wait for another player.',
   chat_no_links: 'Links are not allowed in chat right now.', chat_blocked_word: 'That message contains a word that is not allowed here.', message_not_found: 'That message is no longer there.',
   adult_required: 'Confirm that you are at least 18 years old.', terms_required: 'Accept the Terms of Service first.', name_taken: 'That username is already taken.',
   invalid_name: 'Use 2 to 20 letters, numbers, spaces, _ or -.', account_closed: 'This account has been closed.',

@@ -1,4 +1,4 @@
-# The admin site (steps A, B, C and D built, step E in progress; live since 2026-11-25)
+# The admin site (steps A to E built; live since 2026-11-25)
 
 A **separate website** for running Vaultrush. It lives in this repository and uses the same database, but it is its own page, its own build and (when deployed) its own address. The plan, the decisions and the open questions are in [admin-panel-proposal-2026-11-21.md](admin-panel-proposal-2026-11-21.md). This page describes what exists now.
 
@@ -13,7 +13,7 @@ A **separate website** for running Vaultrush. It lives in this repository and us
 | Data explorer | A read-only query tool for the Owner. Every attempt is logged first, including refused and failing ones. |
 | Site controls (step B1) | Maintenance mode, site notice, per-game switches, sign-ups open or closed, country restrictions. Details below. |
 | Wallets (step D) | Every coin in the database: economy totals, player search, one player's wallet, ledger and bets, and the owner's audited coin adjustment. Details below. |
-| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Catalogue, Rewards, Announcements, Events, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
+| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Catalogue, Rewards, Announcements, Events, Game settings, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
 
 ## Site controls (step B1)
 
@@ -137,6 +137,25 @@ Everything is checked by the database (dates, amounts, levels, one entry per pla
 
 Tested by `tests/events-db.test.ts` (13 database tests, including an independent re-check of a draw with Node's own SHA-256), `tests/events-client.test.ts` (the draw check, the race board, the rain bar in the chat) and the step E part of `tests/admin-app.test.ts`.
 
+## Game settings and house bots (step E, part 3: `0025_game_settings.sql`, built 2026-11-25)
+
+The **Game settings** page (`config.view` to look, `config.edit` to change). The starting values are exactly what the games did before, so running `0025` changes nothing until something is saved.
+
+| Setting | Start | Range | Where it acts |
+|---|---|---|---|
+| Smallest and largest stake per game | 0.01 and 50,000 | 0.01 to 50,000 | The database refuses a stake outside it ("below the smallest" / "above the largest"), on top of the player's own limits and the verification caps. One action is a bet, a drop, an upgrade, a case opening (price × number), or the cost of joining a battle |
+| Crash betting window | 7 seconds | 5 to 20 | New rounds take bets this long; the Crash page reads the same value for its timer |
+| Double betting window | 12 seconds | 8 to 30 | The same for Double. The 5.2-second roll and the pauses between rounds stay fixed (the animation is built around them) |
+| Waiting lobby expiry | 30 minutes | 5 to 120 | A battle or coinflip nobody started is cancelled and every stake refunded after this |
+| Open lobbies per player | 3 battles, 5 coinflips | 1 to 10, 1 to 20 | Creating one more is refused |
+| House bots | on for battles and coinflip | on / off each | With bots off the database refuses a bot and the page hides "Call bot" in live games: players wait for real opponents |
+| Bot names | the 20 built-in names | 3 to 100 names | The database accepts only these names for bots, and the page picks bots from them. A **new** name may not be a real player's name, so a bot never passes for a player |
+| Simulated activity | on | on / off | Off: the "live drops" ticker and the bet feed show only what real players do |
+
+**Not a setting, on purpose: the house edge.** The page lists it for information (Crash 3%, Double about 6.7%, Upgrade 5%, Plinko and Mines 3%, case returns per case on the Catalogue page; coinflip and battles between players have none). It is part of the game maths that the fairness pages let players check, so changing it is a code change with its own review.
+
+How it is built: the stake check lives in `wallet_gate` (every stake passes it); `site_guard` now also remembers which game the request is for. The lobby caps and the bot checks are small edits to the stored live-game functions, each made only if its anchor is found exactly once. Tested by `tests/game-settings-db.test.ts` (8 database tests), `tests/game-settings.test.ts` (the page applying the settings) and the step E part of `tests/admin-app.test.ts`.
+
 ## How the sign-in works
 
 1. **Steam.** The same Steam account you use on the game, through the existing `steam-login` Edge Function.
@@ -156,7 +175,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 **Status (2026-11-21):** the SQL in step 1 is run. That the Owner role has been created (step 2) and that `http://localhost:5174` is allowed for sign-in (step 3) is **not confirmed**; the admin site has not been deployed and runs only on the owner's PC. See [setup-status.md](setup-status.md).
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; run by the owner on 2026-11-25). For step C (Catalogue): `0022_catalogue_editor.sql` (after `0021`; run by the owner on 2026-11-25). For step E part 1 (Rewards, Announcements): `0023_rewards_admin.sql` (after `0022`; run by the owner on 2026-11-25). For step E part 2 (Events): `0024_events.sql` (after `0023`; run by the owner on 2026-11-25).
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; run by the owner on 2026-11-25). For step C (Catalogue): `0022_catalogue_editor.sql` (after `0021`; run by the owner on 2026-11-25). For step E part 1 (Rewards, Announcements): `0023_rewards_admin.sql` (after `0022`; run by the owner on 2026-11-25). For step E part 2 (Events): `0024_events.sql` (after `0023`; run by the owner on 2026-11-25). For step E part 3 (Game settings): `0025_game_settings.sql` (after `0024`; run by the owner on 2026-11-25, on the second try).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -198,6 +217,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `supabase/migrations/0006_admin.sql` | Tables, permissions, sign-in chain, audit log, role and permission functions, e-mail reveal, explorer |
 | `supabase/migrations/0007_site_controls.sql` | The settings row, the guards, the status function the game site reads, the five admin switch functions |
 | `supabase/migrations/0019_admin_wallet.sql` | The Wallets page's functions: totals, search, overview, ledger, bets, the audited adjustment |
+| `supabase/migrations/0025_game_settings.sql` | Step E part 3: stake limits per game (in `wallet_gate`), betting windows, lobby expiry and caps, house bots and their names, simulated activity |
 | `supabase/migrations/0024_events.sql` | Step E part 2: races and their payouts, coin rain and its joins, giveaways with a committed seed, entries and winners |
 | `supabase/migrations/0023_rewards_admin.sql` | Step E part 1: the reward settings row and the reward functions that read it, promo-code management, announcements (also in `site_status`) |
 | `supabase/migrations/0022_catalogue_editor.sql` | Step C: case versions and history, the published catalogue the game reads, the editor functions and their checks |
@@ -207,6 +227,8 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `admin/index.html`, `admin/main.ts`, `vite.admin.config.ts` | The separate site's page and build |
 | `src/admin/app.ts` | The sign-in state machine and the panel shell |
 | `src/admin/pages.ts` | Overview, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer, and the menu order |
+| `src/admin/pages-config.ts` | Step E part 3: the Game settings page |
+| `src/game-settings.ts` (used by Crash, Double, the feed, battles and coinflip) | Game-site side of step E part 3 |
 | `src/admin/pages-events.ts` | Step E part 2: the Events page (races, coin rain, giveaways) |
 | `src/events.ts`, special races in `src/views/leaderboard.ts`, rain in `src/chat.ts`, giveaways in `src/views/rewards.ts` | Game-site side of step E part 2 |
 | `src/admin/pages-rewards.ts` | Step E part 1: the Rewards and Announcements pages |
@@ -227,7 +249,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 
 ## Not built yet
 
-Everything in the plan except steps A, B, C, D and the first part of E: game configuration and bots (the rest of E); rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
+Everything in the plan except steps A to E: rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
 
 ## Alerts to the owner
 

@@ -17,6 +17,7 @@ import { openAuth, initAuth, isSignedIn, localSignedIn, logout } from './auth.js
 import { hideSplash } from './splash.js';
 import { syncCatalogue } from './catalogue-sync.js';
 import { syncRewards } from './rewards-sync.js';
+import { syncGameSettings } from './game-settings.js';
 import * as legal from './views/legal.js';
 import { renderFooter } from './footer.js';
 import * as responsible from './views/responsible.js';
@@ -253,8 +254,9 @@ async function boot() {
   void initAuth();
   // maintenance, notice, paused games and the published cases: known before the first page is drawn (or drawn again when the cases arrive late)
   let drawn = false;
-  const cat = syncCatalogue(), rw = syncRewards();
-  await Promise.race([Promise.all([initSite(), cat, rw]), new Promise(r => setTimeout(r, 1500))]);
+  const cat = syncCatalogue(), rw = syncRewards(), gs = syncGameSettings();
+  await Promise.race([Promise.all([initSite(), cat, rw, gs]), new Promise(r => setTimeout(r, 1500))]);
+  void gs.then(changed => { if (changed && drawn) route(); });
   void cat.then(changed => { if (changed && drawn) route(); });
   void rw.then(changed => { if (changed && drawn) route(); });                // the free-coins button rereads the amount every second by itself
   on('auth', () => route());
