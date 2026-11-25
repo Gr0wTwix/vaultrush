@@ -16,6 +16,7 @@ import { initRg } from './rgui.js';
 import { openAuth, initAuth, isSignedIn, localSignedIn, logout } from './auth.js';
 import { hideSplash } from './splash.js';
 import { syncCatalogue } from './catalogue-sync.js';
+import { syncRewards } from './rewards-sync.js';
 import * as legal from './views/legal.js';
 import { renderFooter } from './footer.js';
 import * as responsible from './views/responsible.js';
@@ -252,9 +253,10 @@ async function boot() {
   void initAuth();
   // maintenance, notice, paused games and the published cases: known before the first page is drawn (or drawn again when the cases arrive late)
   let drawn = false;
-  const cat = syncCatalogue();
-  await Promise.race([Promise.all([initSite(), cat]), new Promise(r => setTimeout(r, 1500))]);
+  const cat = syncCatalogue(), rw = syncRewards();
+  await Promise.race([Promise.all([initSite(), cat, rw]), new Promise(r => setTimeout(r, 1500))]);
   void cat.then(changed => { if (changed && drawn) route(); });
+  void rw.then(changed => { if (changed && drawn) route(); });                // the free-coins button rereads the amount every second by itself
   on('auth', () => route());
   on('live', () => route());
   on('wallet', () => route());               // the server wallet switched on or off: pages that show coins and items redraw                 // lobbies change from simulated to real the moment the server confirms live games

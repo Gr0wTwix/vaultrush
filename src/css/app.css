@@ -558,3 +558,9 @@ table.bets { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 /* a warning from staff (src/notices.ts) */
 .notice-box { padding: 6px 4px; } .notice-box h3 { margin: 0 0 10px; } .notice-text { font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--panel2); border: 1px solid var(--line2); border-radius: 10px; padding: 12px 14px; }
+
+/* announcements from the admin site (src/site.ts, migration 0023) */
+.site-notice.win { background: #1d2a0a; color: var(--accent); border-bottom-color: #3f5a12; }
+.site-notice.ann { position: relative; padding-right: 44px; }
+.ann-x { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: inherit; opacity: .7; font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px; }
+.ann-x:hover, .ann-x:focus-visible { opacity: 1; }

@@ -1,6 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AnnouncementRow, Promo, RewardSettings } from '../src/admin/api.js';
 import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, CatCase, CatCaseFull, CatItem, CatSave, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
@@ -74,6 +75,15 @@ const CAT_CASE: CatCaseFull = {
   entries: [{ item: 'a', name: 'P250 | Sand <Dune>', rarity: 'consumer', value: 0.3, tickets: 90000, from: 0, to: 89999 }, { item: 'b', name: 'AK-47 | Redline', rarity: 'classified', value: 1.8, tickets: 10000, from: 90000, to: 99999 }],
   history: [{ version: 3, at: '2026-11-25T09:00:00Z', by: 'Mirage', reason: 'cheaper', price: 0.5, items: 2 }, { version: 1, at: '2026-11-21T09:00:00Z', by: null, reason: 'as installed (0015)', price: 0.6, items: 2 }],
 };
+const REWARDS: RewardSettings = { faucet_amount: 25, faucet_minutes: 10, rakeback: { instant: 0.004, daily: 0.003, weekly: 0.003 }, calendar: [1, 2, 3, 5, 8, 12, 25], race_prizes: [400, 200, 120], updated_at: '2026-11-25T09:00:00Z', updated_by: null };
+const PROMOS: Promo[] = [
+  { code: 'SPRING', amount: 5, max_uses: 10, uses: 10, active: true, expires_at: null, note: 'newsletter', created_at: '2026-11-25T09:00:00Z', by: 'Mirage', live: false },
+  { code: 'VAULT10', amount: 10, max_uses: null, uses: 3, active: true, expires_at: null, note: null, created_at: '2026-11-21T09:00:00Z', by: null, live: true },
+];
+const ANNS: AnnouncementRow[] = [
+  { id: 2, kind: 'banner', style: 'win', body: 'Double <b>XP</b> weekend', starts_at: '2026-11-25T09:00:00Z', ends_at: null, ended_at: null, by: 'Mirage', state: 'showing' },
+  { id: 1, kind: 'popup', style: 'info', body: 'Old news', starts_at: '2026-11-20T09:00:00Z', ends_at: null, ended_at: '2026-11-21T09:00:00Z', by: 'Mirage', state: 'ended' },
+];
 const CAT_ITEMS: CatItem[] = [{ id: 'c', name: 'AWP | Asiimov', rarity: 'covert', value: 50 }];
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
@@ -159,6 +169,15 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     catalogueSave: rec('catalogueSave', async (c: CatSave, version: number) => ({ id: c.id, version: version + 1, ev: 0.45, rtp: 0.9, created: version === 0 })),
     catalogueSetActive: rec('catalogueSetActive', async () => undefined),
     catalogueRestore: rec('catalogueRestore', async () => ({ version: 4 })),
+    rewardSettings: rec('rewardSettings', async () => ({ ...REWARDS })),
+    saveRewardSettings: rec('saveRewardSettings', async (s: RewardSettings) => s),
+    rewardStats: rec('rewardStats', async () => ({ kinds: [{ kind: 'faucet', today_count: 3, today_sum: 75, week_count: 20, week_sum: 500 }], crates: [{ kind: 'welcome', week: 4 }] })),
+    promos: rec('promos', async () => PROMOS),
+    promoUsers: rec('promoUsers', async () => [{ id: 'p1', name: 'Nova' }]),
+    savePromo: rec('savePromo', async () => undefined),
+    announcements: rec('announcements', async () => ANNS),
+    announce: rec('announce', async () => undefined),
+    endAnnouncement: rec('endAnnouncement', async () => undefined),
     ...apiOver,
   };
   return { api, calls, state };
@@ -854,5 +873,66 @@ describe('step C: the catalogue editor', () => {
     expect(q('#kNew')).toBeNull(); expect(q('tr[data-k="starter"] [data-toggle]')).toBeNull();
     q('tr[data-k="starter"] [data-open]').click(); await wait(() => expect(q('#kEditor')).not.toBeNull());
     expect(q('#kSave')).toBeNull(); expect(q<HTMLInputElement>('#kName').disabled).toBe(true); expect(q('[data-restore]')).toBeNull();
+  });
+});
+
+describe('step E part 1: rewards and announcements', () => {
+  const E1 = [...OWNER_PERMS, 'rewards.view', 'rewards.edit', 'promos.manage', 'announcements.manage'];
+  const toastText = (): string => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | ');
+  const setVal = (sel: string, v: string): void => { const i = q<HTMLInputElement>(sel); i.value = v; i.dispatchEvent(new Event('input')); };
+
+  it('shows the reward settings and what they cost; a summary updates as numbers change', async () => {
+    await start(fake({ perms: E1 })); await goto('rewards', '#rFa');
+    expect(q('#pageBody').textContent).toContain('Free coins (faucet)');
+    expect(q<HTMLInputElement>('#rRi').value).toBe('0.4');
+    expect(q('#rSum').textContent).toContain('150.00 free coins');                      // 6 claims an hour of 25
+    setVal('#rFm', '30');
+    expect(q('#rSum').textContent).toContain('50.00 free coins');
+    setVal('#rCal', '1, 2, 3');
+    expect(q('#rSum').textContent).toContain('exactly 7');
+    expect(q<HTMLButtonElement>('#rSave').disabled).toBe(true);
+  });
+
+  it('saving sends the settings as the database wants them (rakeback as a share, not a percent)', async () => {
+    const f = fake({ perms: E1 }); await start(f); await goto('rewards', '#rFa');
+    setVal('#rFa', '40'); setVal('#rRi', '1'); setVal('#rRace', '777, 5');
+    q('#rSave').click(); await answerReason('weekend boost');
+    await wait(() => expect(f.calls['saveRewardSettings']).toHaveLength(1));
+    const [s, reason] = f.calls['saveRewardSettings']![0]!;
+    expect(reason).toBe('weekend boost');
+    expect(s).toMatchObject({ faucet_amount: 40, faucet_minutes: 10, rakeback: { instant: 0.01, daily: 0.003, weekly: 0.003 }, race_prizes: [777, 5] });
+  });
+
+  it('promo codes: the list shows the state; a new code is upper-cased and checked; one can be switched off', async () => {
+    const f = fake({ perms: E1 }); await start(f); await goto('rewards', 'tr[data-code="SPRING"]');
+    expect(q('tr[data-code="SPRING"]').textContent).toContain('used up');
+    expect(q('tr[data-code="VAULT10"]').textContent).toContain('working');
+    type('#pCode', 'vault10'); type('#pAmt', '5'); submit('#pNew');
+    await wait(() => expect(toastText()).toContain('already exists'));
+    type('#pCode', 'summer-25'); type('#pAmt', '7.5'); type('#pMax', '100'); submit('#pNew'); await answerReason('summer campaign');
+    await wait(() => expect(f.calls['savePromo']).toHaveLength(1));
+    expect(f.calls['savePromo']![0]).toEqual([{ code: 'SUMMER-25', amount: 7.5, max_uses: 100, expires_at: null, active: true, note: null }, 'summer campaign']);
+    await wait(() => expect(q('tr[data-code="VAULT10"] [data-toggle]')).not.toBeNull());
+    q('tr[data-code="VAULT10"] [data-toggle]').click(); await answerReason('retired');
+    await wait(() => expect(f.calls['savePromo']).toHaveLength(2));
+    expect(f.calls['savePromo']![1]![0]).toMatchObject({ code: 'VAULT10', active: false });
+    q('tr[data-code="VAULT10"] [data-users]').click();
+    await wait(() => expect(q('#pUsers').textContent).toContain('Nova'));
+  });
+
+  it('read-only staff see rewards without any controls', async () => {
+    await start(fake({ perms: ['rewards.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) })); await goto('rewards', '#rFa');
+    expect(q<HTMLInputElement>('#rFa').disabled).toBe(true); expect(q('#rSave')).toBeNull(); expect(q('#pNew')).toBeNull(); expect(q('[data-toggle]')).toBeNull();
+  });
+
+  it('announcements: the list is escaped; publishing and ending ask for a reason', async () => {
+    const f = fake({ perms: E1 }); await start(f); await goto('announcements', 'tr[data-a="2"]');
+    expect(q('tr[data-a="2"]').textContent).toContain('Double <b>XP</b> weekend');
+    expect(q('tr[data-a="1"] [data-end]')).toBeNull();
+    q<HTMLSelectElement>('#aKind').value = 'popup'; q<HTMLSelectElement>('#aStyle').value = 'warn';
+    q<HTMLTextAreaElement>('#aBody').value = 'Maintenance tonight'; submit('#aNew'); await answerReason('heads-up');
+    await wait(() => expect(f.calls['announce']).toEqual([[{ kind: 'popup', style: 'warn', body: 'Maintenance tonight', starts_at: null, ends_at: null }, 'heads-up']]));
+    q('tr[data-a="2"] [data-end]').click(); await answerReason('weekend over');
+    await wait(() => expect(f.calls['endAnnouncement']).toEqual([[2, 'weekend over']]));
   });
 });

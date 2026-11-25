@@ -16,7 +16,7 @@ It is for **play money**. No deposits or withdrawals exist. The design keeps rea
 | **Coinflip** | Stake when created or joined, the winner is paid 1.94x the stake the moment the second player (or a house bot) is in. |
 | **Battles** | Cost of all cases at create and join. When the last seat fills, the database draws every pull from the battle's seed, decides the winners (all seven modes, solo and team formats) and pays them the pot, the total value pulled by everyone. Bots play for the house. |
 | **Crash and Double** | Stake at the bet, cash-outs paid at once (server clock), auto cash-outs and winning lanes paid when the round ends. |
-| **Rewards** | The free-coins faucet (25 every 10 minutes), rakeback (0.4% instant, 0.3% daily, 0.3% weekly of every stake), the login calendar, promo codes (table `promo_codes`), the welcome / daily / level crates, and the daily race prize for yesterday's top 10. |
+| **Rewards** | The free-coins faucet (25 every 10 minutes), rakeback (0.4% instant, 0.3% daily, 0.3% weekly of every stake), the login calendar, promo codes (table `promo_codes`), the welcome / daily / level crates, and the daily race prize for yesterday's top 10. The amounts are the starting values: since `0023` they are reward settings the owner changes on the admin site's Rewards page. |
 | **Selling** | Items sell for their catalogue value; the database checks they are yours and not sold already. |
 | **History and race** | Every finished game writes a row to `bets` (amount, payout, result), so the account history, the XP and the daily race all come from one place. |
 

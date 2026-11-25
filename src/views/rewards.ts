@@ -1,6 +1,6 @@
 // Rewards hub: level, rakeback, free cases (welcome, daily, level), promo codes and a login calendar.
 import { CASE, ITEM, RARITY, entryForTicket, ticketOf, isBigDrop } from '../data.js';
-import { state, save, grant, credit, logTx, addItems, removeItems, round2, level, xpForLevel, todayKey, DAY, isAuthed } from '../state.js';
+import { state, save, grant, credit, logTx, addItems, removeItems, round2, level, xpForLevel, todayKey, DAY, isAuthed, CALENDAR } from '../state.js';
 import { bet, annotate } from '../fair.js';
 import { pushDrop } from '../feed.js';
 import { takeFreeClaim } from '../live.js';
@@ -9,7 +9,6 @@ import { sfx } from '../sfx.js';
 import { serverWallet, openFreeCase as openFree, sellItems, claimRakeback, claimCalendar, redeemPromo, releaseItems } from '../wallet.js';
 
 export const LEVEL_CASES: [number, string][] = [[10, 'starter'], [20, 'neon'], [30, 'charmed'], [40, 'sniper'], [50, 'blade'], [60, 'high']];
-const CALENDAR = [1, 2, 3, 5, 8, 12, 25];
 const PROMOS = { VAULT10: 10, RUSH5: 5, WELCOME3: 3, LUCKY7: 7 };
 const WEEK = 7 * DAY;
 
@@ -102,7 +101,7 @@ export function render(el) {
         <section class="panel">
           <div class="panel-head"><h2>Promo code</h2></div>
           <form class="amount" id="promoForm"><input id="promo" placeholder="Enter code" maxlength="20" autocomplete="off"><button type="submit">Redeem</button></form>
-          <p class="muted small">Demo codes: VAULT10, RUSH5, WELCOME3, LUCKY7. Each works once.</p>
+          <p class="muted small">${serverWallet() ? 'Codes come from our announcements and socials. Each works once per player.' : 'Demo codes: VAULT10, RUSH5, WELCOME3, LUCKY7. Each works once.'}</p>
         </section>
       </div>`;
 

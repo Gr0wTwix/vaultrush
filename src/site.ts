@@ -4,13 +4,38 @@
 // Staff (anyone with an admin role) are never held back, so the Owner can always get in to switch things back.
 import { backendEnabled, call } from './backend.js';
 import { emit, on } from './state.js';
-import { $, esc, h } from './ui.js';
+import { $, esc, h, modal } from './ui.js';
 
+/** An announcement from the admin site (migration 0023): a banner under the top bar, or a pop-up shown once. */
+export interface Announcement { id: number; kind: 'banner' | 'popup'; style: 'info' | 'warn' | 'win'; body: string }
 export interface SiteStatus {
   maintenance: boolean; maintenance_message: string; notice: { text: string; kind: 'info' | 'warn' } | null;
   signups_open: boolean; games_off: string[]; country: string | null; country_blocked: boolean; staff: boolean;
+  announcements: Announcement[];
 }
-const OPEN: SiteStatus = { maintenance: false, maintenance_message: '', notice: null, signups_open: true, games_off: [], country: null, country_blocked: false, staff: false };
+const OPEN: SiteStatus = { maintenance: false, maintenance_message: '', notice: null, signups_open: true, games_off: [], country: null, country_blocked: false, staff: false, announcements: [] };
+const HIDDEN_KEY = 'vaultrush.ann.hidden', SEEN_KEY = 'vaultrush.ann.seen';
+const readIds = (k: string): number[] => { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v.filter(Number.isFinite).slice(-100) : []; } catch { return []; } };
+const addId = (k: string, id: number): void => { try { localStorage.setItem(k, JSON.stringify([...readIds(k).filter(x => x !== id), id].slice(-100))); } catch { /* storage blocked: shown again next time */ } };
+let popupOpen = false;
+/** Banners (each can be closed, and stays closed in this browser) and pop-ups (each shown once in this browser). */
+function renderAnnouncements(): void {
+  $('#siteAnn')?.remove();
+  if (blockedBy()) return;
+  const hidden = readIds(HIDDEN_KEY), list = (cur.announcements ?? []).filter(a => a.kind === 'banner' && !hidden.includes(a.id));
+  if (list.length) {
+    const box = h(`<div class="site-ann" id="siteAnn">${list.map(a => `<div class="site-notice ann ${a.style === 'warn' ? 'warn' : a.style === 'win' ? 'win' : 'info'}" role="status" data-ann="${Number(a.id)}"><span>${esc(a.body)}</span><button type="button" class="ann-x" aria-label="Close this announcement">×</button></div>`).join('')}</div>`);
+    box.querySelectorAll('.ann-x').forEach(b => b.addEventListener('click', () => { const row = (b as HTMLElement).closest('[data-ann]') as HTMLElement; addId(HIDDEN_KEY, Number(row.dataset.ann)); row.remove(); }));
+    ($('#siteNotice') ?? $('#topbar') ?? document.body).after(box);
+  }
+  const pop = (cur.announcements ?? []).find(a => a.kind === 'popup' && !readIds(SEEN_KEY).includes(a.id));
+  if (pop && !popupOpen) {
+    popupOpen = true; addId(SEEN_KEY, pop.id);
+    const m = modal(`<section class="notice-box"><h3>${pop.style === 'warn' ? 'Heads up' : pop.style === 'win' ? 'Good news' : 'News from Vaultrush'}</h3><p class="notice-text">${esc(pop.body)}</p><div class="row"><button class="btn btn-primary" type="button" data-ok>OK</button></div></section>`,
+      { label: 'Announcement', onClose: () => { popupOpen = false; renderAnnouncements(); } });
+    const ok = m.el.querySelector('[data-ok]') as HTMLButtonElement; ok.focus(); ok.onclick = () => m.close();
+  }
+}
 export const POLL_MS = 30_000, GRACE_MS = 60_000;
 
 /** Which switchable game each page belongs to (the nav ids used by the router). */
@@ -56,7 +81,7 @@ function renderBlock(): void {
 /** Draw the banner and the full-screen message for the current status. */
 export function applySiteUi(): void {
   clearTimeout(overlayTimer);
-  renderNotice(); renderBlock();
+  renderNotice(); renderBlock(); renderAnnouncements();
   if (cur.maintenance && !cur.staff && Date.now() < graceUntil) overlayTimer = window.setTimeout(applySiteUi, graceUntil - Date.now() + 50);
 }
 
@@ -84,4 +109,4 @@ export async function initSite(): Promise<void> {
   on('auth', () => void refreshSite());
 }
 /** For tests: forget everything. */
-export function resetSite(): void { clearTimeout(overlayTimer); clearInterval(pollTimer); cur = OPEN; graceUntil = 0; started = false; $('#siteNotice')?.remove(); $('#siteBlock')?.remove(); document.body.classList.remove('site-blocked'); $('.app')?.removeAttribute('inert'); }
+export function resetSite(): void { clearTimeout(overlayTimer); clearInterval(pollTimer); cur = OPEN; graceUntil = 0; started = false; $('#siteNotice')?.remove(); $('#siteBlock')?.remove(); $('#siteAnn')?.remove(); popupOpen = false; document.body.classList.remove('site-blocked'); $('.app')?.removeAttribute('inert'); }

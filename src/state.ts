@@ -8,12 +8,21 @@ let KEY = stateKeyFor(activeId());         // guests use the original key; each 
 /** Storage key of the account whose state is loaded now (used by backup import). */
 export const stateKey = (): string => KEY;
 export const START_BALANCE = 100;
-export const FREE_COINS = 25;
-export const FREE_COINS_EVERY_MS = 10 * 60 * 1000;
+// The free rewards. With a backend these follow the admin site's reward settings (migration 0023, loaded by src/rewards-sync.ts at start-up);
+// they are live bindings, so every page that imported them sees the loaded values.
+export let FREE_COINS = 25;
+export let FREE_COINS_EVERY_MS = 10 * 60 * 1000;
 export const DAY = 24 * 60 * 60 * 1000;
 
-// Rakeback rates (share of every wager returned to the player).
-export const RAKEBACK = { instant: 0.004, daily: 0.003, weekly: 0.003 } as const;
+// Rakeback rates (share of every wager returned to the player) and the 7-day login calendar.
+export const RAKEBACK = { instant: 0.004, daily: 0.003, weekly: 0.003 };
+export const CALENDAR: number[] = [1, 2, 3, 5, 8, 12, 25];
+/** Use the reward numbers the database pays (called by rewards-sync). Arrays and objects are changed in place. */
+export function applyRewardSettings(s: { faucet_amount: number; faucet_minutes: number; rakeback: { instant: number; daily: number; weekly: number }; calendar: number[] }): void {
+  FREE_COINS = Number(s.faucet_amount); FREE_COINS_EVERY_MS = Number(s.faucet_minutes) * 60_000;
+  RAKEBACK.instant = Number(s.rakeback.instant); RAKEBACK.daily = Number(s.rakeback.daily); RAKEBACK.weekly = Number(s.rakeback.weekly);
+  CALENDAR.splice(0, CALENDAR.length, ...s.calendar.map(Number));
+}
 export const XP_PER_COIN = 10;
 
 /** People who ask their system for less motion start with visual effects off and the fastest reels. They can change both in Settings. */

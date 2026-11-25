@@ -89,6 +89,12 @@ export interface CatCaseFull extends Omit<CatCase, 'items' | 'opens_7d'> { entri
 export interface CatItem { id: string; name: string; rarity: string; value: number }
 export interface CatSave { id: string; name: string; price: number; hue: number | null; tag: string | null; art: string | null; sort: number; entries: { item: string; tickets: number }[] }
 
+/** Step E part 1 (migration 0023): reward settings, promo codes, announcements. */
+export interface RewardSettings { faucet_amount: number; faucet_minutes: number; rakeback: { instant: number; daily: number; weekly: number }; calendar: number[]; race_prizes: number[]; updated_at?: string; updated_by?: string | null }
+export interface RewardStats { kinds: { kind: string; today_count: number; today_sum: number; week_count: number; week_sum: number }[]; crates: { kind: string; week: number }[] }
+export interface Promo { code: string; amount: number; max_uses: number | null; uses: number; active: boolean; expires_at: string | null; note: string | null; created_at: string; by: string | null; live: boolean }
+export interface AnnouncementRow { id: number; kind: 'banner' | 'popup'; style: 'info' | 'warn' | 'win'; body: string; starts_at: string; ends_at: string | null; ended_at: string | null; by: string | null; state: 'showing' | 'scheduled' | 'ended' }
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -161,6 +167,15 @@ export interface AdminApi {
   catalogueSave(c: CatSave, version: number, reason: string): Promise<{ id: string; version: number; ev: number; rtp: number | null; created: boolean }>;
   catalogueSetActive(id: string, active: boolean, reason: string): Promise<void>;
   catalogueRestore(id: string, version: number, reason: string): Promise<{ version: number }>;
+  rewardSettings(): Promise<RewardSettings>;
+  saveRewardSettings(s: RewardSettings, reason: string): Promise<RewardSettings>;
+  rewardStats(): Promise<RewardStats>;
+  promos(): Promise<Promo[]>;
+  promoUsers(code: string): Promise<{ id: string; name: string }[]>;
+  savePromo(p: { code: string; amount: number; max_uses: number | null; expires_at: string | null; active: boolean; note: string | null }, reason: string): Promise<void>;
+  announcements(): Promise<AnnouncementRow[]>;
+  announce(a: { kind: 'banner' | 'popup'; style: 'info' | 'warn' | 'win'; body: string; starts_at: string | null; ends_at: string | null }, reason: string): Promise<void>;
+  endAnnouncement(id: number, reason: string): Promise<void>;
 }
 
 export const realApi: AdminApi = {
@@ -240,6 +255,16 @@ export const realApi: AdminApi = {
   catalogueSave: (c, version, reason) => call('admin_catalogue_save', { p_id: c.id, p_version: version, p_name: c.name, p_price: c.price, p_hue: c.hue, p_tag: c.tag, p_art: c.art, p_sort: c.sort, p_entries: c.entries, p_reason: reason }),
   catalogueSetActive: async (id, active, reason) => { await call('admin_catalogue_set_active', { p_id: id, p_active: active, p_reason: reason }); },
   catalogueRestore: (id, version, reason) => call('admin_catalogue_restore', { p_id: id, p_version: version, p_reason: reason }),
+  rewardSettings: () => call<RewardSettings>('admin_reward_settings'),
+  saveRewardSettings: (s, reason) => call<RewardSettings>('admin_reward_settings_save', { p_faucet_amount: s.faucet_amount, p_faucet_minutes: s.faucet_minutes, p_rb_instant: s.rakeback.instant,
+    p_rb_daily: s.rakeback.daily, p_rb_weekly: s.rakeback.weekly, p_calendar: s.calendar, p_race_prizes: s.race_prizes, p_reason: reason }),
+  rewardStats: () => call<RewardStats>('admin_reward_stats'),
+  promos: () => call<Promo[]>('admin_promos'),
+  promoUsers: code => call('admin_promo_users', { p_code: code }),
+  savePromo: async (p, reason) => { await call('admin_promo_save', { p_code: p.code, p_amount: p.amount, p_max_uses: p.max_uses, p_expires_at: p.expires_at, p_active: p.active, p_note: p.note, p_reason: reason }); },
+  announcements: () => call<AnnouncementRow[]>('admin_announcements'),
+  announce: async (a, reason) => { await call('admin_announce', { p_kind: a.kind, p_style: a.style, p_body: a.body, p_starts_at: a.starts_at, p_ends_at: a.ends_at, p_reason: reason }); },
+  endAnnouncement: async (id, reason) => { await call('admin_announce_end', { p_id: id, p_reason: reason }); },
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -274,6 +299,8 @@ export const ADMIN_ERRORS: Record<string, string> = {
   invalid_entries: 'A case needs 1 to 60 items, each with at least 1 ticket (0.001%).', duplicate_item: 'The same item is in the case twice.',
   unknown_item: 'One of the items is not in the catalogue (or is retired).', tickets_not_100000: 'The chances must add up to exactly 100%.',
   rtp_out_of_range: 'At this price the case would return less than 70% or more than 98% of its price on average. Change the price or the chances.',
+  rakeback_too_high: 'The three rakeback shares together can be at most 5% of every stake.',
+  invalid_code_format: 'A code is 3 to 20 letters, numbers, - or _ (it is saved in capitals).', invalid_dates: 'The end must be after the start and in the future; the start at most 90 days ahead.',
 };
 export const errorText = (e: unknown): string => {
   const m = e instanceof Error ? e.message : String(e);
