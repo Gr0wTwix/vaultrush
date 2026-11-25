@@ -1,4 +1,4 @@
-# The admin site (steps A, B and D built; live since 2026-11-25)
+# The admin site (steps A, B, C and D built; live since 2026-11-25)
 
 A **separate website** for running Vaultrush. It lives in this repository and uses the same database, but it is its own page, its own build and (when deployed) its own address. The plan, the decisions and the open questions are in [admin-panel-proposal-2026-11-21.md](admin-panel-proposal-2026-11-21.md). This page describes what exists now.
 
@@ -13,7 +13,7 @@ A **separate website** for running Vaultrush. It lives in this repository and us
 | Data explorer | A read-only query tool for the Owner. Every attempt is logged first, including refused and failing ones. |
 | Site controls (step B1) | Maintenance mode, site notice, per-game switches, sign-ups open or closed, country restrictions. Details below. |
 | Wallets (step D) | Every coin in the database: economy totals, player search, one player's wallet, ledger and bets, and the owner's audited coin adjustment. Details below. |
-| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
+| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Catalogue, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
 
 ## Site controls (step B1)
 
@@ -90,6 +90,26 @@ Rules kept by the database: an action needs a reason; staff of your rank or abov
 
 Tested by `tests/admin-control-db.test.ts` (24 database tests), the step B part of `tests/admin-app.test.ts` (10 screen tests) and `tests/chat-moderation.test.ts` (the game site's chat and warning popup).
 
+## Catalogue (step C: `0022_catalogue_editor.sql`, built 2026-11-25)
+
+The **Catalogue** page (`catalogue.view` to look, `catalogue.edit` to change) edits the cases in the database. The server already drew every opening from those tables; now the game site also reads them at start-up (`catalogue_public`, through `src/catalogue-sync.ts`), so a saved change is what players see on their next visit and what every opening uses. If the site cannot reach the database it shows the copy of the cases it was built with.
+
+| Part | What it does |
+|---|---|
+| Case list | Every case with price, return to the player (average value / price), number of items, openings in the last 7 days, version, and whether a waiting battle uses it. Switched-off cases on request |
+| Editor | Name, price, colour, label, picture (its own `public/assets/cases/<id>.webp`, or another case's picture for a new case), order on the page, and the items with their chances in percent (3 decimals; 1% = 1,000 of the 100,000 tickets). Live totals: chances added up, average value, return, items |
+| Helpers | "Put the rest on the most likely item" (makes the chances add up to 100%), "Set the price for a 90% return" (the return the generated cases use), item search by name and value range (all 14,411 real items), JSON export and import |
+| Checks (also in the database) | Chances add up to exactly 100%; 1 to 60 items, no item twice, only real items; a paid case returns 70% to 98% of its price; a new case's id is 2 to 30 lower-case letters, numbers or dashes and can never change; reward crates (daily, welcome) are never sold, so their price is not checked |
+| Versions | Every save is a new version with the full contents, the person and the reason; the first version of every case ("as installed") is recorded when `0022` runs. **Restore** puts an old version back as a new version, so nothing is ever lost. A save based on an older version than the current one is refused, so two people cannot overwrite each other |
+| Switching off | Hides the case on the site and the server refuses to open it; nothing is deleted, and it can be switched on again |
+| Cases in a waiting battle | Cannot be re-priced or switched off until that battle starts or is cancelled (its refund uses the price); what is inside can still change |
+
+Not built: uploading new case pictures (pick an existing picture, or add a file to `public/assets/cases/` and deploy) and scheduling a case for a later date. Every save, switch and restore is in the audit log.
+
+**Important:** from now on the database holds the cases. Running the generated `0015_real_cases.sql` again (a price refresh with `npm run build:catalogue`) rebuilds every case and would undo edits made here. See [real-catalogue.md](real-catalogue.md).
+
+Tested by `tests/catalogue-editor-db.test.ts` (13 database tests on the real catalogue), the step C part of `tests/admin-app.test.ts` (6 screen tests) and `tests/catalogue-sync.test.ts` (the game site applying the published cases).
+
 ## How the sign-in works
 
 1. **Steam.** The same Steam account you use on the game, through the existing `steam-login` Edge Function.
@@ -109,7 +129,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 **Status (2026-11-21):** the SQL in step 1 is run. That the Owner role has been created (step 2) and that `http://localhost:5174` is allowed for sign-in (step 3) is **not confirmed**; the admin site has not been deployed and runs only on the owner's PC. See [setup-status.md](setup-status.md).
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; **not run yet**).
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; run by the owner on 2026-11-25). For step C (Catalogue): `0022_catalogue_editor.sql` (after `0021`; run by the owner on 2026-11-25).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -151,12 +171,15 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `supabase/migrations/0006_admin.sql` | Tables, permissions, sign-in chain, audit log, role and permission functions, e-mail reveal, explorer |
 | `supabase/migrations/0007_site_controls.sql` | The settings row, the guards, the status function the game site reads, the five admin switch functions |
 | `supabase/migrations/0019_admin_wallet.sql` | The Wallets page's functions: totals, search, overview, ledger, bets, the audited adjustment |
+| `supabase/migrations/0022_catalogue_editor.sql` | Step C: case versions and history, the published catalogue the game reads, the editor functions and their checks |
 | `supabase/migrations/0021_admin_control.sql` | Step B: notes, tags, account restrictions (and the guard and chat rules that enforce them), chat moderation and reports, live-room and round tools, the dashboard |
 | `vercel.admin.json` | The admin site's own Vercel project: build and security headers |
 | `src/site.ts` | Game-site side: notice bar, maintenance and country screens, paused-game panel, status polling |
 | `admin/index.html`, `admin/main.ts`, `vite.admin.config.ts` | The separate site's page and build |
 | `src/admin/app.ts` | The sign-in state machine and the panel shell |
 | `src/admin/pages.ts` | Overview, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer, and the menu order |
+| `src/admin/pages-catalogue.ts` | Step C: the Catalogue page and editor |
+| `src/catalogue-sync.ts`, `applyCatalogue()` in `src/data.ts` | Game-site side of step C: load the published cases at start-up and swap them in |
 | `src/admin/pages-control.ts` | Step B: Dashboard, Players (with the account actions), Chat, Live rooms, Rounds |
 | `src/notices.ts`, `src/chat.ts`, `src/live.ts` | Game-site side of step B: the warning popup, removed and staff messages, reports, the pinned message |
 | `src/admin/api.ts` | The one interface to the outside world (real calls here, a fake in tests) |
@@ -171,7 +194,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 
 ## Not built yet
 
-Everything in the plan except steps A, B and D: the catalogue editor (C); rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
+Everything in the plan except steps A, B, C and D: rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
 
 ## Alerts to the owner
 

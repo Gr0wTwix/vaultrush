@@ -29,7 +29,8 @@ Step by step: how features are built, released and documented in Vaultrush. Last
 
 | Task | How |
 |---|---|
-| Refresh item prices or add cases | Edit `scripts/build-catalogue.mjs`, run `npm run build:catalogue`, deploy, and have the owner run the regenerated `0014_*` and `0015_*` files. See [real-catalogue.md](real-catalogue.md) |
+| Add or change a case | The admin site's Catalogue page (checks, versions, restore). The game site picks it up on the next visit |
+| Refresh item prices | Run `npm run build:catalogue`, deploy, and have the owner run the regenerated `0014_*` files. Running `0015_*` again rebuilds every case and **undoes Catalogue edits**. See [real-catalogue.md](real-catalogue.md) |
 | New case picture | Replace `public/assets/cases/<case id>.webp` (640 × 640, transparent) |
 | Give a player coins | The admin site's Wallets page, or the SQL in [server-wallet.md](server-wallet.md) |
 | Maintenance mode | The admin site's Site controls, or SQL on `site_controls` |

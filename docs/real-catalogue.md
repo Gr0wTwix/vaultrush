@@ -37,6 +37,14 @@ Free coins (the 10-minute faucet, calendar, promo codes, rakeback) were not chan
 
 Existing players are not left with invented items: 0015 swaps every old inventory item for the real item **of the new cases closest in value** (nobody loses value), then deletes the invented items. Browser-only saves (no cloud account) simply drop old items. Running the files again is safe and is how a **price refresh** works: it updates every value and rebuilds the cases; inventories are untouched.
 
+## Cases are edited in the admin site (since 2026-11-25)
+
+Since migration `0022` the cases in the database can be edited on the admin site's **Catalogue** page, and the game site reads them from the database at start-up (it keeps the bundled `src/catalogue/cases.generated.json` only as a fallback). That makes the **database the source of truth for cases**:
+
+- Running `0015_real_cases.sql` again replaces **every** case and its odds with the generated ones, which **undoes edits made in the admin site** (their old versions stay in the history, so they can be restored one by one). Before a price refresh, export the edited cases from the admin site, or restore them afterwards.
+- Item values (`0014_real_items_*.sql`) can be refreshed without touching the cases; a case's return then moves with its items' values, and the Catalogue page shows it.
+- New cases made in the admin site have no picture file unless one is added to `public/assets/cases/<id>.webp`; until then they can borrow another case's picture.
+
 ## Refreshing prices
 
 ```powershell

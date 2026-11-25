@@ -15,6 +15,7 @@ import { openAccount, applyUi } from './account.js';
 import { initRg } from './rgui.js';
 import { openAuth, initAuth, isSignedIn, localSignedIn, logout } from './auth.js';
 import { hideSplash } from './splash.js';
+import { syncCatalogue } from './catalogue-sync.js';
 import * as legal from './views/legal.js';
 import { renderFooter } from './footer.js';
 import * as responsible from './views/responsible.js';
@@ -249,7 +250,11 @@ async function boot() {
   applyUi();
   initRg();
   void initAuth();
-  await Promise.race([initSite(), new Promise(r => setTimeout(r, 1500))]);      // maintenance, notice, paused games: known before the first page is drawn
+  // maintenance, notice, paused games and the published cases: known before the first page is drawn (or drawn again when the cases arrive late)
+  let drawn = false;
+  const cat = syncCatalogue();
+  await Promise.race([Promise.all([initSite(), cat]), new Promise(r => setTimeout(r, 1500))]);
+  void cat.then(changed => { if (changed && drawn) route(); });
   on('auth', () => route());
   on('live', () => route());
   on('wallet', () => route());               // the server wallet switched on or off: pages that show coins and items redraw                 // lobbies change from simulated to real the moment the server confirms live games
@@ -258,7 +263,7 @@ async function boot() {
   renderTicker();
   initChat($('#chat'));
   window.addEventListener('hashchange', route);
-  route();
+  route(); drawn = true;
   void hideSplash();                                                      // the loading screen from index.html
   wireTipsLink();
   setTimeout(maybeShowTips, 1500);                                        // first visit: a short tour, unless another window is open

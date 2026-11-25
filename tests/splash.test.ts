@@ -22,7 +22,7 @@ describe('loading screen markup', () => {
   });
   it('is removed once the first page is drawn, and also when start-up fails', () => {
     const app = readFileSync(resolve(__dirname, '..', 'src', 'app.ts'), 'utf8');
-    expect(app).toMatch(/route\(\);\s*void hideSplash\(\);/);
+    expect(app).toMatch(/route\(\);[^\n]*\s*void hideSplash\(\);/);
     expect(app).toMatch(/boot\(\)\.catch\(err => \{[^}]*hideSplash\(\)/);
   });
 });

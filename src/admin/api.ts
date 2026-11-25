@@ -82,6 +82,13 @@ export interface RoundRow { id: number; status: string; created_at: string; bett
 export interface RoundBet { id: number; user_id: string; name: string; lane: string; amount: number; auto_cashout: number | null; cashouts: number[]; paid: number; done: boolean; at: string }
 export interface RoundCheck { id: number; game: string; hash_ok: boolean; result_ok: boolean; recorded: unknown; recomputed: unknown }
 
+/** Step C (migration 0022): the case catalogue editor. Chances are tickets out of 100,000. */
+export interface CatCase { id: string; name: string; price: number; reward: boolean; active: boolean; hue: number | null; tag: string | null; art: string | null; sort: number; version: number; updated_at: string | null; items: number; ev: number; opens_7d: number; in_use: boolean }
+export interface CatEntry { item: string; name: string; rarity: string; value: number; tickets: number; from: number; to: number }
+export interface CatCaseFull extends Omit<CatCase, 'items' | 'opens_7d'> { entries: CatEntry[]; history: { version: number; at: string; by: string | null; reason: string | null; price: number; items: number }[] }
+export interface CatItem { id: string; name: string; rarity: string; value: number }
+export interface CatSave { id: string; name: string; price: number; hue: number | null; tag: string | null; art: string | null; sort: number; entries: { item: string; tickets: number }[] }
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -147,6 +154,13 @@ export interface AdminApi {
   rounds(game: 'crash' | 'double', before?: number): Promise<RoundRow[]>;
   roundBets(id: number): Promise<RoundBet[]>;
   roundVerify(id: number): Promise<RoundCheck>;
+  catalogueCases(): Promise<CatCase[]>;
+  catalogueCase(id: string): Promise<CatCaseFull>;
+  catalogueItems(q: string, min?: number, max?: number | null): Promise<CatItem[]>;
+  /** version: the one the editor loaded (0 for a new case). */
+  catalogueSave(c: CatSave, version: number, reason: string): Promise<{ id: string; version: number; ev: number; rtp: number | null; created: boolean }>;
+  catalogueSetActive(id: string, active: boolean, reason: string): Promise<void>;
+  catalogueRestore(id: string, version: number, reason: string): Promise<{ version: number }>;
 }
 
 export const realApi: AdminApi = {
@@ -220,6 +234,12 @@ export const realApi: AdminApi = {
   rounds: (game, before) => call<RoundRow[]>('admin_rounds', { p_game: game, p_before: before ?? null, p_limit: 30 }),
   roundBets: id => call<RoundBet[]>('admin_round_bets', { p_round: id }),
   roundVerify: id => call<RoundCheck>('admin_round_verify', { p_round: id }),
+  catalogueCases: () => call<CatCase[]>('admin_catalogue_cases'),
+  catalogueCase: id => call<CatCaseFull>('admin_catalogue_case', { p_id: id }),
+  catalogueItems: (q, min = 0, max = null) => call<CatItem[]>('admin_catalogue_items', { p_query: q, p_min: min, p_max: max, p_limit: 60 }),
+  catalogueSave: (c, version, reason) => call('admin_catalogue_save', { p_id: c.id, p_version: version, p_name: c.name, p_price: c.price, p_hue: c.hue, p_tag: c.tag, p_art: c.art, p_sort: c.sort, p_entries: c.entries, p_reason: reason }),
+  catalogueSetActive: async (id, active, reason) => { await call('admin_catalogue_set_active', { p_id: id, p_active: active, p_reason: reason }); },
+  catalogueRestore: (id, version, reason) => call('admin_catalogue_restore', { p_id: id, p_version: version, p_reason: reason }),
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -247,6 +267,13 @@ export const ADMIN_ERRORS: Record<string, string> = {
   message_not_found: 'That message no longer exists or was already removed.', battle_not_found: 'That battle no longer exists.', flip_not_found: 'That coinflip no longer exists.',
   already_started: 'That game has already started, so it cannot be cancelled.', flip_not_open: 'That coinflip is no longer waiting, so it cannot be cancelled.',
   round_not_finished: 'Only a finished round can be checked.', invalid_game: 'Unknown game.',
+  case_not_found: 'That case does not exist.', case_changed: 'Someone saved this case after you opened it. Open it again to see their version, then make your change.',
+  case_in_use: 'A battle that is waiting for players uses this case. Its price cannot change and it cannot be switched off until that battle starts or is cancelled (see Live rooms).',
+  invalid_case_id: 'The case id is 2 to 30 lower-case letters, numbers or dashes (for example summer-drop). It cannot be changed later.',
+  invalid_case_name: 'The name is 2 to 40 characters.', invalid_price: 'Enter a price above 0 with at most 2 decimals (up to 100,000).',
+  invalid_entries: 'A case needs 1 to 60 items, each with at least 1 ticket (0.001%).', duplicate_item: 'The same item is in the case twice.',
+  unknown_item: 'One of the items is not in the catalogue (or is retired).', tickets_not_100000: 'The chances must add up to exactly 100%.',
+  rtp_out_of_range: 'At this price the case would return less than 70% or more than 98% of its price on average. Change the price or the chances.',
 };
 export const errorText = (e: unknown): string => {
   const m = e instanceof Error ? e.message : String(e);

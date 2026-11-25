@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
+import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, CatCase, CatCaseFull, CatItem, CatSave, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
 const ROLES = [
@@ -64,6 +64,17 @@ const ROUNDS: RoundRow[] = [
   { id: 42, status: 'betting', created_at: '2026-11-25T10:00:00Z', betting_ends_at: '2026-11-25T10:00:07Z', finished_at: null, server_hash: 'h2', result: null, seed: null, bets: 1, staked: 5, paid: null, flags: [] },
   { id: 41, status: 'finished', created_at: '2026-11-25T09:59:00Z', betting_ends_at: '2026-11-25T09:59:07Z', finished_at: '2026-11-25T09:59:20Z', server_hash: 'h1', result: { point: 2.5 }, seed: 'ab'.repeat(32), bets: 3, staked: 60, paid: 45, flags: [] },
 ];
+const CAT_LIST: CatCase[] = [
+  { id: 'starter', name: 'Starter Crate', price: 0.5, reward: false, active: true, hue: null, tag: null, art: null, sort: 0, version: 3, updated_at: '2026-11-25T09:00:00Z', items: 2, ev: 0.45, opens_7d: 12, in_use: false },
+  { id: 'old-box', name: 'Old Box', price: 2, reward: false, active: false, hue: 10, tag: null, art: null, sort: 0, version: 1, updated_at: null, items: 3, ev: 1.8, opens_7d: 0, in_use: false },
+  { id: 'daily', name: 'Daily Crate', price: 0.34, reward: true, active: true, hue: null, tag: null, art: null, sort: 0, version: 1, updated_at: null, items: 4, ev: 0.3, opens_7d: 5, in_use: false },
+];
+const CAT_CASE: CatCaseFull = {
+  id: 'starter', name: 'Starter Crate', price: 0.5, reward: false, active: true, hue: null, tag: null, art: null, sort: 0, version: 3, updated_at: '2026-11-25T09:00:00Z', ev: 0.45, in_use: false,
+  entries: [{ item: 'a', name: 'P250 | Sand <Dune>', rarity: 'consumer', value: 0.3, tickets: 90000, from: 0, to: 89999 }, { item: 'b', name: 'AK-47 | Redline', rarity: 'classified', value: 1.8, tickets: 10000, from: 90000, to: 99999 }],
+  history: [{ version: 3, at: '2026-11-25T09:00:00Z', by: 'Mirage', reason: 'cheaper', price: 0.5, items: 2 }, { version: 1, at: '2026-11-21T09:00:00Z', by: null, reason: 'as installed (0015)', price: 0.6, items: 2 }],
+};
+const CAT_ITEMS: CatItem[] = [{ id: 'c', name: 'AWP | Asiimov', rarity: 'covert', value: 50 }];
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
 interface Fake { api: AdminApi; calls: Record<string, any[][]>; state: { user: { id: string } | null; status: Status; perms: string[]; factors: { id: string; status: string }[]; unlockResult: any; admins: Admin[]; audit: AuditRow[]; queryResult: QueryResult; controls: Controls; overview: WalletOverview; adjustFails: string | null } }
@@ -142,6 +153,12 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     rounds: rec('rounds', async () => ROUNDS),
     roundBets: rec('roundBets', async () => []),
     roundVerify: rec('roundVerify', async () => ({ id: 41, game: 'crash', hash_ok: true, result_ok: true, recorded: { point: 2.5 }, recomputed: { point: 2.5 } })),
+    catalogueCases: rec('catalogueCases', async () => CAT_LIST),
+    catalogueCase: rec('catalogueCase', async () => CAT_CASE),
+    catalogueItems: rec('catalogueItems', async () => CAT_ITEMS),
+    catalogueSave: rec('catalogueSave', async (c: CatSave, version: number) => ({ id: c.id, version: version + 1, ev: 0.45, rtp: 0.9, created: version === 0 })),
+    catalogueSetActive: rec('catalogueSetActive', async () => undefined),
+    catalogueRestore: rec('catalogueRestore', async () => ({ version: 4 })),
     ...apiOver,
   };
   return { api, calls, state };
@@ -758,5 +775,84 @@ describe('step B pages: dashboard, players, chat, rooms, rounds', () => {
     await wait(() => expect(toastText()).toMatch(/checks out/));
     q('#gPause').click(); await answerReason('investigating');
     await wait(() => expect(f.calls['setGame']).toEqual([['crash', true, 'investigating']]));
+  });
+});
+
+describe('step C: the catalogue editor', () => {
+  const CAT = [...OWNER_PERMS, 'catalogue.view', 'catalogue.edit'];
+  const toastText = (): string => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | ');
+  const openStarter = async (f: Fake): Promise<void> => {
+    await start(f); await goto('catalogue', 'tr[data-k="starter"]');
+    q('tr[data-k="starter"] [data-open]').click();
+    await wait(() => expect(q('#kEditor')).not.toBeNull());
+  };
+  const setPct = (row: number, v: string): void => { const i = root.querySelectorAll<HTMLInputElement>('#kRows [data-pct]')[row]!; i.value = v; i.dispatchEvent(new Event('input')); };
+
+  it('lists the cases with their return; switched-off cases only on request; reward crates are not "sold"', async () => {
+    await start(fake({ perms: CAT })); await goto('catalogue', 'tr[data-k="starter"]');
+    expect(q('tr[data-k="starter"]').textContent).toContain('90.0%');
+    expect(q('tr[data-k="daily"]').textContent).toContain('not sold');
+    expect(q('tr[data-k="old-box"]')).toBeNull();
+    q<HTMLInputElement>('#kOff').checked = true; q('#kOff').dispatchEvent(new Event('change'));
+    expect(q('tr[data-k="old-box"]').textContent).toContain('off');
+  });
+
+  it('the editor shows the totals live and blocks saving until the chances add up and the return is allowed', async () => {
+    const f = fake({ perms: CAT }); await openStarter(f);
+    expect(q('#kSum').textContent).toContain('100.000%'); expect(q('#kSum').textContent).toContain('90.0%');
+    expect(q('#kRows').textContent).toContain('P250 | Sand <Dune>');                 // names are text, not markup
+    setPct(1, '5');                                                                  // 90% + 5% = 95%
+    expect(q('#kSum').textContent).toContain('95.000%');
+    expect(q<HTMLButtonElement>('#kSave').disabled).toBe(true);
+    expect(q('#kProblems').textContent).toContain('not 100%');
+    q('#kFill').click();                                                             // the missing 5% goes to the most likely item
+    expect(q('#kSum').textContent).toContain('100.000%');
+    const price = q<HTMLInputElement>('#kPrice'); price.value = '5'; price.dispatchEvent(new Event('input'));
+    expect(q('#kProblems').textContent).toMatch(/between 70% and 98%/);
+    q('#kPrice90').click();
+    expect(q('#kProblems').textContent).toBe('');
+    expect(q<HTMLButtonElement>('#kSave').disabled).toBe(false);
+  });
+
+  it('saving sends the version it was opened at, the items as tickets, and a reason', async () => {
+    const f = fake({ perms: CAT }); await openStarter(f);
+    setPct(0, '89'); setPct(1, '11');
+    const name = q<HTMLInputElement>('#kName'); name.value = 'Starter Crate II'; name.dispatchEvent(new Event('input'));
+    q('#kPrice90').click();
+    q('#kSave').click(); await answerReason('better mix');
+    await wait(() => expect(f.calls['catalogueSave']).toHaveLength(1));
+    const [body, version, reason] = f.calls['catalogueSave']![0]!;
+    expect(version).toBe(3); expect(reason).toBe('better mix');
+    expect(body).toMatchObject({ id: 'starter', name: 'Starter Crate II', entries: [{ item: 'a', tickets: 89000 }, { item: 'b', tickets: 11000 }] });
+    await wait(() => expect(toastText()).toContain('version 4'));
+  });
+
+  it('adding an item from the search puts it in at 1%', async () => {
+    const f = fake({ perms: CAT }); await openStarter(f);
+    q<HTMLInputElement>('#kq').value = 'awp'; submit('#kFind');
+    await wait(() => expect(q('tr[data-f="c"] [data-add]')).not.toBeNull());
+    q('tr[data-f="c"] [data-add]').click();
+    expect(root.querySelectorAll('#kRows tr[data-i]')).toHaveLength(3);
+    expect(q('#kSum').textContent).toContain('101.000%');
+  });
+
+  it('a new case needs a valid id; an old version can be restored with a reason', async () => {
+    const f = fake({ perms: CAT }); await start(f); await goto('catalogue', '#kNew');
+    q('#kNew').click(); await wait(() => expect(q('#kEditor')).not.toBeNull());
+    const id = q<HTMLInputElement>('#kId'); id.value = 'Bad Id'; id.dispatchEvent(new Event('input'));
+    expect(q('#kProblems').textContent).toContain('lower-case');
+    q('#kClose').click();
+    q('tr[data-k="starter"] [data-open]').click(); await wait(() => expect(q('[data-restore="1"]')).not.toBeNull());
+    expect(q('[data-restore="3"]')).toBeNull();                                      // the current version has nothing to restore
+    q('[data-restore="1"]').click(); await answerReason('back to the original');
+    await wait(() => expect(f.calls['catalogueRestore']).toEqual([['starter', 1, 'back to the original']]));
+  });
+
+  it('staff who may only look see the cases without any way to change them', async () => {
+    const f = fake({ perms: ['catalogue.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) }); await start(f);
+    await goto('catalogue', 'tr[data-k="starter"]');
+    expect(q('#kNew')).toBeNull(); expect(q('tr[data-k="starter"] [data-toggle]')).toBeNull();
+    q('tr[data-k="starter"] [data-open]').click(); await wait(() => expect(q('#kEditor')).not.toBeNull());
+    expect(q('#kSave')).toBeNull(); expect(q<HTMLInputElement>('#kName').disabled).toBe(true); expect(q('[data-restore]')).toBeNull();
   });
 });

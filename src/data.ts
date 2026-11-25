@@ -64,6 +64,32 @@ export const CASES: Case[] = ALL.filter(c => !c.reward);
 export const REWARD_CASES: Case[] = ALL.filter(c => c.reward);
 export const CASE: Record<string, Case> = Object.fromEntries(ALL.map(c => [c.id, c]));
 
+/** One case as the database publishes it (migration 0022): entries are [item id, first ticket, last ticket] out of 100,000. */
+export interface PublishedCase { id: string; name: string; price: number; reward: boolean; hue: number | null; tag: string | null; art: string | null; version: number; entries: [string, number, number][] }
+/**
+ * Replace the bundled cases with the published ones (src/catalogue-sync.ts calls this at start-up). The arrays and the map are changed in place, so every
+ * page that already holds them sees the new cases. A case missing from the list is switched off: it leaves CASES but stays in CASE for old records.
+ * Every item must already be registered (ensureItems). Returns false, changing nothing, if anything does not fit.
+ */
+export function applyCatalogue(list: PublishedCase[]): boolean {
+  const built: Case[] = [];
+  for (const p of list) {
+    if (!p.entries?.length || p.entries.some(([id]) => !ITEM[id])) return false;
+    const old = CASE[p.id];
+    const entries = p.entries.map(([id, from, to]): CaseEntry => { const chance = (to - from + 1) / 100000; return { item: ITEM[id] as Item, weight: chance, chance, from, to }; });
+    built.push({
+      id: p.id, name: p.name, hue: p.hue ?? old?.hue ?? 200, tag: p.tag ?? old?.tag, reward: p.reward || undefined,
+      img: `assets/cases/${p.art || p.id}.webp`, entries, price: Number(p.price),
+      ev: Math.round(entries.reduce((s, e) => s + e.item.value * e.chance, 0) * 10000) / 10000,
+    });
+  }
+  if (!built.some(c => !c.reward)) return false;                       // an empty answer would empty the site: keep the bundled cases
+  for (const c of built) CASE[c.id] = c;
+  CASES.splice(0, CASES.length, ...built.filter(c => !c.reward));
+  REWARD_CASES.splice(0, REWARD_CASES.length, ...built.filter(c => c.reward));
+  return true;
+}
+
 /** How risky a case is, measured honestly: the chance that one opening gives an item worth at least the price (`back`, 0 to 1).
  *  22% or more is Low, 12% or more is Medium, less is High. (Idea from the L / M / H labels on CSGOBig's cases.) */
 export type CaseRisk = { level: 'low' | 'medium' | 'high'; back: number };
