@@ -1,4 +1,4 @@
-# The admin site (step A, the site controls of step B and the wallet tools of step D built 2026-11-21)
+# The admin site (steps A, B and D built; live since 2026-11-25)
 
 A **separate website** for running Vaultrush. It lives in this repository and uses the same database, but it is its own page, its own build and (when deployed) its own address. The plan, the decisions and the open questions are in [admin-panel-proposal-2026-11-21.md](admin-panel-proposal-2026-11-21.md). This page describes what exists now.
 
@@ -13,7 +13,7 @@ A **separate website** for running Vaultrush. It lives in this repository and us
 | Data explorer | A read-only query tool for the Owner. Every attempt is logged first, including refused and failing ones. |
 | Site controls (step B1) | Maintenance mode, site notice, per-game switches, sign-ups open or closed, country restrictions. Details below. |
 | Wallets (step D) | Every coin in the database: economy totals, player search, one player's wallet, ledger and bets, and the owner's audited coin adjustment. Details below. |
-| Pages | Overview, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
+| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
 
 ## Site controls (step B1)
 
@@ -57,6 +57,39 @@ How a change is made safe:
 - **Looking is not written to the audit log** (it would only be noise, and every audit row alerts the owner); the data explorer, which can read anything, is logged. If operator alerts are on, an adjustment sends the "admin action" alert and the "coins added by hand" alert ([n8n.md](n8n.md)).
 - Tested by `tests/admin-wallet-db.test.ts` (who may look and who may change, each viewer, paging, credit, debit, refusals, repeats) and the Wallets part of `tests/admin-app.test.ts`.
 
+## Control and visibility (step B: `0021_admin_control.sql`, built 2026-11-25)
+
+Five pages, each shown only to staff holding its permission. Every change asks for a reason, is checked again by the database and is written to the audit log (and, with operator alerts on, sent to the owner's chat).
+
+| Page | What it shows | What it can do |
+|---|---|---|
+| **Dashboard** (`dashboard.view`) | Players active in the last 15 minutes and today (a bet or a chat message), new players, bets and chat in the last 15 minutes, open and stuck lobbies, the current Crash and Double rounds, open chat reports, active restrictions, paused games, bets per hour (24 hours) and new players per day (7 days). Refreshes every 15 seconds | Links to the pages behind each tile |
+| **Players** (`players.view`) | Every account with status (muted, banned, warned, self-excluded, closed, staff) and tags; search by name or id; one player's profile: sign-in method and last sign-in, balance (with `ledger.view`), live games, free crates taken, restrictions and their history, staff notes, tags, recent chat, recent bets, every staff action on the player | Notes (`players.notes`), tags VIP / watch / friend / tester / streamer (`players.tags`), and the account actions below |
+| **Chat** (`chat.view`) | The English room's messages with reports and removals, the open and handled report queues, the room rules | Remove a message, clear the last N minutes, pin and unpin, post as staff (`chat.post`, shown with a STAFF badge), lock the room, slow mode, block links, blocked words (`chat.settings`), dismiss a report |
+| **Live rooms** (`rooms.view`) | Every case battle and coinflip: seats (bots marked), stake, status, age, the seed once revealed; lobbies waiting more than 30 minutes are marked "stuck" | Cancel a waiting lobby with every stake refunded (`rooms.cancel`); mark a game suspicious (`rooms.cancel`) or void (`rooms.void`) |
+| **Rounds** (`rounds.view`) | The last Crash and Double rounds with bets, staked and paid; each round's bets; the seed of finished rounds only (the Crash point of a round in play is never shown) | **Check** recomputes a finished round from its seed (hash and result); pause or resume the game (`site.games`, the same switch as Site controls); mark a round void (`rounds.void`) |
+
+**Account actions** (from a player's profile):
+
+| Action | Permission | Effect on the player |
+|---|---|---|
+| Mute | `accounts.mute` | Chat messages refused ("you are muted") for 15 minutes to 30 days, or until lifted |
+| Warn | `accounts.mute` | A popup with your message the next time they open the site, shown once; the profile shows whether it was read |
+| Betting ban | `accounts.ban` | Every game refuses their bets; chat and rewards still work |
+| Site ban | `accounts.ban` | Games, rewards, free crates and chat refused; their sign-in is ended and new sign-ins refused until the ban ends (see the note below) |
+| Force sign-out | `accounts.signout` | Every session ends; they can sign in again unless banned |
+| Rename | `accounts.rename` | New name under the sign-up rules; old chat messages keep the old name |
+| Reset a free crate | `rewards.edit` | The welcome or daily crate can be claimed again |
+| Close the account | `accounts.close` | Anonymised like a self-closure (name, coins, chat), sign-in refused for good. You must type the player's name to confirm. Staff accounts cannot be closed here |
+
+Rules kept by the database: an action needs a reason; staff of your rank or above cannot be acted on, nor can you act on yourself; a temporary restriction ends by itself; lifting one is logged with its own reason; staff are never limited by bans, mutes, chat locks or filters. "Suspicious" and "void" are records only: no coins move (correct coins on the Wallets page). A round that is running is never stopped half way: pausing a game lets the current round finish and refuses new bets (rounds last seconds).
+
+**Signing a player out.** Ending a sign-in and refusing new ones changes Supabase's own sign-in tables from the database. If the project does not allow that, the action still works on every request (the bans are checked by the database) and the action's result says the sign-out did not happen. A player who is signed out keeps their current access token until it expires (at most one hour), but every game, reward and chat request is refused by the ban at once.
+
+**On the game site:** removed messages turn into "Message removed by a moderator" for everyone at once; staff messages carry a STAFF badge; a small flag on other players' messages reports them (once per message, at most 20 reports an hour); the pinned message and slow mode or a locked room show above the chat; a warning appears as a popup at the next visit. The refusals have readable texts ("You are muted in chat for now", "Your account is suspended", and so on).
+
+Tested by `tests/admin-control-db.test.ts` (24 database tests), the step B part of `tests/admin-app.test.ts` (10 screen tests) and `tests/chat-moderation.test.ts` (the game site's chat and warning popup).
+
 ## How the sign-in works
 
 1. **Steam.** The same Steam account you use on the game, through the existing `steam-login` Edge Function.
@@ -76,7 +109,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 **Status (2026-11-21):** the SQL in step 1 is run. That the Owner role has been created (step 2) and that `http://localhost:5174` is allowed for sign-in (step 3) is **not confirmed**; the admin site has not been deployed and runs only on the owner's PC. See [setup-status.md](setup-status.md).
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21).
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; **not run yet**).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -104,9 +137,9 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 | 1 | You | Done (2026-11-21): `0015` re-run, `0017`, `0018` and `0019` were run in the Supabase SQL editor |
 | 2 | You | Done (confirmed 2026-11-25): your account holds the Owner role |
 | 3 | You | Done (confirmed 2026-11-25): **TOTP** is enabled under Authentication, Multi-factor (step 2 of the sign-in needs it) |
-| 4 | Me, once you say go | Create the second Vercel project (a name you choose), give it the same three public variables as the game site (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STEAM_LOGIN`; no secret is involved), export the branch into a clean folder, copy `vercel.admin.json` over `vercel.json` there, link the folder to the new project and deploy it to production |
+| 4 | Me | Done (2026-11-25): created the second Vercel project (a name you choose), give it the same three public variables as the game site (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STEAM_LOGIN`; no secret is involved), export the branch into a clean folder, copy `vercel.admin.json` over `vercel.json` there, link the folder to the new project and deploy it to production |
 | 5 | You | Supabase, Authentication, URL Configuration, Redirect URLs: add the new address followed by `/**` |
-| 6 | Me (with the private deploy notes) or you | Add the new address to the Steam function's allow-list (`SITE_URLS`, keeping the addresses already there) and redeploy that function |
+| 6 | Me | Done (2026-11-25): the new address was added to the Steam function's allow-list (`SITE_URLS`, the three addresses already there kept). Checked: the function now returns to the admin address and still refuses unknown ones |
 | 7 | You | Open the admin address, sign in with Steam, scan the QR code with an authenticator app, set the admin password. You are in |
 
 The address is public but shows only a Steam sign-in; everything behind it is checked again by the database on every call (staff role, two-factor session, unlocked admin session, permission). A custom domain is optional and can be added later.
@@ -118,14 +151,19 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `supabase/migrations/0006_admin.sql` | Tables, permissions, sign-in chain, audit log, role and permission functions, e-mail reveal, explorer |
 | `supabase/migrations/0007_site_controls.sql` | The settings row, the guards, the status function the game site reads, the five admin switch functions |
 | `supabase/migrations/0019_admin_wallet.sql` | The Wallets page's functions: totals, search, overview, ledger, bets, the audited adjustment |
+| `supabase/migrations/0021_admin_control.sql` | Step B: notes, tags, account restrictions (and the guard and chat rules that enforce them), chat moderation and reports, live-room and round tools, the dashboard |
 | `vercel.admin.json` | The admin site's own Vercel project: build and security headers |
 | `src/site.ts` | Game-site side: notice bar, maintenance and country screens, paused-game panel, status polling |
 | `admin/index.html`, `admin/main.ts`, `vite.admin.config.ts` | The separate site's page and build |
 | `src/admin/app.ts` | The sign-in state machine and the panel shell |
-| `src/admin/pages.ts` | Overview, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer |
+| `src/admin/pages.ts` | Overview, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer, and the menu order |
+| `src/admin/pages-control.ts` | Step B: Dashboard, Players (with the account actions), Chat, Live rooms, Rounds |
+| `src/notices.ts`, `src/chat.ts`, `src/live.ts` | Game-site side of step B: the warning popup, removed and staff messages, reports, the pinned message |
 | `src/admin/api.ts` | The one interface to the outside world (real calls here, a fake in tests) |
 | `tests/admin-db.test.ts` | 26 database tests (sign-in chain, lockout, hierarchy, switches, audit immutability, explorer) |
-| `tests/admin-app.test.ts` | 47 screen tests against a fake API (including the Site controls and Wallets pages) |
+| `tests/admin-app.test.ts` | 57 screen tests against a fake API (including the Site controls, Wallets and step B pages) |
+| `tests/admin-control-db.test.ts` | 24 database tests of step B: who may do what, every account action and its effect on the player, chat rules, reports, rooms, rounds, running the file twice |
+| `tests/chat-moderation.test.ts` | The game site's chat with moderation and the warning popup |
 | `tests/admin-wallet-db.test.ts` | 15 database tests: who may look and change, each viewer, paging, credit and debit, refusals, repeats |
 | `tests/admin-deploy.test.ts` | 6 tests: the deployment config, its security headers, and that the admin code holds no service key |
 | `tests/site-db.test.ts` | 27 database tests: who may change what, every guarded entry point, staff exempt, leaving never blocked, sign-ups, countries, no country or IP stored |
@@ -133,7 +171,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 
 ## Not built yet
 
-Everything in the plan except steps A, B1 and D: dashboard, players list and profile, account actions, chat moderation, live rooms, round control (the rest of step B); the catalogue editor (C); rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
+Everything in the plan except steps A, B and D: the catalogue editor (C); rewards and operations (E); the rest of compliance, fairness, economy, risk signals and analytics (F), including admin tools to apply a limit, cool-off or exclusion to a player (`rg.apply`); legal editor, system health, developer tools (G). **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
 
 ## Alerts to the owner
 

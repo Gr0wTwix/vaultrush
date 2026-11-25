@@ -6,6 +6,7 @@ import {
   needs2fa, startSteamLogin, steamEnabled, verifyLogin2fa,
 } from './backend.js';
 import { useFairFor } from './fair.js';
+import { showNotices } from './notices.js';
 import { initLive, stopLive } from './live.js';
 import { initWallet, stopWallet } from './wallet.js';
 import { activeAccount, activeId, loginLocal, registerLocal, setActive, stateKeyFor } from './accounts.js';
@@ -355,7 +356,7 @@ export async function initAuth(): Promise<void> {
     state.avatar = pic; save();
     const me = $('.me .avatar'); if (me) me.outerHTML = avatar(state.name, 32);
   };
-  await onAuthChange(async (event, on, uid) => { if (on) await useFairFor(cloudId(uid)); setSignedIn(on, uid); if (on) { markKnown(); void initWallet(uid); void initLive(uid); } else { stopLive(); stopWallet(); closeSecondStep(); } if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) { void checkSecondStep(); void ensure().then(applyPicture); } });
+  await onAuthChange(async (event, on, uid) => { if (on) await useFairFor(cloudId(uid)); setSignedIn(on, uid); if (on) { markKnown(); void initWallet(uid); void initLive(uid); } else { stopLive(); stopWallet(); closeSecondStep(); } if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) { void checkSecondStep(); void ensure().then(applyPicture).then(showNotices); } });
 }
 
 // ---- click guard for signed-out visitors ----

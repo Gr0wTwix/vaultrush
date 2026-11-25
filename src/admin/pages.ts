@@ -1,7 +1,8 @@
-// The pages of the admin panel that exist so far (step A of the plan). The other modules are listed on the "Coming next" page.
+// The pages of the admin panel. Step A (sign-in, roles, audit, explorer), B1 (site controls) and D (wallets) are here; step B (dashboard, players, chat, rooms, rounds) is in pages-control.ts.
 import type { AdminApi, AuditRow, BetRow, Controls, LedgerRow, Status, WalletOverview, WalletTotals } from './api.js';
 import { errorText } from './api.js';
 import { $, $$, coins, esc, reasonDialog, when } from './dom.js';
+import { CONTROL_PAGES } from './pages-control.js';
 
 export interface PageCtx { api: AdminApi; status: Status; perms: string[]; toast: (m: string, k?: 'info' | 'ok' | 'error') => void; reload: () => void; lock: () => Promise<void> }
 export interface Page { title: string; perm?: string; render(el: HTMLElement, c: PageCtx): Promise<void> }
@@ -9,7 +10,7 @@ export interface Page { title: string; perm?: string; render(el: HTMLElement, c:
 /** The whole plan, in order (docs/admin-panel-proposal-2026-11-21.md). */
 export const ROADMAP: { step: string; title: string; items: string; state: 'done' | 'partial' | 'next' | 'later' }[] = [
   { step: 'A', title: 'Admin site, roles, permissions, audit log, explorer', items: 'This site: three-step sign-in, staff roles, editable permissions, audit log, read-only data explorer', state: 'done' },
-  { step: 'B', title: 'Control and visibility', items: 'Built: site controls (maintenance, notice, game switches, sign-ups, country restrictions). Still to build: dashboard, players, account actions, chat moderation (English room), live rooms, round control', state: 'partial' },
+  { step: 'B', title: 'Control and visibility', items: 'Dashboard, players with notes and tags, account actions (mute, warn, betting and site bans, sign-out, rename, claim reset, closing), chat moderation (English room), live rooms, round control, site controls (maintenance, notice, game switches, sign-ups, country restrictions)', state: 'done' },
   { step: 'C', title: 'Catalogue in the database', items: 'Cases, items and odds you can add, edit and delete here', state: 'later' },
   { step: 'D', title: 'Full server wallet', items: 'All coins in the database, every game rewritten around it, everyone starts at 0. Built: owner wallet adjustments, wallet, ledger and bets viewer (the Wallets page)', state: 'done' },
   { step: 'E', title: 'Rewards and operations', items: 'Promo codes, free crates, races, rain, giveaways, game configuration, bots, in-app announcements', state: 'later' },
@@ -19,7 +20,7 @@ export const ROADMAP: { step: string; title: string; items: string; state: 'done
 
 const group = <T,>(xs: T[], key: (x: T) => string): [string, T[]][] => { const m = new Map<string, T[]>(); for (const x of xs) { const k = key(x); m.set(k, [...(m.get(k) ?? []), x]); } return [...m.entries()]; };
 
-export const PAGES: Record<string, Page> = {
+const BASE: Record<string, Page> = {
   overview: {
     title: 'Overview',
     async render(el, c) {
@@ -298,4 +299,10 @@ export const PAGES: Record<string, Page> = {
       sql.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void run(); } };
     },
   },
+};
+
+/** Every page, in menu order. */
+export const PAGES: Record<string, Page> = {
+  overview: BASE['overview'] as Page, ...CONTROL_PAGES,
+  site: BASE['site'] as Page, wallets: BASE['wallets'] as Page, staff: BASE['staff'] as Page, permissions: BASE['permissions'] as Page, audit: BASE['audit'] as Page, explorer: BASE['explorer'] as Page,
 };

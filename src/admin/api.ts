@@ -46,6 +46,42 @@ export interface LedgerRow { id: number; kind: string; amount: number; balance_a
 export interface BetRow { id: number; game: string; amount: number; payout: number; multiplier: number; nonce: number; at: string }
 export interface AdjustResult { user_id: string; amount: number; balance_before: number; balance_after: number; ledger_id?: number; replayed: boolean }
 
+/** Step B (migration 0021): dashboard, players, account actions, chat moderation, live rooms, rounds. */
+export interface Dashboard {
+  players: { total: number; new_today: number; new_7d: number; active_15m: number; active_today: number };
+  bets_15m: { count: number; staked: number }; chat_15m: number;
+  rooms: { battles_waiting: number; coinflips_waiting: number; stuck: number };
+  rounds: { game: string; id: number; status: string; betting_ends_at: string; bets: number; staked: number }[];
+  flags: { mute: number; warn: number; bet_ban: number; site_ban: number }; reports_open: number;
+  site: { maintenance_on: boolean; notice_on: boolean; games_off: string[]; signups_open: boolean };
+  chat: { locked: boolean; slow_seconds: number };
+  signups_7d: { day: string; count: number }[]; bets_24h: { hour: string; count: number; staked: number }[]; now: number;
+}
+export type FlagKind = 'mute' | 'warn' | 'bet_ban' | 'site_ban';
+export interface PlayerRow { id: string; name: string; created_at: string; closed: boolean; staff_role: string | null; balance: number | null; wagered: number | null; last_seen: string | null; flags: FlagKind[]; tags: string[]; excluded: boolean }
+export interface Flag { id: number; kind: FlagKind; until: string | null; message: string; reason: string; at: string; by: string | null; seen_at: string | null; lifted_at: string | null; lift_reason: string | null; active: boolean }
+export interface PlayerProfile {
+  player: { id: string; name: string; created_at: string; closed: boolean; closed_at: string | null; age_confirmed_at: string | null; terms_version: string | null; staff_role: string | null;
+            sign_in: { provider: string | null; last_sign_in_at: string | null; banned_until: string | null } | null };
+  wallet: { balance: number; wagered: number; won: number } | null;
+  flags: Flag[]; notes: { id: number; body: string; author: string | null; at: string }[]; tags: string[];
+  chat: { id: number; body: string; at: string; removed_at: string | null }[] | null;
+  bets: { id: number; game: string; amount: number; payout: number; at: string }[] | null;
+  games: { battles: number; coinflips: number; round_bets: number };
+  claims: { kind: string; at: string }[];
+  controls: { excluded_until: string | null; cool_off_until: string | null; kyc_tier: number } | null;
+  actions: { id: number; at: string; action: string; actor: string | null; reason: string | null }[] | null;
+}
+export interface ChatMsg { id: number; user_id: string; name: string; body: string; at: string; is_staff: boolean; removed_at: string | null; removed_by: string | null; reports: number }
+export interface ChatSettings { slow_seconds: number; locked: boolean; links_allowed: boolean; blocked_words: string[]; pinned_id: number | null; updated_at: string; updated_by: string | null }
+export interface ChatReport { id: number; message_id: number; body: string; author: string; author_id: string; removed: boolean; reporter: string | null; reason: string; at: string; resolved_at: string | null; outcome: string | null }
+export interface RoomFlag { flag: 'suspicious' | 'void'; reason: string; at: string }
+export interface BattleRoom { id: string; format: string; mode: string; cases: string[]; seats: ({ uid?: string; name: string; bot?: boolean } | null)[]; status: string; cost: number; creator: string | null; created_at: string; started_at: string | null; server_hash: string; seed: string | null; stuck: boolean; flags: RoomFlag[] }
+export interface FlipRoom { id: number; creator: string; side: string; amount: number; joiner: string | null; bot: boolean; status: string; result: string | null; winner: string | null; created_at: string; finished_at: string | null; server_hash: string; seed: string | null; stuck: boolean; flags: RoomFlag[] }
+export interface RoundRow { id: number; status: string; created_at: string; betting_ends_at: string; finished_at: string | null; server_hash: string; result: { point?: number; n?: number } | null; seed: string | null; bets: number; staked: number; paid: number | null; flags: RoomFlag[] }
+export interface RoundBet { id: number; user_id: string; name: string; lane: string; amount: number; auto_cashout: number | null; cashouts: number[]; paid: number; done: boolean; at: string }
+export interface RoundCheck { id: number; game: string; hash_ok: boolean; result_ok: boolean; recorded: unknown; recomputed: unknown }
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -84,6 +120,33 @@ export interface AdminApi {
   walletBets(user: string, before?: number): Promise<BetRow[]>;
   /** A positive amount credits, a negative one debits. `key` makes a repeat of the same request harmless (the same key is paid once). */
   walletAdjust(user: string, amount: number, reason: string, key: string): Promise<AdjustResult>;
+  dashboard(): Promise<Dashboard>;
+  players(q: string, filter: string, offset?: number): Promise<PlayerRow[]>;
+  player(id: string): Promise<PlayerProfile>;
+  note(user: string, body: string): Promise<void>;
+  tag(user: string, tag: string, on: boolean): Promise<string[]>;
+  /** minutes: null = until lifted. message: what the player is told (required for a warning). */
+  flag(user: string, kind: FlagKind, minutes: number | null, message: string, reason: string): Promise<{ id: number; until: string | null; signed_out: boolean | null }>;
+  liftFlag(id: number, reason: string): Promise<void>;
+  signOutPlayer(user: string, reason: string): Promise<{ signed_out: boolean }>;
+  rename(user: string, name: string, reason: string): Promise<void>;
+  resetClaim(user: string, kind: string, reason: string): Promise<void>;
+  closeAccount(user: string, confirmName: string, reason: string): Promise<{ name: string; balance_removed: number; signed_out: boolean }>;
+  chat(f: { before?: number; q?: string; removed?: boolean }): Promise<{ messages: ChatMsg[]; settings: ChatSettings }>;
+  chatRemove(id: number, reason: string): Promise<void>;
+  chatClear(minutes: number, reason: string): Promise<{ removed: number }>;
+  chatSettings(slow: number, locked: boolean, links: boolean, words: string[], reason: string): Promise<ChatSettings>;
+  chatPin(id: number | null, reason: string): Promise<void>;
+  chatPost(body: string): Promise<void>;
+  chatReports(open: boolean): Promise<ChatReport[]>;
+  chatDismiss(report: number, reason: string): Promise<void>;
+  battles(status?: string): Promise<BattleRoom[]>;
+  coinflips(status?: string): Promise<FlipRoom[]>;
+  roomCancel(kind: 'battle' | 'coinflip', id: string, reason: string): Promise<{ refunded: number; each: number }>;
+  roomFlag(kind: 'battle' | 'coinflip' | 'round', id: string, flag: 'suspicious' | 'void', reason: string): Promise<void>;
+  rounds(game: 'crash' | 'double', before?: number): Promise<RoundRow[]>;
+  roundBets(id: number): Promise<RoundBet[]>;
+  roundVerify(id: number): Promise<RoundCheck>;
 }
 
 export const realApi: AdminApi = {
@@ -131,6 +194,32 @@ export const realApi: AdminApi = {
   walletLedger: (user, before) => call<LedgerRow[]>('admin_wallet_ledger', { p_user: user, p_before: before ?? null, p_limit: 50 }),
   walletBets: (user, before) => call<BetRow[]>('admin_wallet_bets', { p_user: user, p_before: before ?? null, p_limit: 50 }),
   walletAdjust: (user, amount, reason, key) => call<AdjustResult>('admin_wallet_adjust', { p_user: user, p_amount: amount, p_reason: reason, p_key: key }),
+  dashboard: () => call<Dashboard>('admin_dashboard'),
+  players: (q, filter, offset = 0) => call<PlayerRow[]>('admin_players', { p_query: q, p_filter: filter, p_limit: 50, p_offset: offset }),
+  player: id => call<PlayerProfile>('admin_player', { p_user: id }),
+  note: async (user, body) => { await call('admin_player_note', { p_user: user, p_body: body }); },
+  tag: (user, tag, on) => call<string[]>('admin_player_tag', { p_user: user, p_tag: tag, p_on: on }),
+  flag: (user, kind, minutes, message, reason) => call('admin_flag_player', { p_user: user, p_kind: kind, p_minutes: minutes, p_message: message, p_reason: reason }),
+  liftFlag: async (id, reason) => { await call('admin_lift_flag', { p_flag: id, p_reason: reason }); },
+  signOutPlayer: (user, reason) => call('admin_sign_out', { p_user: user, p_reason: reason }),
+  rename: async (user, name, reason) => { await call('admin_rename', { p_user: user, p_name: name, p_reason: reason }); },
+  resetClaim: async (user, kind, reason) => { await call('admin_reset_claim', { p_user: user, p_kind: kind, p_reason: reason }); },
+  closeAccount: (user, confirmName, reason) => call('admin_close_account', { p_user: user, p_confirm: confirmName, p_reason: reason }),
+  chat: f => call('admin_chat', { p_before: f.before ?? null, p_query: f.q ?? '', p_only_removed: !!f.removed }),
+  chatRemove: async (id, reason) => { await call('admin_chat_remove', { p_message: id, p_reason: reason }); },
+  chatClear: (minutes, reason) => call('admin_chat_clear', { p_minutes: minutes, p_reason: reason }),
+  chatSettings: (slow, locked, links, words, reason) => call<ChatSettings>('admin_chat_settings', { p_slow: slow, p_locked: locked, p_links: links, p_words: words, p_reason: reason }),
+  chatPin: async (id, reason) => { await call('admin_chat_pin', { p_message: id, p_reason: reason }); },
+  chatPost: async body => { await call('admin_chat_post', { p_body: body }); },
+  chatReports: open => call<ChatReport[]>('admin_chat_reports', { p_open: open }),
+  chatDismiss: async (report, reason) => { await call('admin_chat_dismiss', { p_report: report, p_reason: reason }); },
+  battles: status => call<BattleRoom[]>('admin_rooms', { p_kind: 'battles', p_status: status ?? null, p_limit: 100 }),
+  coinflips: status => call<FlipRoom[]>('admin_rooms', { p_kind: 'coinflips', p_status: status ?? null, p_limit: 100 }),
+  roomCancel: (kind, id, reason) => call('admin_room_cancel', { p_kind: kind, p_id: id, p_reason: reason }),
+  roomFlag: async (kind, id, flag, reason) => { await call('admin_room_flag', { p_kind: kind, p_id: id, p_flag: flag, p_reason: reason }); },
+  rounds: (game, before) => call<RoundRow[]>('admin_rounds', { p_game: game, p_before: before ?? null, p_limit: 30 }),
+  roundBets: id => call<RoundBet[]>('admin_round_bets', { p_round: id }),
+  roundVerify: id => call<RoundCheck>('admin_round_verify', { p_round: id }),
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */
@@ -153,6 +242,11 @@ export const ADMIN_ERRORS: Record<string, string> = {
   unknown_game: 'Unknown game.', invalid_country: 'Use two-letter country codes such as US or GB (at most 250).',
   adjust_amount_invalid: 'Enter an amount above zero with at most 2 decimals, up to 10,000,000.', debit_exceeds_balance: 'The player does not have that many coins: a debit cannot take the balance below zero.',
   key_reused: 'That request was already used for something else. Close this box and start again.', player_not_found: 'That player has no open account.',
+  invalid_name: 'Names are 2 to 20 letters, numbers, spaces, - or _.', name_taken: 'Another player already has that name.',
+  staff_account: 'Staff accounts cannot be closed here. Remove the staff role first.', confirm_mismatch: "Type the player's current name exactly to confirm.",
+  message_not_found: 'That message no longer exists or was already removed.', battle_not_found: 'That battle no longer exists.', flip_not_found: 'That coinflip no longer exists.',
+  already_started: 'That game has already started, so it cannot be cancelled.', flip_not_open: 'That coinflip is no longer waiting, so it cannot be cancelled.',
+  round_not_finished: 'Only a finished round can be checked.', invalid_game: 'Unknown game.',
 };
 export const errorText = (e: unknown): string => {
   const m = e instanceof Error ? e.message : String(e);

@@ -101,7 +101,7 @@ export async function boot(root: HTMLElement, api: AdminApi): Promise<AdminApp> 
   // ---------------------------------------------------------------- the panel
   const ctx = (): PageCtx => ({ api, status: status as Status, perms, toast, reload: () => void renderPage(), lock });
   const lock = async (): Promise<void> => { try { await api.lock(); } catch { /* already locked */ } await refresh(); };
-  const currentPage = (): string => { const h = location.hash.replace(/^#\/?/, ''); return PAGES[h] ? h : 'overview'; };
+  const currentPage = (): string => { const h = location.hash.replace(/^#\/?/, '').split('?')[0] as string; return PAGES[h] ? h : 'overview'; };     // #/players?id=… opens one player
   const renderPanel = (): void => {
     const here = currentPage(); shown = here;
     const visible = Object.entries(PAGES).filter(([, p]) => !p.perm || perms.includes(p.perm));

@@ -167,19 +167,29 @@ export async function liveFlipSeed(id: number): Promise<string | null> {
 export const watchFlips = (cb: Change<LiveFlip>): Promise<() => void> => watch<LiveFlip>('live_coinflips', cb);
 
 // ---- chat ---------------------------------------------------------------------------------------------------------
-export interface ChatRow { id: number; display_name: string; body: string; created_at: string }
+/** is_staff and removed_at exist once migration 0021 has run; before that they are simply missing. */
+export interface ChatRow { id: number; display_name: string; body: string; created_at: string; is_staff?: boolean; removed_at?: string | null }
 export async function recentChat(limit = 30): Promise<ChatRow[]> {
-  const { data } = await (await getClient()).from('chat_messages').select('id, display_name, body, created_at').order('id', { ascending: false }).limit(limit);
-  return ((data as ChatRow[] | null) ?? []).reverse();
+  const c = await getClient();
+  const first = await c.from('chat_messages').select('id, display_name, body, created_at, is_staff, removed_at').order('id', { ascending: false }).limit(limit);
+  let data = first.data as ChatRow[] | null;
+  if (first.error) data = (await c.from('chat_messages').select('id, display_name, body, created_at').order('id', { ascending: false }).limit(limit)).data as ChatRow[] | null;    // before 0021
+  return (data ?? []).reverse();
 }
+/** The room's state: slow mode, locked, and the pinned message (null before migration 0021). */
+export interface ChatStatus { slow_seconds: number; locked: boolean; links_allowed: boolean; pinned: { id: number; display_name: string; body: string; is_staff: boolean } | null }
+export const chatStatus = (): Promise<ChatStatus | null> => call<ChatStatus>('chat_status').catch(() => null);
+export async function reportChat(id: number, reason = ''): Promise<void> { await call('report_chat', { p_message: id, p_reason: reason }); }
 export async function sendChat(body: string): Promise<void> {
   const { error } = await (await getClient()).from('chat_messages').insert({ body });
   if (error) throw new Error(explain(error));                           // e.g. chat_too_fast (0020) becomes a readable sentence
 }
-export const watchChat = async (cb: (m: ChatRow) => void): Promise<() => void> => {
+/** New messages, and changes to existing ones (a moderator removing a message). */
+export const watchChat = async (cb: (m: ChatRow) => void, onChange?: (m: ChatRow) => void): Promise<() => void> => {
   const c = await getClient();
   const ch = c.channel(`live-chat-${Math.random().toString(36).slice(2, 8)}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (p: any) => cb(p.new as ChatRow)).subscribe();
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (p: any) => cb(p.new as ChatRow))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, (p: any) => onChange?.(p.new as ChatRow)).subscribe();
   return () => { void c.removeChannel(ch); };
 };
 

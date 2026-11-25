@@ -430,6 +430,20 @@ table.bets { width: 100%; border-collapse: collapse; font-size: 13px; }
 .msg-text { font-size: 15px; line-height: 1.4; word-break: break-word; }
 .msg-sys { font-size: 12px; color: var(--muted); padding: 8px 10px; border-radius: 10px; background: var(--panel); border: 1px dashed var(--line2); display: block; }
 .msg-sys b { color: var(--accent); }
+/* live chat moderation (0021): staff badge, removed messages, report button, pinned message and room state */
+.staff-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font: 800 10px var(--display); letter-spacing: .08em; vertical-align: 1px; }
+.msg-staff .msg-text { color: var(--text); }
+.msg-body { flex: 1; min-width: 0; }
+.msg-user { display: flex; align-items: center; gap: 4px; }
+.msg-report { margin-left: auto; background: none; border: 0; padding: 2px; color: var(--dim); cursor: pointer; opacity: 0; transition: opacity .15s; }
+.msg:hover .msg-report, .msg-report:focus-visible { opacity: 1; } .msg-report:hover { color: var(--red); }
+.msg-report .icon { width: 14px; height: 14px; }
+@media (hover: none) { .msg-report { opacity: .6; } }
+.msg-removed { color: var(--dim); font-size: 13px; }
+.chat-pin { margin: 0 12px 8px; padding: 8px 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line2); font-size: 13px; display: grid; gap: 4px; }
+.chat-pin[hidden] { display: none; }
+.pin-msg { display: flex; gap: 6px; align-items: flex-start; word-break: break-word; } .pin-msg .icon { width: 14px; height: 14px; flex: none; color: var(--accent); margin-top: 2px; }
+.pin-note { color: var(--muted); font-size: 12px; }
 .chat-form { display: flex; gap: 6px; padding: 12px; border-top: 1px solid var(--line); }
 .chat-form input { padding: 12px 14px; font-size: 15px; }
 .chat-head { padding: 18px 16px; } .chat-title { font-size: 17px; }
@@ -541,3 +555,6 @@ table.bets { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 /* Phones: the toasts sit above the bottom menu bar instead of on top of it */
 @media (max-width: 900px) { .toasts { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); } }
+
+/* a warning from staff (src/notices.ts) */
+.notice-box { padding: 6px 4px; } .notice-box h3 { margin: 0 0 10px; } .notice-text { font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--panel2); border: 1px solid var(--line2); border-radius: 10px; padding: 12px 14px; }

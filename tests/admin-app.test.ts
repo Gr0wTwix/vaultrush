@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, Controls, LedgerRow, Matrix, QueryResult, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
+import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
 const ROLES = [
@@ -34,6 +34,36 @@ const LEDGER: LedgerRow[] = Array.from({ length: 120 }, (_, i) => ({ id: 120 - i
 const BETS: BetRow[] = [{ id: 9, game: 'plinko', amount: 100, payout: 40, multiplier: 0.4, nonce: 3, at: '2026-11-21T09:00:00Z' }, { id: 8, game: 'cases', amount: 50, payout: 160, multiplier: 3.2, nonce: 2, at: '2026-11-21T08:00:00Z' }];
 const CONTROLS: Controls = { maintenance_on: false, maintenance_message: '', notice_on: false, notice_text: '', notice_kind: 'info', signups_open: true, games_off: [], blocked_countries: [],
   games: ['cases', 'battles', 'upgrade', 'crash', 'double', 'plinko', 'mines', 'coinflip'], updated_at: '2026-11-21T09:00:00Z', updated_by: null };
+const DASH: Dashboard = {
+  players: { total: 120, new_today: 4, new_7d: 30, active_15m: 9, active_today: 41 }, bets_15m: { count: 55, staked: 1234 }, chat_15m: 18,
+  rooms: { battles_waiting: 2, coinflips_waiting: 1, stuck: 1 }, rounds: [{ game: 'crash', id: 41, status: 'betting', betting_ends_at: '2026-11-25T10:00:00Z', bets: 3, staked: 60 }],
+  flags: { mute: 1, warn: 2, bet_ban: 1, site_ban: 0 }, reports_open: 3, site: { maintenance_on: false, notice_on: false, games_off: ['plinko'], signups_open: true },
+  chat: { locked: false, slow_seconds: 10 }, signups_7d: Array.from({ length: 7 }, (_, i) => ({ day: `2026-11-${19 + i}`, count: i })),
+  bets_24h: Array.from({ length: 24 }, (_, i) => ({ hour: new Date(Date.UTC(2026, 10, 25, i)).toISOString(), count: i, staked: i * 10 })), now: Date.now(),
+};
+const PLAYERS: PlayerRow[] = [
+  { id: 'p1', name: 'Nova', created_at: '2026-11-18T10:00:00Z', closed: false, staff_role: null, balance: 1250.75, wagered: 400, last_seen: new Date().toISOString(), flags: ['mute'], tags: ['watch'], excluded: false },
+  { id: 'p2', name: 'Orion', created_at: '2026-11-19T10:00:00Z', closed: false, staff_role: null, balance: 3, wagered: 0, last_seen: null, flags: [], tags: [], excluded: true },
+];
+const PROFILE: PlayerProfile = {
+  player: { id: 'p1', name: 'Nova', created_at: '2026-11-18T10:00:00Z', closed: false, closed_at: null, age_confirmed_at: '2026-11-18T10:00:00Z', terms_version: '2026-11-21', staff_role: null,
+            sign_in: { provider: 'steam', last_sign_in_at: '2026-11-25T08:00:00Z', banned_until: null } },
+  wallet: { balance: 1250.75, wagered: 400, won: 380 },
+  flags: [{ id: 3, kind: 'mute', until: new Date(Date.now() + 3600_000).toISOString(), message: '', reason: 'flooding', at: '2026-11-25T09:00:00Z', by: 'Vexx', seen_at: null, lifted_at: null, lift_reason: null, active: true }],
+  notes: [{ id: 1, body: 'Asked about the race', author: 'Vexx', at: '2026-11-24T09:00:00Z' }], tags: ['watch'],
+  chat: [{ id: 9, body: 'hello <b>all</b>', at: '2026-11-25T09:00:00Z', removed_at: null }], bets: [], games: { battles: 2, coinflips: 1, round_bets: 5 },
+  claims: [{ kind: 'welcome', at: '2026-11-18T10:05:00Z' }], controls: null, actions: [],
+};
+const CHAT: ChatMsg[] = [
+  { id: 9, user_id: 'p1', name: 'Nova', body: 'buy coins at my site', at: '2026-11-25T09:00:00Z', is_staff: false, removed_at: null, removed_by: null, reports: 2 },
+  { id: 8, user_id: 'p2', name: 'Orion', body: 'gl', at: '2026-11-25T08:59:00Z', is_staff: false, removed_at: '2026-11-25T09:01:00Z', removed_by: 'Vexx', reports: 0 },
+];
+const CHAT_SETTINGS: ChatSettings = { slow_seconds: 0, locked: false, links_allowed: true, blocked_words: [], pinned_id: null, updated_at: '2026-11-25T09:00:00Z', updated_by: null };
+const FLIPS: FlipRoom[] = [{ id: 77, creator: 'Nova', side: 'bolt', amount: 40, joiner: null, bot: false, status: 'waiting', result: null, winner: null, created_at: new Date(Date.now() - 40 * 60_000).toISOString(), finished_at: null, server_hash: 'h', seed: null, stuck: true, flags: [] }];
+const ROUNDS: RoundRow[] = [
+  { id: 42, status: 'betting', created_at: '2026-11-25T10:00:00Z', betting_ends_at: '2026-11-25T10:00:07Z', finished_at: null, server_hash: 'h2', result: null, seed: null, bets: 1, staked: 5, paid: null, flags: [] },
+  { id: 41, status: 'finished', created_at: '2026-11-25T09:59:00Z', betting_ends_at: '2026-11-25T09:59:07Z', finished_at: '2026-11-25T09:59:20Z', server_hash: 'h1', result: { point: 2.5 }, seed: 'ab'.repeat(32), bets: 3, staked: 60, paid: 45, flags: [] },
+];
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
 interface Fake { api: AdminApi; calls: Record<string, any[][]>; state: { user: { id: string } | null; status: Status; perms: string[]; factors: { id: string; status: string }[]; unlockResult: any; admins: Admin[]; audit: AuditRow[]; queryResult: QueryResult; controls: Controls; overview: WalletOverview; adjustFails: string | null } }
@@ -86,6 +116,32 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
       state.overview = { ...state.overview, wallet: { ...state.overview.wallet, balance: after } };
       return { user_id: 'p1', amount, balance_before: before, balance_after: after, ledger_id: 99, replayed: false };
     }),
+    dashboard: rec('dashboard', async () => DASH),
+    players: rec('players', async (q: string) => PLAYERS.filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()))),
+    player: rec('player', async () => PROFILE),
+    note: rec('note', async () => undefined),
+    tag: rec('tag', async (_u: string, t: string, on: boolean) => (on ? [t] : [])),
+    flag: rec('flag', async () => ({ id: 5, until: null, signed_out: true })),
+    liftFlag: rec('liftFlag', async () => undefined),
+    signOutPlayer: rec('signOutPlayer', async () => ({ signed_out: true })),
+    rename: rec('rename', async () => undefined),
+    resetClaim: rec('resetClaim', async () => undefined),
+    closeAccount: rec('closeAccount', async () => ({ name: 'deleted-1', balance_removed: 10, signed_out: true })),
+    chat: rec('chat', async () => ({ messages: CHAT, settings: { ...CHAT_SETTINGS } })),
+    chatRemove: rec('chatRemove', async () => undefined),
+    chatClear: rec('chatClear', async () => ({ removed: 3 })),
+    chatSettings: rec('chatSettings', async (slow: number, locked: boolean, links: boolean, words: string[]) => ({ ...CHAT_SETTINGS, slow_seconds: slow, locked, links_allowed: links, blocked_words: words })),
+    chatPin: rec('chatPin', async () => undefined),
+    chatPost: rec('chatPost', async () => undefined),
+    chatReports: rec('chatReports', async () => []),
+    chatDismiss: rec('chatDismiss', async () => undefined),
+    battles: rec('battles', async () => []),
+    coinflips: rec('coinflips', async () => FLIPS),
+    roomCancel: rec('roomCancel', async () => ({ refunded: 1, each: 40 })),
+    roomFlag: rec('roomFlag', async () => undefined),
+    rounds: rec('rounds', async () => ROUNDS),
+    roundBets: rec('roundBets', async () => []),
+    roundVerify: rec('roundVerify', async () => ({ id: 41, game: 'crash', hash_ok: true, result_ok: true, recorded: { point: 2.5 }, recomputed: { point: 2.5 } })),
     ...apiOver,
   };
   return { api, calls, state };
@@ -193,7 +249,7 @@ describe('the panel', () => {
   it('shows the owner every page, with the role and a session timer', async () => {
     await start(fake());
     await wait(() => expect(root.querySelector('nav')).not.toBeNull());
-    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Site controls', 'Wallets', 'Staff and roles', 'Permissions', 'Audit log', 'Data explorer']);
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Dashboard', 'Players', 'Site controls', 'Wallets', 'Staff and roles', 'Permissions', 'Audit log', 'Data explorer']);
     expect(q('#roleTag').textContent).toBe('Owner');
     expect(q('#timer').textContent).toMatch(/^\d+:\d\d$/);
     expect(root.textContent).toContain('Everything you do here is written to the audit log');
@@ -202,7 +258,7 @@ describe('the panel', () => {
   it('shows a moderator only what its permissions allow', async () => {
     await start(fake({ status: unlocked({ role: 'moderator', label: 'Moderator', rank: 60 }), perms: ['dashboard.view', 'players.view', 'chat.delete'] }));
     await wait(() => expect(root.querySelector('nav')).not.toBeNull());
-    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Site controls']);       // the dashboard permission lets a moderator look at the switches, not change them
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Dashboard', 'Players', 'Site controls']);       // the dashboard permission lets a moderator look at the switches, not change them
     await goto('explorer', '#page');                                                  // typing the address does not open a hidden page's data
     expect(q('#page h1').textContent).toBe('Data explorer');
   });
@@ -594,5 +650,113 @@ describe('wallets', () => {
     expect(root.querySelector('#wPlayer img')).toBeNull();
     expect(q('#wPlayer h2').textContent).toContain('<img');
     expect(q('#wPlayer h2').textContent).toContain('closed'); expect(q('#wPlayer h2').textContent).toContain('staff: moderator');
+  });
+});
+
+describe('step B pages: dashboard, players, chat, rooms, rounds', () => {
+  const ALL = [...OWNER_PERMS, 'players.notes', 'players.tags', 'accounts.mute', 'accounts.ban', 'accounts.signout', 'accounts.rename', 'accounts.close', 'rewards.edit',
+    'chat.view', 'chat.settings', 'chat.post', 'rooms.view', 'rooms.cancel', 'rooms.void', 'rounds.view', 'rounds.void', 'audit.read'];
+  const toastText = (): string => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | ');
+
+  it('the owner sees every step B page in the menu, in order', async () => {
+    await start(fake({ perms: ALL }));
+    await wait(() => expect(root.querySelector('nav')).not.toBeNull());
+    expect([...root.querySelectorAll('nav a')].map(a => a.textContent)).toEqual(['Overview', 'Dashboard', 'Players', 'Chat', 'Live rooms', 'Rounds', 'Site controls', 'Wallets', 'Staff and roles', 'Permissions', 'Audit log', 'Data explorer']);
+    expect(q('#page').textContent).toContain('Control and visibility');
+  });
+
+  it('the dashboard shows the live numbers, the paused games and the charts', async () => {
+    await start(fake({ perms: ALL })); await goto('dashboard', '.bars');
+    const t = q('#pageBody').textContent ?? '';
+    expect(t).toContain('41 active today'); expect(t).toContain('1 stuck'); expect(t).toContain('plinko'); expect(t).toContain('slow mode 10 s');
+    expect(root.querySelectorAll('.bars')).toHaveLength(2);
+    expect(root.querySelectorAll('.bars')[0]!.querySelectorAll('.bar')).toHaveLength(24);
+  });
+
+  it('players: the list shows status and tags; opening one shows the profile, escaped', async () => {
+    const f = fake({ perms: ALL }); await start(f); await goto('players', '#pRows tr[data-p]');
+    expect(q('tr[data-p="p1"]').textContent).toContain('Muted'); expect(q('tr[data-p="p1"]').textContent).toContain('watch');
+    expect(q('tr[data-p="p2"]').textContent).toContain('self-excluded');
+    q('tr[data-p="p1"]').click();
+    await wait(() => expect(q('#profile')).not.toBeNull());
+    expect(q('#profile').textContent).toContain('signs in with steam');
+    expect(q('#profile').textContent).toContain('hello <b>all</b>');                 // shown as text, not markup
+    expect(f.calls['player']![0]).toEqual(['p1']);
+  });
+
+  it('a deep link #/players?id= opens that player straight away', async () => {
+    const f = fake({ perms: ALL }); await start(f);
+    location.hash = '#/players?id=p1'; window.dispatchEvent(new HashChangeEvent('hashchange'));
+    await wait(() => expect(q('#profile')).not.toBeNull());
+    expect(q('#page h1').textContent).toBe('Players');
+  });
+
+  it('account actions ask for a reason and send exactly what was chosen; a warning needs its message', async () => {
+    const f = fake({ perms: ALL }); await start(f); await goto('players', 'tr[data-p="p1"]');
+    q('tr[data-p="p1"]').click(); await wait(() => expect(q('#aForm')).not.toBeNull());
+    q<HTMLSelectElement>('#aKind').value = 'warn'; submit('#aForm');
+    await wait(() => expect(toastText()).toMatch(/message the player will see/));
+    expect(f.calls['flag']).toBeUndefined();
+    q<HTMLSelectElement>('#aKind').value = 'bet_ban'; q<HTMLSelectElement>('#aDur').value = '3'; submit('#aForm');   // 7 days
+    await answerReason('chargeback suspicion');
+    await wait(() => expect(f.calls['flag']).toHaveLength(1));
+    expect(f.calls['flag']![0]).toEqual(['p1', 'bet_ban', 10080, '', 'chargeback suspicion']);
+    await wait(() => expect(f.calls['player']).toHaveLength(2));                  // the profile is drawn again after the action
+    await wait(() => expect(q('[data-lift="3"]')).not.toBeNull());
+    q('[data-lift="3"]').click(); await answerReason('appeal accepted');
+    await wait(() => expect(f.calls['liftFlag']).toEqual([[3, 'appeal accepted']]));
+  });
+
+  it('tags and notes are saved for the player', async () => {
+    const f = fake({ perms: ALL }); await start(f); await goto('players', 'tr[data-p="p1"]');
+    q('tr[data-p="p1"]').click(); await wait(() => expect(q('#nForm')).not.toBeNull());
+    const vip = q<HTMLInputElement>('input[data-tag="vip"]'); vip.checked = true; vip.dispatchEvent(new Event('change'));
+    await wait(() => expect(f.calls['tag']).toEqual([['p1', 'vip', true]]));
+    type('#nBody', 'Plays every evening'); submit('#nForm');
+    await wait(() => expect(f.calls['note']).toEqual([['p1', 'Plays every evening']]));
+  });
+
+  it('a moderator without ban rights cannot pick a ban, and cannot close accounts', async () => {
+    const f = fake({ perms: ['players.view', 'accounts.mute'], status: unlocked({ role: 'moderator', label: 'Moderator', rank: 60 }) }); await start(f); await goto('players', 'tr[data-p="p1"]');
+    q('tr[data-p="p1"]').click(); await wait(() => expect(q('#aForm')).not.toBeNull());
+    expect(q<HTMLOptionElement>('#aKind option[value="bet_ban"]').disabled).toBe(true);
+    expect(q<HTMLOptionElement>('#aKind option[value="mute"]').disabled).toBe(false);
+    expect(q<HTMLButtonElement>('#aClose').disabled).toBe(true);
+  });
+
+  it('chat: remove and pin a message, save the room rules, post as staff', async () => {
+    const f = fake({ perms: ALL }); await start(f); await goto('chat', 'tr[data-m="9"]');
+    expect(q('tr[data-m="9"]').textContent).toContain('2 reports');
+    expect(q('tr[data-m="8"]').textContent).toContain('removed by Vexx');
+    expect(q('tr[data-m="8"] [data-rm]')).toBeNull();
+    q('tr[data-m="9"] [data-rm]').click(); await answerReason('advertising');
+    await wait(() => expect(f.calls['chatRemove']).toEqual([[9, 'advertising']]));
+    await wait(() => expect(q('tr[data-m="9"] [data-pin]')).not.toBeNull());
+    q('tr[data-m="9"] [data-pin]').click(); await answerReason('rules');
+    await wait(() => expect(f.calls['chatPin']).toEqual([[9, 'rules']]));
+    q<HTMLInputElement>('#sLock').checked = true; q<HTMLInputElement>('#sLinks').checked = true; q<HTMLSelectElement>('#sSlow').value = '30'; type('#sWords', 'scam, spam ,');
+    q('#sSave').click(); await answerReason('raid');
+    await wait(() => expect(f.calls['chatSettings']).toEqual([[30, true, false, ['scam', 'spam'], 'raid']]));
+    type('#cBody', 'Be nice'); submit('#cPost');
+    await wait(() => expect(f.calls['chatPost']).toEqual([['Be nice']]));
+  });
+
+  it('rooms: a stuck coinflip is marked and can be cancelled with a refund', async () => {
+    const f = fake({ perms: ALL }); await start(f); await goto('rooms', '#rList');
+    q('[data-k="coinflips"]').click();
+    await wait(() => expect(q('[data-cancel="77"]')).not.toBeNull());
+    expect(q('#rList').textContent).toContain('stuck');
+    q('[data-cancel="77"]').click(); await answerReason('stuck lobby');
+    await wait(() => expect(f.calls['roomCancel']).toEqual([['coinflip', '77', 'stuck lobby']]));
+  });
+
+  it('rounds: a finished round can be checked; a round in play cannot; pausing goes through the game switch', async () => {
+    const f = fake({ perms: ALL }); await start(f); await goto('rounds', 'tr[data-r="41"]');
+    expect(q('tr[data-r="42"] [data-check]')).toBeNull();
+    expect(q('tr[data-r="41"]').textContent).toContain('2.5×');
+    q('tr[data-r="41"] [data-check]').click();
+    await wait(() => expect(toastText()).toMatch(/checks out/));
+    q('#gPause').click(); await answerReason('investigating');
+    await wait(() => expect(f.calls['setGame']).toEqual([['crash', true, 'investigating']]));
   });
 });

@@ -112,6 +112,7 @@ export const ICONS = {
   plinko: '<circle cx="12" cy="3" r="1.4" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="13" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="13" r="1.4" fill="currentColor" stroke="none"/><circle cx="20" cy="13" r="1.4" fill="currentColor" stroke="none"/><circle cx="8" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M3 21v1h18v-1"/>',
   coin: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5.5"/><path d="M12 9v6"/>',
   coinflip: '<ellipse cx="12" cy="13" rx="6" ry="8" transform="rotate(35 12 13)"/><path d="m12 10-2 5 4-3M3 7q4-5 10-5m-3-1 3 1-2 3"/>',
+  report: '<path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/>',
   race: '<path d="M5 21V3l6-1 5 2 5-1v11l-5 1-5-2-6 1"/><path fill="currentColor" fill-rule="evenodd" d="m6 4 4-1v4l-4 1Zm4 3 5 1v4l-5-1Zm5-3 5 0v4l-5 0Z"/>',
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4a3 3 0 0 0 4 4M16 6h4a3 3 0 0 1-4 4M12 13v4M8 20h8M9 17h6"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.5-6.5 8-6.5s7 2 8 6.5"/>',

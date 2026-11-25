@@ -6,7 +6,7 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 
 | Part | State | How we know |
 |---|---|---|
-| **The site** | Live at the production address on Vercel, running the latest commit of the `compliance` branch (`e6dc78b`, deployed 2026-11-25: the authenticator step after every sign-in; before it `2bbd97d`, the security pass, and `2169155`, the audit fixes and the ideas from reference sites, see [audit-2026-11-22.md](audit-2026-11-22.md)) | Checked at each deploy: the served JavaScript file is the one built locally |
+| **The site** | Live at the production address on Vercel, running the latest commit of the `compliance` branch (`cc3f1fb`, deployed 2026-11-25: the brand kit and the loading screen; before it `e6dc78b`, the authenticator step after every sign-in, and `2bbd97d`, the security pass, and `2169155`, the audit fixes and the ideas from reference sites, see [audit-2026-11-22.md](audit-2026-11-22.md)) | Checked at each deploy: the served JavaScript file is the one built locally |
 | **Supabase variables** | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_STEAM_LOGIN` are **set** in the owner's local `.env` and in Vercel Production. So the live site runs in **cloud mode** (Supabase accounts), not the browser-only fallback | Checked: names listed from `.env` and from `vercel env ls production`; the live bundle contains the project address and the publishable key |
 | **Database migrations** | `0001` to `0020` have all been run | Owner confirmed `0007` to `0019` (the `0015` re-run, `0017`, `0018` and `0019` on 2026-11-21); `0001` to `0006` are in place because everything built on them works (not each confirmed one by one) |
 | **Server wallet** | On: coins, items and every game and reward are handled by the database | Owner has used it; the migration tests pass. Not tested by me signed in on the live site |
@@ -35,7 +35,8 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 
 | Part | State |
 |---|---|
-| **Admin site** | Built (sign-in chain, roles, audit log, explorer, site controls, the Wallets page) but it runs **only on localhost** and is not deployed. Its deployment config (`vercel.admin.json`) is written and tested, but no Vercel project exists for it yet. The Owner role exists for the owner's account (confirmed 2026-11-25); that `http://localhost:5174` is allowed for sign-in is not confirmed; the steps to go live, and who does each, are in [admin-site.md](admin-site.md) |
+| **Admin site** | **Deployed 2026-11-25** to its own Vercel project (the address is in the owner's private notes) with the strict headers of `vercel.admin.json`; the Steam allow-list includes it (checked). Still to do by the owner: add the address to Supabase's Redirect URLs, then sign in (Steam, authenticator, admin password). Not yet tried with a real sign-in. The rest of the admin plan (steps B, C, E, F, G) is being built step by step; see [admin-site.md](admin-site.md) |
+| **Admin step B (`0021`)** | Built and tested (dashboard, players, account actions, chat moderation, live rooms, rounds) but **not run** in Supabase and **not deployed**. The game site's chat changes wait for `0021` too (they fall back quietly without it) |
 | **Pull request into `main`** | Not opened; `main` has PR #2 but none of the later work |
 | **Always-on n8n** | n8n runs on the owner's PC, so alerts arrive only while the PC and Docker are on (the database does not retry). The server version (`n8n/docker-compose.server.yml`) is written but not tested or set up |
 | **KYC, AML, Triple Green** | KYC and AML are sandbox demonstrations; the Triple Green pot in Double is simulated |
