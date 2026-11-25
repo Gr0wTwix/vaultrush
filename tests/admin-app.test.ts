@@ -1,7 +1,7 @@
 // The admin site against a fake API: every sign-in step, the panel for different roles, and the pages (staff, permissions, audit, explorer).
 // The rules themselves are tested in admin-db.test.ts; here we check that the screens show the right step and call the right functions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AdminGiveaway, AdminRace, AdminRain, AnnouncementRow, GameSettings, KycRequest, Promo, RewardSettings, RgOverview } from '../src/admin/api.js';
+import type { AdminGiveaway, AdminRace, AdminRain, AnnouncementRow, Economy, FairnessRun, GameSettings, KycRequest, Promo, RewardSettings, RgOverview } from '../src/admin/api.js';
 import type { AdjustResult, Admin, AdminApi, AuditRow, BetRow, CatCase, CatCaseFull, CatItem, CatSave, ChatMsg, ChatSettings, Controls, Dashboard, FlipRoom, LedgerRow, Matrix, PlayerProfile, PlayerRow, QueryResult, RoundRow, Status, WalletFound, WalletOverview, WalletTotals } from '../src/admin/api.js';
 import { boot, type AdminApp } from '../src/admin/app.js';
 
@@ -96,6 +96,12 @@ const KYC: KycRequest[] = [{ id: 7, user_id: 'p1', name: 'Nova', tier: 1, note: 
   current_tier: 0, joined: '2026-11-18T10:00:00Z', wagered: 400, flags: ['mute'] }];
 const RG: RgOverview = { excluded: [{ id: 'p2', name: 'Orion', until: '2026-12-25T09:00:00Z' }], cool_off: [], pending: [{ id: 'p1', name: 'Nova', key: 'loss_daily', value: 500, effective_at: '2026-11-26T09:00:00Z' }],
   losses_7d: [{ id: 'p1', name: 'Nova', staked: 800, net_loss: 300, bets: 40 }], busy_today: [], now: Date.now() };
+const OK_RUN: FairnessRun = { id: 1, at: '2026-11-25T09:00:00Z', by: 'Mirage', days: 3, summary: { rounds: { checked: 40, bad: 0 }, coinflips: { checked: 5, bad: 0 }, battles: { checked: 2, bad: 0 }, seeds: { checked: 3, bad: 0 }, all_ok: true }, mismatches: [] };
+const BAD_RUN: FairnessRun = { ...OK_RUN, id: 2, summary: { ...OK_RUN.summary, rounds: { checked: 40, bad: 1 }, all_ok: false }, mismatches: [{ kind: 'crash', id: '77', hash_ok: true, result_ok: false }] };
+const ECON: Economy = { days: 30, now: { coins: 12000, wallets_with_coins: 9, median_balance: 300, items: 40, items_value: 900, top: [{ id: 'p1', name: 'Nova <1>', balance: 5000 }] },
+  flows: [{ kind: 'faucet', count: 10, sum: 250 }, { kind: 'bet', count: 50, sum: -1000 }, { kind: 'win', count: 20, sum: 930 }],
+  games: [{ game: 'plinko', bets: 50, staked: 1000, paid: 930, take: 70, return: 0.93, expected: 0.97 }],
+  daily: Array.from({ length: 30 }, (_, i) => ({ day: `2026-11-${String(i + 1).padStart(2, '0')}`, free: i, adjust: 0, games: -i })), big_wins: [] };
 const CAT_ITEMS: CatItem[] = [{ id: 'c', name: 'AWP | Asiimov', rarity: 'covert', value: 50 }];
 const unlocked = (o: Partial<Status> = {}): Status => ({ is_admin: true, role: 'owner', label: 'Owner', rank: 100, mfa: true, password_set: true, unlocked: true, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), ...o });
 
@@ -208,6 +214,9 @@ function fake(over: Partial<Fake['state']> = {}, apiOver: Partial<AdminApi> = {}
     kycSetTier: rec('kycSetTier', async () => undefined),
     rgOverview: rec('rgOverview', async () => RG),
     rgApply: rec('rgApply', async () => ({ until: '2026-11-27T10:00:00Z' })),
+    fairnessRun: rec('fairnessRun', async () => BAD_RUN),
+    fairnessRuns: rec('fairnessRuns', async () => [OK_RUN]),
+    economy: rec('economy', async () => ECON),
     ...apiOver,
   };
   return { api, calls, state };
@@ -1067,5 +1076,34 @@ describe('step F part 1: compliance', () => {
     await start(fake({ perms: ['compliance.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) })); await goto('compliance', 'tr[data-k="7"]');
     expect(q<HTMLButtonElement>('tr[data-k="7"] [data-ok]').disabled).toBe(true);
     expect(q('[data-t="rg"]')).toBeNull();
+  });
+});
+
+describe('step F part 2: fairness and economy', () => {
+  const F2 = [...OWNER_PERMS, 'fairness.view', 'fairness.run', 'economy.view'];
+
+  it('fairness: shows the last run, and a new run that finds a problem lists it', async () => {
+    const f = fake({ perms: F2 }); await start(f); await goto('fairness', '#fRun');
+    expect(q('#fResult').textContent).toContain('40 of 40');
+    expect(q('#fRuns').textContent).toContain('all match');
+    q<HTMLSelectElement>('#fDays').value = '7'; q('#fRun').click();
+    await wait(() => expect(f.calls['fairnessRun']).toEqual([[7]]));
+    await wait(() => expect(q('#fResult').textContent).toContain('do not match'));
+    expect(q('#fResult').textContent).toContain('Crash round');
+  });
+
+  it('fairness: staff who may only look cannot run it', async () => {
+    await start(fake({ perms: ['fairness.view'], status: unlocked({ role: 'readonly', label: 'Read-only', rank: 10 }) })); await goto('fairness', '#fRun');
+    expect(q<HTMLButtonElement>('#fRun').disabled).toBe(true);
+  });
+
+  it('economy: totals, each game against its maths, the day chart, escaped names; the period can change', async () => {
+    const f = fake({ perms: F2 }); await start(f); await goto('economy', '.econ-days');
+    expect(q('#eBody').textContent).toContain('12,000.00');
+    expect(q('#eBody').textContent).toContain('93.0%'); expect(q('#eBody').textContent).toContain('97.0%');
+    expect(root.querySelectorAll('.econ-day')).toHaveLength(30);
+    expect(q('#eBody').textContent).toContain('Nova <1>');
+    q<HTMLSelectElement>('#eDays').value = '7'; q('#eDays').dispatchEvent(new Event('change'));
+    await wait(() => expect(f.calls['economy']).toEqual([[30], [7]]));
   });
 });

@@ -13,7 +13,7 @@ A **separate website** for running Vaultrush. It lives in this repository and us
 | Data explorer | A read-only query tool for the Owner. Every attempt is logged first, including refused and failing ones. |
 | Site controls (step B1) | Maintenance mode, site notice, per-game switches, sign-ups open or closed, country restrictions. Details below. |
 | Wallets (step D) | Every coin in the database: economy totals, player search, one player's wallet, ledger and bets, and the owner's audited coin adjustment. Details below. |
-| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Catalogue, Rewards, Announcements, Events, Game settings, Compliance, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
+| Pages | Overview, Dashboard, Players, Chat, Live rooms, Rounds, Catalogue, Rewards, Announcements, Events, Game settings, Compliance, Fairness, Economy, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer. |
 
 ## Site controls (step B1)
 
@@ -152,7 +152,7 @@ The **Game settings** page (`config.view` to look, `config.edit` to change). The
 | Bot names | the 20 built-in names | 3 to 100 names | The database accepts only these names for bots, and the page picks bots from them. A **new** name may not be a real player's name, so a bot never passes for a player |
 | Simulated activity | on | on / off | Off: the "live drops" ticker and the bet feed show only what real players do |
 
-**Not a setting, on purpose: the house edge.** The page lists it for information (Crash 3%, Double about 6.7%, Upgrade 5%, Plinko and Mines 3%, case returns per case on the Catalogue page; coinflip and battles between players have none). It is part of the game maths that the fairness pages let players check, so changing it is a code change with its own review.
+**Not a setting, on purpose: the house edge.** The page lists it for information (Crash 3%, Double about 6.7%, Upgrade 5%, Plinko and Mines 3%, case returns per case on the Catalogue page; Coinflip 3% (the winner gets 1.94× the stake); battles return what the cases return, since the pot is the value of the items pulled. Corrected 2026-11-25: the first version of this page said coinflip and battles had no edge). It is part of the game maths that the fairness pages let players check, so changing it is a code change with its own review.
 
 How it is built: the stake check lives in `wallet_gate` (every stake passes it); `site_guard` now also remembers which game the request is for. The lobby caps and the bot checks are small edits to the stored live-game functions, each made only if its anchor is found exactly once. Tested by `tests/game-settings-db.test.ts` (8 database tests), `tests/game-settings.test.ts` (the page applying the settings) and the step E part of `tests/admin-app.test.ts`.
 
@@ -168,6 +168,17 @@ The **Compliance** page (`compliance.view`) has two tabs.
 **Why verification needed this.** The database's verification level sets the largest stake (10,000 / 25,000 / 50,000) and could only be changed by a trusted service, so in practice it never changed; the levels players reached in Account, Verification were a browser-only demonstration. Now a player with a cloud account asks for the next level in Account, Verification (one request at a time, which they can withdraw), and staff decide. This demo collects no documents: it is a manual staff decision, and the player's page says so.
 
 Tested by `tests/compliance-db.test.ts` (8 database tests, including that an approved level really lets a bigger stake through), `tests/verification-server.test.ts` (the player's card) and the step F part of `tests/admin-app.test.ts`.
+
+## Fairness and Economy (step F, part 2: `0027_fairness_economy.sql`, built 2026-11-25)
+
+Two read-only pages: nothing on them changes a balance, a game or a setting.
+
+| Page | Permission | What it does |
+|---|---|---|
+| **Fairness** | `fairness.view` to see, `fairness.run` to run | Re-checks a window of 1 to 30 days. Every finished Crash and Double round and every finished coinflip: the revealed seed must match the SHA-256 fingerprint published before the game **and** give exactly the recorded result (recomputed with the same formulas as the games). Every started battle and every revealed personal seed pair: the seed must match its fingerprint (a battle's pulls are re-checked one by one on the game's Fairness page). Each run is stored with who ran it; anything that does not match is listed. Shared rounds are kept for 3 days, so older ones cannot be checked |
+| **Economy** | `economy.view` | For 7, 30 or 90 days: coins in wallets now (with the median and the 10 biggest balances), items held and their value, free coins given (faucet, rewards, events, bonuses) and staff adjustments, the games' net, a day-by-day chart (coins added against coins the games took), every kind of coin movement, the biggest wins, and **each game against its maths**: staked, paid back, what the house took, the share returned, and the share the game's rules give on average (Crash 97%, Double 93.3%, Upgrade 95%, Plinko, Mines and Coinflip 97%; Cases and Battles from the cases actually played) |
+
+Tested by `tests/fairness-economy-db.test.ts` (on the real catalogue: honest data checks out; a changed result, a flipped coinflip and a changed seed fingerprint are each caught; the economy numbers and expected returns) and the step F part of `tests/admin-app.test.ts`.
 
 ## How the sign-in works
 
@@ -188,7 +199,7 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 
 **Status (2026-11-21):** the SQL in step 1 is run. That the Owner role has been created (step 2) and that `http://localhost:5174` is allowed for sign-in (step 3) is **not confirmed**; the admin site has not been deployed and runs only on the owner's PC. See [setup-status.md](setup-status.md).
 
-1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; run by the owner on 2026-11-25). For step C (Catalogue): `0022_catalogue_editor.sql` (after `0021`; run by the owner on 2026-11-25). For step E part 1 (Rewards, Announcements): `0023_rewards_admin.sql` (after `0022`; run by the owner on 2026-11-25). For step E part 2 (Events): `0024_events.sql` (after `0023`; run by the owner on 2026-11-25). For step E part 3 (Game settings): `0025_game_settings.sql` (after `0024`; run by the owner on 2026-11-25, on the second try). For step F part 1 (Compliance): `0026_compliance.sql` (after `0025`; run by the owner on 2026-11-25).
+1. **Run the SQL** in the Supabase SQL editor, in order: `0004_claims_bots_caps.sql`, `0005_rounds.sql`, `0006_admin.sql`, then `0007_site_controls.sql` (all run). For the Wallets page also the server wallet (`0008` to `0013`, run) and, newer, `0018_server_limits.sql` then `0019_admin_wallet.sql` (run by the owner on 2026-11-21). For step B (Dashboard, Players, Chat, Live rooms, Rounds): `0021_admin_control.sql` (after `0020`; run by the owner on 2026-11-25). For step C (Catalogue): `0022_catalogue_editor.sql` (after `0021`; run by the owner on 2026-11-25). For step E part 1 (Rewards, Announcements): `0023_rewards_admin.sql` (after `0022`; run by the owner on 2026-11-25). For step E part 2 (Events): `0024_events.sql` (after `0023`; run by the owner on 2026-11-25). For step E part 3 (Game settings): `0025_game_settings.sql` (after `0024`; run by the owner on 2026-11-25, on the second try). For step F part 1 (Compliance): `0026_compliance.sql` (after `0025`; run by the owner on 2026-11-25). For step F part 2 (Fairness, Economy): `0027_fairness_economy.sql` (after `0026`; run by the owner on 2026-11-25).
 2. **Make yourself the Owner.** Replace `YOUR_DISPLAY_NAME` with your player name and run only this statement:
    ```sql
    insert into public.admin_roles (user_id, role, granted_by)
@@ -230,6 +241,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `supabase/migrations/0006_admin.sql` | Tables, permissions, sign-in chain, audit log, role and permission functions, e-mail reveal, explorer |
 | `supabase/migrations/0007_site_controls.sql` | The settings row, the guards, the status function the game site reads, the five admin switch functions |
 | `supabase/migrations/0019_admin_wallet.sql` | The Wallets page's functions: totals, search, overview, ledger, bets, the audited adjustment |
+| `supabase/migrations/0027_fairness_economy.sql` | Step F part 2: the fairness check and its stored runs, the economy figures (read-only) |
 | `supabase/migrations/0026_compliance.sql` | Step F part 1: verification requests and staff decisions, the responsible-play overview, tools that only make things safer |
 | `supabase/migrations/0025_game_settings.sql` | Step E part 3: stake limits per game (in `wallet_gate`), betting windows, lobby expiry and caps, house bots and their names, simulated activity |
 | `supabase/migrations/0024_events.sql` | Step E part 2: races and their payouts, coin rain and its joins, giveaways with a committed seed, entries and winners |
@@ -241,6 +253,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 | `admin/index.html`, `admin/main.ts`, `vite.admin.config.ts` | The separate site's page and build |
 | `src/admin/app.ts` | The sign-in state machine and the panel shell |
 | `src/admin/pages.ts` | Overview, Site controls, Wallets, Staff and roles, Permissions, Audit log, Data explorer, and the menu order |
+| `src/admin/pages-insight.ts` | Step F part 2: the Fairness and Economy pages |
 | `src/admin/pages-compliance.ts` | Step F part 1: the Compliance page |
 | `src/verification-server.ts` (in Account, Verification) | Game-site side of step F part 1: the verified level and the request for the next one |
 | `src/admin/pages-config.ts` | Step E part 3: the Game settings page |
@@ -265,7 +278,7 @@ The address is public but shows only a Steam sign-in; everything behind it is ch
 
 ## Not built yet
 
-Everything in the plan except steps A to E and the first part of F: the fairness audit and economy monitor (F part 2), risk signals and analytics (F part 3), the legal editor, system health and developer tools (G). The AML monitoring stays a browser-only demonstration. **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
+Everything in the plan except steps A to E and the first two parts of F: risk signals and analytics (F part 3), the legal editor, system health and developer tools (G). The AML monitoring stays a browser-only demonstration. **Collecting IP addresses and a device marker** (your decision 9) belongs to step F; the Privacy and Cookie pages will be updated in the same change, before any collection starts. Notifications stay in-app only. Support inbox is skipped.
 
 ## Alerts to the owner
 

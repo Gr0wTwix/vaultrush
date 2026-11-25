@@ -117,6 +117,19 @@ export interface RgOverview {
 }
 export type RgKind = 'cool_off' | 'exclude' | 'max_bet' | 'loss_daily' | 'loss_weekly' | 'loss_monthly' | 'wager_daily' | 'time_daily_min';
 
+/** Step F part 2 (migration 0027): fairness audit and economy monitor. */
+export interface CheckCount { checked: number; bad: number }
+export interface FairnessRun { id: number; at?: string; by?: string | null; days: number; summary: { rounds: CheckCount; coinflips: CheckCount; battles: CheckCount; seeds: CheckCount; all_ok: boolean };
+  mismatches: { kind: string; id: string; hash_ok: boolean; result_ok: boolean | null }[] }
+export interface Economy {
+  days: number;
+  now: { coins: number; wallets_with_coins: number; median_balance: number; items: number; items_value: number; top: { id: string; name: string; balance: number }[] };
+  flows: { kind: string; count: number; sum: number }[];
+  games: { game: string; bets: number; staked: number; paid: number; take: number; return: number | null; expected: number | null }[];
+  daily: { day: string; free: number; adjust: number; games: number }[];
+  big_wins: { name: string; game: string; amount: number; payout: number; at: string }[];
+}
+
 export interface AdminApi {
   configured(): boolean;
   steamAvailable(): boolean;
@@ -216,6 +229,9 @@ export interface AdminApi {
   kycSetTier(user: string, tier: number, reason: string): Promise<void>;
   rgOverview(): Promise<RgOverview>;
   rgApply(user: string, kind: RgKind, value: number, reason: string): Promise<Record<string, unknown>>;
+  fairnessRun(days: number): Promise<FairnessRun>;
+  fairnessRuns(): Promise<FairnessRun[]>;
+  economy(days: number): Promise<Economy>;
 }
 
 export const realApi: AdminApi = {
@@ -325,6 +341,9 @@ export const realApi: AdminApi = {
   kycSetTier: async (user, tier, reason) => { await call('admin_kyc_set_tier', { p_user: user, p_tier: tier, p_reason: reason }); },
   rgOverview: () => call<RgOverview>('admin_rg_overview'),
   rgApply: (user, kind, value, reason) => call('admin_rg_apply', { p_user: user, p_kind: kind, p_value: value, p_reason: reason }),
+  fairnessRun: days => call<FairnessRun>('admin_fairness_run', { p_days: days }),
+  fairnessRuns: () => call<FairnessRun[]>('admin_fairness_runs'),
+  economy: days => call<Economy>('admin_economy', { p_days: days }),
 };
 
 /** What to tell a person when an admin call fails (the database raises short codes). */

@@ -75,3 +75,7 @@ ul.notes { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px;
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .swatch { display: inline-block; width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--line); vertical-align: middle; }
+.econ-days { display: flex; gap: 3px; height: 140px; }
+.econ-day { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.econ-day .half { flex: 1; display: flex; } .econ-day .top { align-items: flex-end; border-bottom: 1px solid var(--line); } .econ-day .bot { align-items: flex-start; }
+.econ-day i { display: block; width: 100%; } .econ-day i.up { background: var(--green); border-radius: 3px 3px 0 0; } .econ-day i.down { background: var(--red); border-radius: 0 0 3px 3px; }

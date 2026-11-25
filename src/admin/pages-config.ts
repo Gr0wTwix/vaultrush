@@ -13,7 +13,8 @@ const EDGE: [string, string][] = [
   ['Cases', 'each case returns its own percentage of the price (90% for the generated cases; set per case on the Catalogue page, 70% to 98%)'],
   ['Crash', 'the crash point is 0.97 / (1 − random), so the edge is 3% (about 3% of rounds end at 1.00×)'], ['Double', '15 tiles; purple and gray pay 2×, green 14×, the bait tiles 7×: about 6.7% edge on every colour'],
   ['Upgrade', 'the chance is the stake divided by the target value, times 0.95 (at most 80%): 5% edge'], ['Plinko, Mines', 'every payout is the fair one times 0.97: 3% edge'],
-  ['Coinflip, Battles', 'between players: no edge; a house bot plays for the house'],
+  ['Coinflip', 'the winner gets 1.94× the stake: 3% edge (a house bot that wins keeps the pot)'],
+  ['Battles', 'the pot is the value of every item pulled, so the cases\' return applies (90% for the generated cases); a house bot that wins keeps its share'],
 ];
 
 const config: Page = {
