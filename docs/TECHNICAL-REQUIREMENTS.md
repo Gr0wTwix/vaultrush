@@ -56,6 +56,7 @@ What Vaultrush is built on, what it must do, and the limits it works within. Las
 |---|---|---|
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | `.env` and Vercel | The database address and its publishable key (safe in the browser) |
 | `VITE_STEAM_LOGIN` | `.env` and Vercel | `on` shows the Steam button |
+| `VERCEL_PROJECT_PRODUCTION_URL` | Set by Vercel itself during the build | The production address, written into the link-preview tags (`og:image`, `og:url`); never stored in the repository |
 | `SITE_URLS` | Supabase secret | Addresses the Steam sign-in may return to |
 | n8n settings | `n8n/.env` (never committed) | See [n8n.md](n8n.md) |
 

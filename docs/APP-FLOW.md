@@ -33,8 +33,9 @@ The **account window** (from the account menu) has its own tabs: Account, Securi
 
 ```mermaid
 flowchart LR
-  A[Visitor opens the site] --> B[Browses freely, signed out]
-  A --> T[First-visit tips, once]
+  A[Visitor opens the site] --> L[Loading screen, about 1 second]
+  L --> B[Browses freely, signed out]
+  L --> T[First-visit tips, once]
   B -->|Presses a bet or claim| C[Log in / Register popup]
   C -->|Google, Steam or e-mail| D[Signed in]
   D -->|Account has an authenticator| G[Authenticator code]

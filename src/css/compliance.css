@@ -78,7 +78,7 @@ body.no-fx .confetti, body.no-fx .fx-layer { display: none !important; }
 .modal.auth-modal.au-finish { grid-template-columns: 1fr; width: min(480px, 100%); }
 .auth-modal .modal-x { z-index: 3; }
 .au-side { padding: 30px 28px; display: flex; flex-direction: column; gap: 14px; background: radial-gradient(420px 320px at 0 0, rgba(198,255,61,.2), transparent 65%), linear-gradient(180deg, #10200d, #0a1007); border-right: 1px solid rgba(198,255,61,.14); }
-.au-brand { display: flex; align-items: center; gap: 10px; font: 800 22px var(--display); letter-spacing: .04em; } .au-brand i { color: var(--accent); font-style: normal; }
+.au-brand { display: flex; align-items: center; gap: 10px; font: 800 22px var(--display); letter-spacing: .04em; } .au-brand img { display: block; width: 190px; height: auto; } .au-brand i { color: var(--accent); font-style: normal; }
 .au-side h2 { font: 800 28px var(--display); line-height: 1.1; margin-top: 12px; }
 .au-side p { margin: 0; color: #aab69a; line-height: 1.55; font-size: 14px; }
 .au-side ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; }

@@ -51,7 +51,7 @@ function renderBlock(): void {
   const text = why === 'country'
     ? `Vaultrush is not available where you are${cur.country ? ` (${esc(cur.country)})` : ''}. We are sorry about that.`
     : esc(cur.maintenance_message || 'We are making improvements. Please check back in a little while.');
-  document.body.append(h(`<div class="site-block" id="siteBlock" role="alertdialog" aria-modal="true" aria-labelledby="siteBlockT"><div class="site-block-card"><div class="logo-text">VAULT<b>RUSH</b></div><h1 id="siteBlockT">${title}</h1><p>${text}</p>${why === 'maintenance' ? '<p class="muted small">Your coins and items are safe. This page checks again by itself.</p>' : ''}</div></div>`));
+  document.body.append(h(`<div class="site-block" id="siteBlock" role="alertdialog" aria-modal="true" aria-labelledby="siteBlockT"><div class="site-block-card"><img class="site-block-logo" src="brand/logo-dark.svg" alt="Vaultrush" width="200" height="38"><h1 id="siteBlockT">${title}</h1><p>${text}</p>${why === 'maintenance' ? '<p class="muted small">Your coins and items are safe. This page checks again by itself.</p>' : ''}</div></div>`));
 }
 /** Draw the banner and the full-screen message for the current status. */
 export function applySiteUi(): void {

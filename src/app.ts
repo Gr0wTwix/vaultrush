@@ -14,6 +14,7 @@ import { sfx } from './sfx.js';
 import { openAccount, applyUi } from './account.js';
 import { initRg } from './rgui.js';
 import { openAuth, initAuth, isSignedIn, localSignedIn, logout } from './auth.js';
+import { hideSplash } from './splash.js';
 import * as legal from './views/legal.js';
 import { renderFooter } from './footer.js';
 import * as responsible from './views/responsible.js';
@@ -46,18 +47,18 @@ const NAV = [
   ['#/', 'home', 'Home'], ['#/cases', 'cases', 'Cases'], ['#/battles', 'battles', 'Battles'], ['#/upgrade', 'upgrade', 'Upgrade'],
   [null, 'Originals'],
   ['#/crash', 'crash', 'Crash'], ['#/double', 'double', 'Double'], ['#/plinko', 'plinko', 'Plinko'],
-  ['#/mines', 'mines', 'Mines'], ['#/coinflip', 'coin', 'Coinflip'],
+  ['#/mines', 'mines', 'Mines'], ['#/coinflip', 'coinflip', 'Coinflip'],
   [null, 'Rewards'],
-  ['#/rewards', 'gift', 'Rewards'], ['#/leaderboard', 'trophy', 'Race'], ['#/fair', 'fair', 'Fairness'],
+  ['#/rewards', 'gift', 'Rewards'], ['#/leaderboard', 'race', 'Race'], ['#/fair', 'fair', 'Fairness'],
 ];
 
 type Route = [RegExp, (el: HTMLElement, ...args: string[]) => (() => void) | void, string];
 const ROUTES: Route[] = [
   [/^#\/double$/, double.render, 'double'],
   [/^#\/plinko$/, plinko.render, 'plinko'],
-  [/^#\/coinflip$/, coinflip.render, 'coin'],
+  [/^#\/coinflip$/, coinflip.render, 'coinflip'],
   [/^#\/rewards$/, rewards.render, 'gift'],
-  [/^#\/leaderboard$/, leaderboard.render, 'trophy'],
+  [/^#\/leaderboard$/, leaderboard.render, 'race'],
   [/^#\/profile$/, profile.render, 'profile'],
   [/^#?\/?$/, home.render, 'home'],
   [/^#\/cases$/, cases.renderList, 'cases'],
@@ -77,7 +78,7 @@ const ROUTES: Route[] = [
 
 function renderSidebar() {
   $('#sidebar').innerHTML = `
-    <a class="logo" href="#/" aria-label="Vaultrush home"><span class="logo-mark">${icon('bolt')}</span><span class="logo-text">VAULT<b>RUSH</b></span></a>
+    <a class="logo" href="#/" aria-label="Vaultrush home"><img class="logo-img" src="brand/logo-dark.svg" alt="" width="170" height="32"></a>
     <div class="nav">${NAV.map(([href, ic, label]) => (href === null ? `<div class="nav-group">${ic}</div>` : `<a class="nav-link" href="${href}" data-nav="${ic}"${MAIN_NAV.includes(ic) ? ' data-main' : ''}>${icon(ic)}<span>${label}</span></a>`)).join('')}
       <button type="button" class="nav-link nav-more" id="navMore" aria-expanded="false" aria-controls="navSheet">${icon('menu')}<span>More</span></button></div>
     <div class="nav-sheet" id="navSheet" hidden>${NAV.map(([href, ic, label]) => (href === null ? `<div class="nav-group">${ic}</div>` : `<a class="nav-link" href="${href}" data-nav="${ic}">${icon(ic)}<span>${label}</span></a>`)).join('')}</div>
@@ -129,7 +130,7 @@ function initChatDock() {
 
 function renderTopbar() {
   $('#topbar').innerHTML = `
-    <a class="logo logo-mobile" href="#/" aria-label="Vaultrush home">${icon('bolt')}</a><span class="pill-demo pill-mobile">PLAY MONEY</span>
+    <a class="logo logo-mobile" href="#/" aria-label="Vaultrush home"><img src="brand/mark.svg" alt="" width="30" height="30"></a><span class="pill-demo pill-mobile">PLAY MONEY</span>
     <div class="top-spacer"></div>
     <button class="btn btn-ghost free-btn" id="freeBtn">${icon('gift')}<span id="freeLabel">Free coins</span></button>
     <a class="balance" href="#/inventory" title="Balance and inventory">${coin()}<span id="bal">${fmt(state.balance)}</span><span class="inv-count" id="invCount">${icon('bag')}<b>${state.inv.length}</b></span></a>
@@ -258,6 +259,7 @@ async function boot() {
   initChat($('#chat'));
   window.addEventListener('hashchange', route);
   route();
+  void hideSplash();                                                      // the loading screen from index.html
   wireTipsLink();
   setTimeout(maybeShowTips, 1500);                                        // first visit: a short tour, unless another window is open
   const race = settlePastRace();
@@ -266,5 +268,6 @@ async function boot() {
 
 boot().catch(err => {
   console.error(err);
+  void hideSplash();
   document.getElementById('view').innerHTML = `<div class="panel empty"><h2>Couldn't start</h2><p>${esc(err.message)}</p><p class="muted">Open the site through <code>node server.js</code> (http://localhost:5173), not as a file.</p></div>`;
 });

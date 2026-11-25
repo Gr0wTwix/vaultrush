@@ -69,7 +69,7 @@ const providers = (cloud: boolean): string => {
   <div class="au-note" id="auNote" role="status">${why}</div>`;
 };
 
-const side = (): string => `<aside class="au-side"><div class="au-brand"><span class="logo-mark">${icon('bolt')}</span><b>VAULT<i>RUSH</i></b></div>
+const side = (): string => `<aside class="au-side"><div class="au-brand"><img src="brand/logo-dark.svg" alt="Vaultrush" width="190" height="36"></div>
   <h2>Play the vault.</h2><p>A play-money skin-game demo. Coins have no cash value and cannot be bought or withdrawn.</p>
   <ul><li>${icon('fair')} Every result can be re-checked</li><li>${icon('heart')} Limits, breaks and self-exclusion</li><li>${icon('id')} Age and identity checks (sandbox)</li></ul>
   <small>By accessing the site, I attest that I am at least 18 years old and have read the <a href="#/terms" target="_blank" rel="noopener">Terms &amp; Conditions</a>.</small></aside>`;
