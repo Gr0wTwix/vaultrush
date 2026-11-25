@@ -102,8 +102,8 @@ Steps 2 and 3 are re-checked on **every** admin call in the database (`admin_gua
 | # | Who | What |
 |---|---|---|
 | 1 | You | Done (2026-11-21): `0015` re-run, `0017`, `0018` and `0019` were run in the Supabase SQL editor |
-| 2 | You | If not done: make yourself the Owner (the one SQL statement in step 2 above) |
-| 3 | You | Supabase, Authentication, Multi-factor: make sure **TOTP** is enabled (step 2 of the sign-in needs it) |
+| 2 | You | Done (confirmed 2026-11-25): your account holds the Owner role |
+| 3 | You | Done (confirmed 2026-11-25): **TOTP** is enabled under Authentication, Multi-factor (step 2 of the sign-in needs it) |
 | 4 | Me, once you say go | Create the second Vercel project (a name you choose), give it the same three public variables as the game site (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STEAM_LOGIN`; no secret is involved), export the branch into a clean folder, copy `vercel.admin.json` over `vercel.json` there, link the folder to the new project and deploy it to production |
 | 5 | You | Supabase, Authentication, URL Configuration, Redirect URLs: add the new address followed by `/**` |
 | 6 | Me (with the private deploy notes) or you | Add the new address to the Steam function's allow-list (`SITE_URLS`, keeping the addresses already there) and redeploy that function |

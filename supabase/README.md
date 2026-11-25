@@ -49,7 +49,7 @@ Never put the `service_role` key in the website: it bypasses every protection he
 |---|---|
 | Email and password | Authentication > Providers > Email (keep "Confirm email" on). Add your site URL and `http://localhost:5173` under URL configuration. |
 | Google | Google Cloud Console > APIs & Services > Credentials > Create OAuth client ID (Web application). Add Supabase's callback URL (shown on Authentication > Providers > Google, `https://<ref>.supabase.co/auth/v1/callback`) as an authorized redirect URI. Paste the client ID and secret into that Supabase page and turn Google on. |
-| Two-factor authentication (TOTP) | Authentication > Multi-factor: enable TOTP. Players set it up under Account > Security. |
+| Two-factor authentication (TOTP) | Authentication > Multi-factor: enable TOTP. Players set it up under Account > Security. The site asks for the code after every sign-in method, so "Limit duration of AAL1 sessions" (sign out after 15 minutes without the code) can stay on. |
 | Steam | Not built into Supabase. Deploy the `steam-login` Edge Function: `supabase secrets set SITE_URLS=https://your-site.example,http://localhost:5173`, then `supabase functions deploy steam-login`, and set `VITE_STEAM_LOGIN=on`. |
 | Account deletion | Deploy `close-login` as well: `supabase functions deploy close-login`. |
 

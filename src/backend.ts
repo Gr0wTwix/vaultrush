@@ -92,8 +92,13 @@ export async function signInPassword(email: string, password: string): Promise<{
   const c = await getClient();
   const { error } = await c.auth.signInWithPassword({ email, password });
   if (error) throw new Error(/invalid login/i.test(error.message) ? 'Wrong email or password.' : explain(error));
-  const { data } = await c.auth.mfa.getAuthenticatorAssuranceLevel();
-  return { needs2fa: data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2' };
+  return { needs2fa: await needs2fa() };
+}
+/** True when the account has an authenticator but this session has not entered its code yet. That happens after a password,
+ *  Google or Steam sign-in and on a restored session. The project ends such sessions after 15 minutes ("Limit duration of AAL1 sessions"). */
+export async function needs2fa(): Promise<boolean> {
+  const { data } = await (await getClient()).auth.mfa.getAuthenticatorAssuranceLevel();
+  return data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2';
 }
 export async function verifyLogin2fa(code: string): Promise<void> {
   const c = await getClient();

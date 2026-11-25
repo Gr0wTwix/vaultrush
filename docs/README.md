@@ -4,6 +4,10 @@ Vaultrush is an original **play-money** skin-game demo. Coins cannot be bought, 
 
 | Document | Read it for |
 |---|---|
+| [TECHNICAL-REQUIREMENTS.md](TECHNICAL-REQUIREMENTS.md) | What the app is built on, what it must do, its limits and the non-functional requirements (security, privacy, layout, accessibility) |
+| [APP-FLOW.md](APP-FLOW.md) | Every screen and route, the navigation, and the main user journeys from first visit to playing |
+| [TESTING-GUIDE.md](TESTING-GUIDE.md) | Test commands, the kinds of tests, how to write one, browser testing and the release checklist |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | Step by step: how to build, release and document a feature, and the rules that do not change |
 | [setup-status.md](setup-status.md) | What is set up and what is not: variables, migrations, services, sign-in, n8n, CI; what is confirmed and what is not; how to re-check |
 | [audit-2026-11-22.md](audit-2026-11-22.md) | Full-site audit: what was tested, what was fixed, what still needs verifying |
 | [architecture.md](architecture.md) | Folder layout, how state and views work, the single gates for bets and claims |

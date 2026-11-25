@@ -51,6 +51,10 @@ A short log of how the project got here, why, and what is still open.
 
 29. **Security checklist (2026-11-22).** The owner shared a 19-point checklist; every point was checked (results in [audit-2026-11-22.md](audit-2026-11-22.md)). Fixed: security headers for the game site (a strict Content Security Policy and the usual headers, tried in a browser against the build), inline image handlers replaced by one listener, rate limits for chat and promo codes (`0020_rate_limits.sql`), patch dependency updates. 843 tests. The owner ran `0020` (2026-11-25); then committed, pushed and deployed.
 
+30. **Four planning documents and ten attacks (2026-11-25).** From two posts the owner shared: [TECHNICAL-REQUIREMENTS.md](TECHNICAL-REQUIREMENTS.md), [APP-FLOW.md](APP-FLOW.md), [TESTING-GUIDE.md](TESTING-GUIDE.md) and [IMPLEMENTATION.md](IMPLEMENTATION.md) now describe the real project, linking to the detailed docs; and Vaultrush was checked against ten common attacks (SQL injection, XSS, CSRF, DDoS, man in the middle, brute force, phishing, session hijacking, path traversal, clickjacking): all covered, no code change needed (table in [audit-2026-11-22.md](audit-2026-11-22.md)).
+
+31. **Authenticator step after every sign-in (2026-11-25).** The owner enabled TOTP with "Limit duration of AAL1 sessions" on, which signs out an account that has an authenticator but has not entered its code within 15 minutes. Only the e-mail sign-in asked for the code; Google, Steam and restored sessions did not, so those players would have been signed out without being asked. Now one step window (`openSecondStep()` in `src/auth.ts`, using `needs2fa()` in `src/backend.ts`) opens after any sign-in and on start-up when the code is still missing; it cannot be dismissed (enter the code or sign out), shows once, locks for 30 seconds after 5 wrong codes, and closes on sign-out. The e-mail form's own code field was removed in favour of it. Tests: `tests/second-step.test.ts`. Not deployed yet.
+
 ## Decisions worth remembering
 
 - **Play money only, and honest about it.** Simulated parts are labelled as simulated. No real-money paths.

@@ -1,6 +1,6 @@
 # What is set up, and what is not
 
-A plain list of the state of the real project, so nobody has to guess. **Last checked: 2026-11-22.** "Checked" means a command or request was run that day; "owner confirmed" means the owner said it worked; "not confirmed" means it was done or planned but nobody has verified it since. Keep this page current (see the ground rules in [README.md](README.md)); private identifiers are deliberately not written here.
+A plain list of the state of the real project, so nobody has to guess. **Last checked: 2026-11-25.** "Checked" means a command or request was run that day; "owner confirmed" means the owner said it worked; "not confirmed" means it was done or planned but nobody has verified it since. Keep this page current (see the ground rules in [README.md](README.md)); private identifiers are deliberately not written here.
 
 ## Set up and working
 
@@ -18,6 +18,9 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 | **Operator alerts in the database** | Switched on (`ops_settings.enabled`) with the webhook address and secret | Owner confirmed the test message |
 | **Google sign-in** | Works end to end on the live site | Owner confirmed 2026-11-22 |
 | **Steam sign-in with profile picture** | The Steam name and picture show after signing in | Owner confirmed 2026-11-22 |
+| **Security pass (headers, rate limits)** | Live: strict security headers on the game site; chat and promo-code rate limits (`0020`) | Owner ran `0020` 2026-11-25; checked after the deploy: headers served, no policy violations, Steam sign-in still works |
+| **Session security (Supabase Auth)** | Access tokens 1 hour, compromised refresh tokens detected and revoked, refresh-token reuse window 10 seconds (the recommended values). Session time-box and inactivity timeout are off: they need the Pro plan | Owner screenshot of the dashboard, 2026-11-25 |
+| **Two-factor (TOTP) in Supabase** | Enabled, with "Limit duration of AAL1 sessions" **on**: a signed-in account that has an authenticator but has not entered its code is signed out after 15 minutes. The game site now asks for the code after every sign-in method and on a restored session (built 2026-11-25, **not deployed yet**: until then, players with an authenticator who sign in with Google or Steam are signed out after 15 minutes) | Owner screenshot of the dashboard, 2026-11-25 |
 | **Two real players at once** | Live games with two people on the real project work | Owner confirmed 2026-11-22 (which games were tried was not specified) |
 | **25 high-stakes cases, the 10,000 verification limit, the Double history fix** | Live (deployed 2026-11-21 with the SQL `0015` re-run and `0017`). The pictures of the 25 new cases are recoloured placeholders | Owner ran the SQL ("all sqls success"); checked after the deploy: the live bundle is the new build and a new case picture loads |
 | **Server-side limits (`0018`), the admin Wallets page's database part (`0019`), the phone layout fixes, the slower battle rounds** | Live (commit `1f005be`, deployed 2026-11-21). The limits are now enforced by the database for every stake; the Wallets page itself only exists in the admin site, which is still localhost-only | Owner ran `0018` and `0019` ("all sqls success"); checked after the deploy: the live bundle contains the new limit calls and the sideways battle board, the public status function answers, maintenance is off. **Not tried by me signed in on the live site**, and the phone fixes were only seen in a 375 px browser window |
@@ -27,14 +30,12 @@ A plain list of the state of the real project, so nobody has to guess. **Last ch
 | Part | What is unclear |
 |---|---|
 | **Daily report schedule in n8n** | The test run works. A screenshot of the Discord channel (2026-11-22) shows only that test report (21 Nov, 18:48) and no 09:00 report on 22 Nov: either the workflow is not published or n8n was not running at 09:00. Alerts themselves arrive |
-| **Two-factor (TOTP) in Supabase** | The site and admin code expect it; whether it is enabled under Authentication is not confirmed |
 
 ## Not set up, or not done
 
 | Part | State |
 |---|---|
-| **Security pass (headers, rate limits)** | Live: the owner ran `0020_rate_limits.sql` (2026-11-25) and the site was deployed with the new security headers. See [audit-2026-11-22.md](audit-2026-11-22.md) |
-| **Admin site** | Built (sign-in chain, roles, audit log, explorer, site controls, the Wallets page) but it runs **only on localhost** and is not deployed. Its deployment config (`vercel.admin.json`) is written and tested, but no Vercel project exists for it yet. That the Owner role has been created and that `http://localhost:5174` is allowed for sign-in is not confirmed; the steps to go live, and who does each, are in [admin-site.md](admin-site.md) |
+| **Admin site** | Built (sign-in chain, roles, audit log, explorer, site controls, the Wallets page) but it runs **only on localhost** and is not deployed. Its deployment config (`vercel.admin.json`) is written and tested, but no Vercel project exists for it yet. The Owner role exists for the owner's account (confirmed 2026-11-25); that `http://localhost:5174` is allowed for sign-in is not confirmed; the steps to go live, and who does each, are in [admin-site.md](admin-site.md) |
 | **Pull request into `main`** | Not opened; `main` has PR #2 but none of the later work |
 | **Always-on n8n** | n8n runs on the owner's PC, so alerts arrive only while the PC and Docker are on (the database does not retry). The server version (`n8n/docker-compose.server.yml`) is written but not tested or set up |
 | **KYC, AML, Triple Green** | KYC and AML are sandbox demonstrations; the Triple Green pot in Double is simulated |

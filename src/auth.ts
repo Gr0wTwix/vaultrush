@@ -3,7 +3,7 @@
 // (see accounts.ts): a hashed password, a username, and a separate set of progress for each account.
 import {
   backendEnabled, completeSignup, currentUser, finishSteamLogin, onAuthChange, profileName, resendSignup, resetPassword, signInOAuth, signInPassword, signOut, signUp,
-  startSteamLogin, steamEnabled, verifyLogin2fa,
+  needs2fa, startSteamLogin, steamEnabled, verifyLogin2fa,
 } from './backend.js';
 import { useFairFor } from './fair.js';
 import { initLive, stopLive } from './live.js';
@@ -104,7 +104,7 @@ export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
   open?.close();
   const cloud = backendEnabled();
   // First-time visitors (and anyone sent here by a bet or claim) are most likely new, so Register comes first for them.
-  let tab: Tab = opts.tab ?? (opts.reason && !knownBrowser() ? 'register' : 'login'), lockUntil = 0, fails = 0, need2fa = false, sent = '';
+  let tab: Tab = opts.tab ?? (opts.reason && !knownBrowser() ? 'register' : 'login'), lockUntil = 0, fails = 0, sent = '';
   const m = modal('', { wide: true, label: 'Log in or register', backdropClose: false, onClose: () => { open = null; } });
   open = m; m.el.classList.add('auth-modal');
   const draft = { email: '', user: '' };           // typed text that survives switching tabs (passwords are never carried over)
@@ -114,11 +114,9 @@ export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
   const fail = (t: string): void => formError(m.el, t);
   const busy = (on: boolean, label: string): void => { const b = $('#auGo', m.el) as HTMLButtonElement | null; if (b) { b.disabled = on; b.textContent = on ? 'Please wait…' : label; } };
 
-  const twoFa = (): string => field('au2fa', 'Authenticator code', '<input id="au2fa" inputmode="numeric" autocomplete="one-time-code" maxlength="6">', '(6 digits)');
   const loginForm = (): string => `<form id="auForm" class="au-form" novalidate>
       ${field('auEmail', cloud ? 'Email' : 'Email or username', `<input id="auEmail" ${cloud ? 'type="email"' : ''} autocomplete="username" placeholder="${cloud ? 'name@example.com' : 'name@example.com or username'}">`)}
       ${pass('auPass', 'Password', 'current-password')}<button type="button" class="link au-forgot" id="auForgot">Forgot password?</button>
-      ${need2fa ? twoFa() : ''}
       <div class="au-formerr" id="auFormErr" role="alert"></div>
       <button class="btn btn-primary btn-lg block" id="auGo" type="submit">Log in</button></form>${providers(cloud)}`;
   const registerForm = (): string => `<form id="auForm" class="au-form" novalidate>
@@ -145,8 +143,8 @@ export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
     if (emailBox) { emailBox.value = draft.email; emailBox.addEventListener('input', () => { draft.email = emailBox.value; }); }
     if (userBox) { userBox.value = draft.user; userBox.addEventListener('input', () => { draft.user = userBox.value; }); }
     $$('.au-tabs [role=tab]', m.el).forEach((b: HTMLElement) => {
-      b.onclick = () => { if (b.dataset.t !== tab) { tab = b.dataset.t as Tab; need2fa = false; draw('tab'); } };
-      b.onkeydown = (e: KeyboardEvent) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') { e.preventDefault(); tab = tab === 'login' ? 'register' : 'login'; need2fa = false; draw('tab'); } };
+      b.onclick = () => { if (b.dataset.t !== tab) { tab = b.dataset.t as Tab; draw('tab'); } };
+      b.onkeydown = (e: KeyboardEvent) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') { e.preventDefault(); tab = tab === 'login' ? 'register' : 'login'; draw('tab'); } };
     });
     $$('[data-show]', m.el).forEach((b: HTMLElement) => b.onclick = () => {
       const i = $('#' + b.dataset.show, m.el) as HTMLInputElement, show = i.type === 'password';
@@ -155,7 +153,7 @@ export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
     $$('[data-prov]', m.el).forEach((b: HTMLElement) => b.onclick = () => provider(b.dataset.prov as 'google' | 'steam'));
     if (sent) wireSent(); else if (tab === 'login') wireLogin(); else wireRegister();
     if (focus === 'tab') ($(`#auTab-${tab}`, m.el) as HTMLElement | null)?.focus();
-    else if (focus === 'field') ((need2fa ? $('#au2fa', m.el) : $('#auEmail', m.el)) as HTMLInputElement | null)?.focus();
+    else if (focus === 'field') ($('#auEmail', m.el) as HTMLInputElement | null)?.focus();
   };
 
   const provider = async (p: 'google' | 'steam'): Promise<void> => {
@@ -182,22 +180,15 @@ export function openAuth(opts: { tab?: Tab; reason?: string } = {}): void {
     ($('#auForm', m.el) as HTMLFormElement).onsubmit = async e => {
       e.preventDefault();
       showErrors(m.el, {});
-      if (need2fa && !v('au2fa').trim()) return showErrors(m.el, {}), fail('Enter the code from your authenticator app.');
-      if (!need2fa && (!v('auEmail').trim() || !v('auPass'))) { fail('Enter your email or username and your password.'); ($(!v('auEmail').trim() ? '#auEmail' : '#auPass', m.el) as HTMLElement).focus(); return; }
+      if (!v('auEmail').trim() || !v('auPass')) { fail('Enter your email or username and your password.'); ($(!v('auEmail').trim() ? '#auEmail' : '#auPass', m.el) as HTMLElement).focus(); return; }
       if (Date.now() < lockUntil) return fail(`Too many attempts. Try again in ${Math.ceil((lockUntil - Date.now()) / 1000)} seconds.`);
       busy(true, 'Log in');
       try {
         if (cloud) {
-          if (!need2fa) {
-            const r = await signInPassword(v('auEmail').trim(), v('auPass'));
-            if (r.needs2fa) {
-              need2fa = true; busy(false, 'Log in');
-              ($('#auGo', m.el) as HTMLElement).insertAdjacentHTML('beforebegin', twoFa());
-              const box = $('#au2fa', m.el) as HTMLInputElement, err = $('#au2faErr', m.el); box.setAttribute('aria-describedby', err.id); box.focus();
-              return fail('Your account uses two-factor authentication. Enter the code from your authenticator app.');
-            }
-          } else await verifyLogin2fa(v('au2fa'));
-          fails = 0; markKnown(); m.close(); sfx.win(); toast('Signed in', 'win', true);
+          const r = await signInPassword(v('auEmail').trim(), v('auPass'));
+          fails = 0; markKnown(); m.close();
+          if (r.needs2fa) openSecondStep();                   // the same step as after Google or Steam
+          else { sfx.win(); toast('Signed in', 'win', true); }
         } else {
           const r = await loginLocal(v('auEmail'), v('auPass'));
           if (r.ok === false) { busy(false, 'Log in'); fail(r.error); ($('#auPass', m.el) as HTMLElement).focus(); return; }
@@ -280,6 +271,40 @@ export function openFinishProfile(prefill: { name?: string; steam?: boolean } = 
   };
 }
 
+let step: { el: HTMLElement; close: () => void } | null = null;
+/** Second sign-in step for accounts with an authenticator app, after any sign-in (password, Google, Steam) and on a restored session.
+ *  It cannot be dismissed: entering the code or signing out are the only ways on. Opening it twice shows one window. */
+export function openSecondStep(): void {
+  if (step) return;
+  const m = modal('', { locked: true, label: 'Enter your authenticator code', onClose: () => { step = null; } });
+  step = m; m.el.classList.add('auth-modal', 'au-finish');
+  m.el.innerHTML = `<section class="au-main"><h3 class="au-h">Enter your authenticator code</h3><p class="au-sub">Your account uses two-factor authentication. Enter the 6-digit code from your authenticator app to keep playing.</p>
+    <form id="auForm" class="au-form" novalidate>${field('au2fa', 'Authenticator code', '<input id="au2fa" inputmode="numeric" autocomplete="one-time-code" maxlength="6">', '(6 digits)')}
+    <div class="au-formerr" id="auFormErr" role="alert"></div>
+    <button class="btn btn-primary btn-lg block" id="auGo" type="submit">Continue</button></form>
+    <p class="au-out"><button type="button" class="link" id="auOut">Sign out instead</button></p></section>`;
+  const box = $('#au2fa', m.el) as HTMLInputElement, go = $('#auGo', m.el) as HTMLButtonElement;
+  box.setAttribute('aria-describedby', 'au2faErr'); box.focus();
+  $('#auOut', m.el).onclick = () => { void logout(); };
+  let fails = 0, lockUntil = 0;
+  ($('#auForm', m.el) as HTMLFormElement).onsubmit = async e => {
+    e.preventDefault();
+    const code = box.value.replace(/\s/g, '');
+    if (!/^\d{6}$/.test(code)) { formError(m.el, 'Enter the 6-digit code from your authenticator app.'); box.focus(); return; }
+    if (Date.now() < lockUntil) return formError(m.el, `Too many attempts. Try again in ${Math.ceil((lockUntil - Date.now()) / 1000)} seconds.`);
+    go.disabled = true; go.textContent = 'Please wait…';
+    try { await verifyLogin2fa(code); m.close(); sfx.win(); toast('Signed in', 'win', true); }
+    catch (err) {
+      if (++fails >= 5) { lockUntil = Date.now() + 30_000; fails = 0; }
+      go.disabled = false; go.textContent = 'Continue'; box.value = ''; box.focus();
+      formError(m.el, err instanceof Error ? err.message : String(err));
+    }
+  };
+}
+const closeSecondStep = (): void => { step?.close(); };
+/** Opens the second step when the signed-in account has an authenticator and this session has not entered its code. */
+const checkSecondStep = async (): Promise<void> => { try { if (await needs2fa()) openSecondStep(); } catch { /* checked again on the next sign-in event */ } };
+
 /** Start-up wiring: the top-right Log in button, the Steam return, and (with a backend) session changes. */
 export async function initAuth(): Promise<void> {
   const slot = $('#meBtn')?.closest('.me-wrap') as HTMLElement | null;
@@ -304,7 +329,7 @@ export async function initAuth(): Promise<void> {
   const first = await currentUser().catch(() => null);
   if (first) await useFairFor(cloudId(first.id));
   setSignedIn(!!first, first?.id ?? '');
-  if (first) { void initWallet(first.id); void initLive(first.id); }
+  if (first) { void initWallet(first.id); void initLive(first.id); void checkSecondStep(); }
   const ensure = async (): Promise<void> => {
     try {
       // A cloud profile cannot exist without the adult flag (the database refuses it), so a returning player on a new browser is already confirmed.
@@ -330,7 +355,7 @@ export async function initAuth(): Promise<void> {
     state.avatar = pic; save();
     const me = $('.me .avatar'); if (me) me.outerHTML = avatar(state.name, 32);
   };
-  await onAuthChange(async (event, on, uid) => { if (on) await useFairFor(cloudId(uid)); setSignedIn(on, uid); if (on) { markKnown(); void initWallet(uid); void initLive(uid); } else { stopLive(); stopWallet(); } if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) void ensure().then(applyPicture); });
+  await onAuthChange(async (event, on, uid) => { if (on) await useFairFor(cloudId(uid)); setSignedIn(on, uid); if (on) { markKnown(); void initWallet(uid); void initLive(uid); } else { stopLive(); stopWallet(); closeSecondStep(); } if (on && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) { void checkSecondStep(); void ensure().then(applyPicture); } });
 }
 
 // ---- click guard for signed-out visitors ----
